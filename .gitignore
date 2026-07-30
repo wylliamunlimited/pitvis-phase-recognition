@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# raw PitVis download — read-only input, never tracked
+26531686/
+
+# extracted features (per-video features.npy + labels.npy)
+data/
