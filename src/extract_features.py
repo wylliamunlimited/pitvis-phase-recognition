@@ -1,0 +1,142 @@
+"""Extract 1 fps frozen ResNet-50 features for every PitVis video.
+
+For each video: decode every round(fps)-th frame (frames 0, r, 2r, ...) via an
+ffmpeg rawvideo pipe, run them through a frozen ImageNet-pretrained timm
+resnet50 (num_classes=0 -> 2048-d pooled features), and save
+
+    data/features/video_{n}/features.npy   (T, 2048) float32
+    data/features/video_{n}/labels.npy     (T,)      int64   (labeled videos only)
+
+where T = ceil(nb_frames / round(fps)). Labels are the annotation rows
+truncated to T (the dropped trailing row is verified background) with the
+15-way encoding: -1 -> 0, k -> k.
+
+Resumable: videos whose features.npy already exists with the expected length
+are skipped. Video 19 gets features but no labels (annotations missing).
+
+Usage: python src/extract_features.py [video_numbers...]
+"""
+
+import json
+import math
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
+from PIL import Image
+
+ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "26531686"
+OUT = ROOT / "data" / "features"
+
+WIDTH, HEIGHT = 1280, 720  # uniform across all 25 videos (verified)
+FRAME_BYTES = WIDTH * HEIGHT * 3
+BATCH = 64
+
+
+def probe(video: Path) -> tuple[int, int]:
+    """Return (nb_frames, round(fps))."""
+    cmd = [
+        "ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
+        "-show_entries", "stream=r_frame_rate,nb_read_packets",
+        "-of", "json", str(video),
+    ]
+    s = json.loads(subprocess.run(cmd, capture_output=True, check=True).stdout)["streams"][0]
+    num, den = s["r_frame_rate"].split("/")
+    return int(s["nb_read_packets"]), round(int(num) / int(den))
+
+
+def build_model(device: torch.device):
+    import timm
+    from timm.data import create_transform, resolve_data_config
+
+    model = timm.create_model("resnet50", pretrained=True, num_classes=0)
+    model.eval().to(device)
+    transform = create_transform(**resolve_data_config({}, model=model))
+    return model, transform
+
+
+@torch.no_grad()
+def extract_video(vid: int, model, transform, device: torch.device) -> None:
+    video = DATA / f"video_{vid:02d}.mp4"
+    out_dir = OUT / f"video_{vid:02d}"
+    nb_frames, r = probe(video)
+    expected = math.ceil(nb_frames / r)
+
+    feat_path = out_dir / "features.npy"
+    if feat_path.exists():
+        existing = np.load(feat_path, mmap_mode="r")
+        if len(existing) == expected:
+            print(f"video {vid:02d}: exists ({expected} frames), skipping")
+            return
+        print(f"video {vid:02d}: found {len(existing)} != {expected} frames, redoing")
+
+    cmd = [
+        "ffmpeg", "-v", "error", "-i", str(video),
+        "-vf", f"select=not(mod(n\\,{r}))", "-vsync", "0",
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+    ]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=FRAME_BYTES * 4)
+
+    t0 = time.time()
+    feats, batch = [], []
+
+    def flush():
+        if batch:
+            x = torch.stack(batch).to(device)
+            feats.append(model(x).float().cpu().numpy())
+            batch.clear()
+
+    n = 0
+    while True:
+        buf = proc.stdout.read(FRAME_BYTES)
+        if len(buf) < FRAME_BYTES:
+            break
+        frame = np.frombuffer(buf, dtype=np.uint8).reshape(HEIGHT, WIDTH, 3)
+        batch.append(transform(Image.fromarray(frame)))
+        n += 1
+        if len(batch) == BATCH:
+            flush()
+        if n % 500 == 0:
+            print(f"  video {vid:02d}: {n}/{expected} ({n / (time.time() - t0):.1f} fps)")
+    flush()
+    proc.wait()
+
+    features = np.concatenate(feats) if feats else np.empty((0, 2048), np.float32)
+    assert len(features) == expected, \
+        f"video {vid:02d}: extracted {len(features)}, expected {expected}"
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    np.save(feat_path, features.astype(np.float32))
+
+    ann_path = DATA / f"annotations_{vid:02d}.csv"
+    if ann_path.exists():
+        steps = pd.read_csv(ann_path)["int_step"].to_numpy()
+        assert len(steps) == expected + 1, \
+            f"video {vid:02d}: {len(steps)} ann rows, expected {expected + 1}"
+        assert steps[-1] == -1, f"video {vid:02d}: dropped row is not background"
+        labels = steps[:expected].copy()
+        labels[labels == -1] = 0
+        np.save(out_dir / "labels.npy", labels.astype(np.int64))
+
+    print(f"video {vid:02d}: done, {expected} frames in {time.time() - t0:.0f}s")
+
+
+def main() -> None:
+    vids = [int(a) for a in sys.argv[1:]] or list(range(1, 26))
+    device = torch.device(
+        "mps" if torch.backends.mps.is_available()
+        else "cuda" if torch.cuda.is_available() else "cpu"
+    )
+    print(f"device: {device}, videos: {vids}")
+    model, transform = build_model(device)
+    for vid in vids:
+        extract_video(vid, model, transform, device)
+
+
+if __name__ == "__main__":
+    main()
