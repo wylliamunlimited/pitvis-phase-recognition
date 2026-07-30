@@ -1,0 +1,83 @@
+"""Frame-wise linear probe on frozen ResNet-50 features.
+
+The simplest baseline: standardize features on the train split, train a single
+linear layer (2048 -> 15) with cross-entropy, evaluate frame-wise on the val
+videos with the challenge metric (macro F1 excluding classes [-1, 11, 13]).
+No temporal context — this is the floor that temporal models must beat.
+
+Usage: python src/train_baseline.py [--epochs 10] [--lr 1e-3]
+"""
+
+import argparse
+
+import numpy as np
+import torch
+import torch.nn as nn
+
+from dataset import NUM_CLASSES, TRAIN, VAL, load_split
+from eval import report
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--epochs", type=int, default=10)
+    ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--batch-size", type=int, default=1024)
+    ap.add_argument("--seed", type=int, default=0)
+    args = ap.parse_args()
+
+    torch.manual_seed(args.seed)
+    device = torch.device(
+        "mps" if torch.backends.mps.is_available()
+        else "cuda" if torch.cuda.is_available() else "cpu"
+    )
+
+    train = load_split(TRAIN)
+    val = load_split(VAL)
+    X = np.concatenate([f for _, f, _ in train])
+    y = np.concatenate([l for _, _, l in train])
+    print(f"train: {len(TRAIN)} videos, {len(X)} frames | "
+          f"val: {len(VAL)} videos, {sum(len(l) for _, _, l in val)} frames")
+
+    mean, std = X.mean(axis=0), X.std(axis=0) + 1e-6
+    X = torch.from_numpy((X - mean) / std)
+    y = torch.from_numpy(y)
+
+    model = nn.Linear(X.shape[1], NUM_CLASSES).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    loss_fn = nn.CrossEntropyLoss()
+
+    for epoch in range(args.epochs):
+        model.train()
+        perm = torch.randperm(len(X))
+        total, correct, loss_sum = 0, 0, 0.0
+        for i in range(0, len(X), args.batch_size):
+            idx = perm[i:i + args.batch_size]
+            xb, yb = X[idx].to(device), y[idx].to(device)
+            logits = model(xb)
+            loss = loss_fn(logits, yb)
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+            loss_sum += loss.item() * len(idx)
+            correct += (logits.argmax(1) == yb).sum().item()
+            total += len(idx)
+        print(f"epoch {epoch + 1}/{args.epochs}: "
+              f"loss {loss_sum / total:.4f} acc {correct / total:.4f}")
+
+    model.eval()
+    y_true, y_pred = [], []
+    with torch.no_grad():
+        for vid, f, l in val:
+            xb = torch.from_numpy((f - mean) / std).to(device)
+            pred = model(xb).argmax(1).cpu().numpy()
+            y_true.append(l)
+            y_pred.append(pred)
+            frame_acc = (pred == l).mean()
+            print(f"video {vid:02d}: frame acc {frame_acc:.4f}")
+    report(np.concatenate(y_true), np.concatenate(y_pred),
+           title="val (frame-wise linear probe)")
+
+
+if __name__ == "__main__":
+    main()
