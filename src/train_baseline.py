@@ -1,11 +1,12 @@
 """Frame-wise linear probe on frozen ResNet-50 features.
 
 The simplest baseline: standardize features on the train split, train a single
-linear layer (2048 -> 15) with cross-entropy, evaluate frame-wise on the val
-videos with the challenge metric (macro F1 excluding classes [-1, 11, 13]).
-No temporal context — this is the floor that temporal models must beat.
+linear layer (2048 -> 15) with cross-entropy, evaluate on the val videos with
+the official challenge metric — (macro F1 + normalised edit score) / 2, scored
+per video and mean-averaged. No temporal context, so expect a very low edit
+score: this is the floor that temporal models must beat.
 
-Usage: python src/train_baseline.py [--epochs 10] [--lr 1e-3]
+Usage: python src/train_baseline.py [--epochs 10] [--lr 1e-3] [--confusion]
 """
 
 import argparse
@@ -24,6 +25,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--batch-size", type=int, default=1024)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--confusion", action="store_true",
+                    help="print the 15-way confusion matrix")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -66,17 +69,15 @@ def main() -> None:
               f"loss {loss_sum / total:.4f} acc {correct / total:.4f}")
 
     model.eval()
-    y_true, y_pred = [], []
+    preds = []
     with torch.no_grad():
         for vid, f, l in val:
             xb = torch.from_numpy((f - mean) / std).to(device)
             pred = model(xb).argmax(1).cpu().numpy()
-            y_true.append(l)
-            y_pred.append(pred)
-            frame_acc = (pred == l).mean()
-            print(f"video {vid:02d}: frame acc {frame_acc:.4f}")
-    report(np.concatenate(y_true), np.concatenate(y_pred),
-           title="val (frame-wise linear probe)")
+            preds.append((vid, l, pred))
+            print(f"video {vid:02d}: frame acc {(pred == l).mean():.4f}")
+    report(preds, title="val (frame-wise linear probe)",
+           show_confusion=args.confusion)
 
 
 if __name__ == "__main__":
