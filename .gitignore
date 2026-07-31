@@ -2,6 +2,9 @@
 __pycache__/
 *.pyc
 
+# uv virtualenv — uv.lock IS tracked, the env is not
+.venv/
+
 # raw PitVis download — read-only input, never tracked
 26531686/
 

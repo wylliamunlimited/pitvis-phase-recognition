@@ -1,0 +1,18 @@
+[project]
+name = "pitvis-phase-recognition"
+version = "0.1.0"
+description = "Surgical step (phase) recognition on the PitVis dataset"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "pillow>=10.0",
+    "scikit-learn>=1.5",
+    "timm>=1.0",
+    "torch>=2.4",
+]
+
+[tool.uv]
+# src/ is a collection of entry-point scripts with flat imports (`from dataset
+# import ...`), not an installable package. Nothing to build.
+package = false

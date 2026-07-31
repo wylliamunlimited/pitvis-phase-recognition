@@ -54,12 +54,34 @@ data/features/            cached per-video features.npy + labels.npy (gitignored
 26531686/                 raw PitVis download (gitignored, read-only)
 ```
 
-## Usage
+## Setup
 
-Requires Python 3.13, PyTorch (MPS/CUDA), timm, pandas, scikit-learn, and ffmpeg.
+Python dependencies are managed with [uv](https://docs.astral.sh/uv/); `pyproject.toml`
+and `uv.lock` are tracked, so the environment is reproducible. Python 3.13 is pinned
+via `.python-version` — uv will fetch it if you don't have it.
 
 ```sh
-python src/inventory.py           # sanity-check the raw data, write notes/inventory.md
-python src/extract_features.py    # one-time feature extraction (all 25 videos)
-python src/train_baseline.py      # train + evaluate the linear probe
+uv sync                           # create .venv and install the locked dependencies
 ```
+
+`ffmpeg` / `ffprobe` are also required and are **not** Python packages — install them
+separately (`brew install ffmpeg`).
+
+Place the raw PitVis download at `26531686/` in the project root (gitignored,
+treated as read-only), with the videos, `annotations_*.csv`, and `map_*.csv` directly
+inside it.
+
+## Usage
+
+```sh
+uv run python src/inventory.py         # sanity-check the raw data, write notes/inventory.md
+uv run python src/extract_features.py  # one-time feature extraction (all 25 videos)
+uv run python src/train_baseline.py    # train + evaluate the linear probe
+```
+
+`uv run` syncs the environment first, so there is no venv to activate. To add or change
+a dependency, use `uv add <pkg>` / `uv remove <pkg>` rather than editing `pyproject.toml`
+by hand, and commit the updated `uv.lock`.
+
+Torch resolves to the default PyPI wheels, which give CPU + MPS on macOS. For a CUDA
+box, add a `[[tool.uv.index]]` entry pointing at the appropriate PyTorch index.
