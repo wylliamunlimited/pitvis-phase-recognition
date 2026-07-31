@@ -4,6 +4,10 @@ Automatic recognition of surgical steps (phases) in endoscopic pituitary surgery
 using the [PitVis Challenge](https://arxiv.org/abs/2409.01184) dataset
 (EndoVis / MICCAI 2023, Das et al. 2024).
 
+**New to this repo?** [`notes/walkthrough.md`](notes/walkthrough.md) is the guided tour:
+what the surgery is, what every annotation column means, how the data flows through the
+pipeline, and which line of which file to read next.
+
 ## The task
 
 The dataset contains 25 full-length videos of endoscopic TransSphenoidal Approach
@@ -56,6 +60,7 @@ src/eval.py               official metric per video + mean±std, plus pooled dia
 src/train_baseline.py     frame-wise linear probe baseline
 tests/test_eval.py        pins eval.py to the official metric
 notes/inventory.md        generated dataset inventory
+notes/walkthrough.md      guide to the domain, the data, and the pipeline — start here
 data/features/            cached per-video features.npy + labels.npy (gitignored)
 26531686/                 raw PitVis download (gitignored, read-only)
 ```
