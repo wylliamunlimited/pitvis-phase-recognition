@@ -16,3 +16,14 @@ dependencies = [
 # src/ is a collection of entry-point scripts with flat imports (`from dataset
 # import ...`), not an installable package. Nothing to build.
 package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+# src/ is not importable as a package, so put it on sys.path for the tests that
+# import `eval` / `official_metric` / `dataset` directly.
+pythonpath = ["src"]
+testpaths = ["tests"]
