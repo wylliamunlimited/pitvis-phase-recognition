@@ -8,6 +8,9 @@ using the [PitVis Challenge](https://arxiv.org/abs/2409.01184) dataset
 what the surgery is, what every annotation column means, how the data flows through the
 pipeline, and which line of which file to read next.
 
+**What's next?** [`notes/roadmap.md`](notes/roadmap.md) tracks everything left to build,
+phased: data engineering → end-to-end pipelining → models → app.
+
 ## The task
 
 The dataset contains 25 full-length videos of endoscopic TransSphenoidal Approach
