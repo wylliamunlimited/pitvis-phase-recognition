@@ -14,14 +14,21 @@ truncated to T (the dropped trailing row is verified background) with the
 Resumable: videos whose features.npy already exists with the expected length
 are skipped. Video 19 gets features but no labels (annotations missing).
 
+data/features/manifest.json records the feature space (backbone, transform,
+target fps, content-hash id) plus per-video provenance. Extraction refuses to
+write into a cache whose manifest describes a different feature space — that
+would silently mix incompatible features in one training run.
+
 Usage: python src/extract_features.py [video_numbers...]
 """
 
+import hashlib
 import json
 import math
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -32,7 +39,10 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "26531686"
 OUT = ROOT / "data" / "features"
+MANIFEST = OUT / "manifest.json"
 
+BACKBONE = "resnet50"
+TARGET_FPS = 1
 WIDTH, HEIGHT = 1280, 720  # uniform across all 25 videos (verified)
 FRAME_BYTES = WIDTH * HEIGHT * 3
 BATCH = 64
@@ -50,18 +60,64 @@ def probe(video: Path) -> tuple[int, int]:
     return int(s["nb_read_packets"]), round(int(num) / int(den))
 
 
+def space_id(space: dict) -> str:
+    """Content hash of a feature-space dict (without its 'id' key)."""
+    payload = {k: v for k, v in space.items() if k != "id"}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def build_model(device: torch.device):
     import timm
     from timm.data import create_transform, resolve_data_config
 
-    model = timm.create_model("resnet50", pretrained=True, num_classes=0)
+    model = timm.create_model(BACKBONE, pretrained=True, num_classes=0)
     model.eval().to(device)
-    transform = create_transform(**resolve_data_config({}, model=model))
-    return model, transform
+    cfg = resolve_data_config({}, model=model)
+    transform = create_transform(**cfg)
+    space = {
+        "backbone": BACKBONE,
+        "feature_dim": model.num_features,
+        "target_fps": TARGET_FPS,
+        "transform": {
+            k: cfg[k]
+            for k in ("crop_mode", "crop_pct", "input_size", "interpolation", "mean", "std")
+        },
+    }
+    space["id"] = space_id(space)
+    return model, transform, space
+
+
+def load_manifest(space: dict) -> dict:
+    """Load the manifest, or start one. Refuses a different feature space."""
+    if not MANIFEST.exists():
+        return {"space": space, "videos": {}}
+    manifest = json.loads(MANIFEST.read_text())
+    canonical = json.loads(json.dumps(space))  # tuples -> lists, as stored
+    if manifest["space"] != canonical:
+        raise SystemExit(
+            f"manifest feature space {manifest['space']['id']} != current "
+            f"{space['id']} — the cache holds features from a different "
+            f"backbone/transform. Delete data/features/ and re-extract."
+        )
+    return manifest
+
+
+def record_video(manifest: dict, vid: int, frames: int, fps_rounded: int,
+                 has_labels: bool, source: Path) -> None:
+    manifest["videos"][f"video_{vid:02d}"] = {
+        "extracted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "fps_rounded": fps_rounded,
+        "frames": frames,
+        "labels": has_labels,
+        "source": str(source),
+    }
+    tmp = MANIFEST.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    tmp.replace(MANIFEST)
 
 
 @torch.no_grad()
-def extract_video(vid: int, model, transform, device: torch.device) -> None:
+def extract_video(vid: int, model, transform, device: torch.device, manifest: dict) -> None:
     video = DATA / f"video_{vid:02d}.mp4"
     out_dir = OUT / f"video_{vid:02d}"
     nb_frames, r = probe(video)
@@ -71,7 +127,13 @@ def extract_video(vid: int, model, transform, device: torch.device) -> None:
     if feat_path.exists():
         existing = np.load(feat_path, mmap_mode="r")
         if len(existing) == expected:
-            print(f"video {vid:02d}: exists ({expected} frames), skipping")
+            entry = manifest["videos"].get(f"video_{vid:02d}")
+            if entry is None or entry["frames"] != expected:
+                record_video(manifest, vid, expected, r,
+                             (out_dir / "labels.npy").exists(), video)
+                print(f"video {vid:02d}: exists ({expected} frames), manifest entry added")
+            else:
+                print(f"video {vid:02d}: exists ({expected} frames), skipping")
             return
         print(f"video {vid:02d}: found {len(existing)} != {expected} frames, redoing")
 
@@ -123,6 +185,7 @@ def extract_video(vid: int, model, transform, device: torch.device) -> None:
         labels[labels == -1] = 0
         np.save(out_dir / "labels.npy", labels.astype(np.int64))
 
+    record_video(manifest, vid, expected, r, ann_path.exists(), video)
     print(f"video {vid:02d}: done, {expected} frames in {time.time() - t0:.0f}s")
 
 
@@ -133,9 +196,10 @@ def main() -> None:
         else "cuda" if torch.cuda.is_available() else "cpu"
     )
     print(f"device: {device}, videos: {vids}")
-    model, transform = build_model(device)
+    model, transform, space = build_model(device)
+    manifest = load_manifest(space)
     for vid in vids:
-        extract_video(vid, model, transform, device)
+        extract_video(vid, model, transform, device, manifest)
 
 
 if __name__ == "__main__":
