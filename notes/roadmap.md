@@ -196,14 +196,34 @@ The metric itself is done and tested; what is missing is everything *around* it.
 
 Deliberately last: nothing here is buildable until 2.3 and 2.5 exist.
 
-- [ ] **5.1 (D) Surface.** CLI report, local web UI, or a served API — decide
-      before building, since it determines everything below.
+The target is a **minimal app with an agentic explanation layer**: an agent
+that walks the viewer through a case by interacting with the video itself —
+circling a region, then captioning it, and so on — and that *adapts to the
+output of the ML model* (predicted step, segment boundaries, confidence).
+The phase model supplies the *when*; the agent supplies the narration and
+the *where*.
+
+- [ ] **5.1 (D) Surface.** The agentic overlay effectively decides this: it
+      needs a video player with a drawable overlay (canvas), which points at a
+      local web UI rather than a CLI report or bare API. Confirm before
+      building, since it determines everything below.
 - [ ] **5.2 Inference service.** Wraps 2.5. Model loaded once, videos processed
       on request, progress reported (a full case is 45–140 min of video, so this
       is not a sub-second request).
 - [ ] **5.3 Timeline visualisation.** Predicted step timeline against ground
-      truth where available, with per-segment confidence.
-- [ ] **5.4 Packaging.** Reproducible run instructions, model artifact
+      truth where available, with per-segment confidence. Doubles as the
+      agent's input: the segment list is what it plans its explanations over.
+- [ ] **5.4 (D) Agentic explanation layer.** The agent consumes 2.5's output
+      (per-second steps, merged segments, confidences) plus sampled frames, and
+      decides what to point at and what to say, per segment — e.g. circle the
+      relevant region, then caption it in surgical-context language, adapting
+      when the model is uncertain or the step sequence is atypical. **Open
+      decision: spatial grounding.** The step classifier is temporal-only —
+      nothing we build in Phases 1–3 localises anything in the frame. Options:
+      a VLM that can point/box on frames at explanation time, or the instrument
+      annotations (3.5) as a supervised hook. Related: the 3.5 auxiliary task
+      becomes more valuable if its predictions feed the agent.
+- [ ] **5.5 Packaging.** Reproducible run instructions, model artifact
       distribution.
 
 ---
