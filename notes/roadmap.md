@@ -32,10 +32,9 @@ What already exists and has been verified by running it, not just by reading it.
       three official quirks preserved — `src/eval.py`, pinned by `tests/test_eval.py`
       (23 tests, all passing).
 - [x] Frame-wise linear probe baseline written — `src/train_baseline.py`.
-- [~] **First full feature extraction run.** Until now `data/` did not exist —
-      the pipeline had never been executed end to end and no baseline number
-      existed. Running now; ~35 min for all 25 videos, ~1 GB of cache
-      (120,018 frames × 2048 × 4 B).
+- [x] **First full feature extraction run.** Completed 2026-08-04: all 25
+      videos, 120,018 frames, 939 MB. Verified end to end by
+      `src/verify_cache.py --probe` (every check passing).
 
 Getting evaluation provably correct *before* any model exists is the right
 order, and it is the strongest part of the foundation. The weakest part is that
@@ -49,20 +48,19 @@ Goal: the feature cache becomes a trustworthy, self-describing asset, and every
 model we later write can get the data shape it needs without re-inventing a
 loader.
 
-- [ ] **1.1 Cache verifier.** A script that checks the whole cache at once:
-      every expected video present, `features.npy` length matches
-      `ceil(nb_frames / round(fps))` from the inventory, `labels.npy` matches
-      features length, dtypes are `float32`/`int64`, no NaN/Inf, label values in
-      `0..14`. `extract_features.py` asserts these at *write* time; nothing
-      re-checks them afterwards, so a truncated or half-written file is
-      currently invisible until training silently misbehaves.
+- [x] **1.1 Cache verifier.** `src/verify_cache.py`. Checks features
+      (dtype, shape, finiteness), labels (re-derived byte-for-byte from the raw
+      annotation CSVs, which also re-verifies the off-by-one alignment), the
+      video-19 special case, and manifest consistency. `--probe` adds the
+      ffprobe length check that is independent of the annotations. Exit code 0
+      iff clean; verified to catch injected NaN/truncation/drift.
 
-- [ ] **1.2 Cache manifest.** Write a `data/features/manifest.json` recording
-      backbone name, timm model tag, the resolved transform config, target fps,
-      per-video frame counts, and extraction timestamp. Right now `features.npy`
-      carries no provenance whatsoever — swapping the backbone and re-extracting
-      only some videos would silently mix two feature spaces in one training
-      run, and nothing would catch it.
+- [x] **1.2 Cache manifest.** `data/features/manifest.json`, written by
+      `extract_features.py`: feature space (backbone, transform config, target
+      fps, content-hash id) plus per-video frames/fps/labels/timestamp.
+      Extraction refuses to write into a cache whose manifest describes a
+      different feature space, so mixed-backbone caches fail loudly instead of
+      silently. Checkpoints (2.3) should record `space.id`.
 
 - [ ] **1.3 Normalisation statistics as a saved artifact.** `train_baseline.py`
       computes train-split mean/std inline (`src/train_baseline.py:45`) and
