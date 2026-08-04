@@ -219,6 +219,10 @@ uv.lock                   pinned resolution — tracked, commit changes to it
 .python-version           3.13
 src/inventory.py          per-video duration, resolution, fps, annotated seconds, step distribution
 src/extract_features.py   1 fps decode, frozen timm resnet50 (num_classes=0) -> data/features/
+                          writes data/features/manifest.json (feature space + per-video provenance);
+                          refuses to extract into a cache from a different feature space
+src/verify_cache.py       integrity check of the whole cache — run after any extraction;
+                          --probe adds the slow annotation-independent ffprobe length check
 src/dataset.py            per-video (T, D) features + aligned labels, train/val split
 src/official_metric.py    VENDORED official challenge metric — do not edit
 src/eval.py               official metric per video + mean±std, plus pooled diagnostics
