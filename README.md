@@ -6,7 +6,9 @@ using the [PitVis Challenge](https://arxiv.org/abs/2409.01184) dataset
 
 **New to this repo?** [`notes/walkthrough.md`](notes/walkthrough.md) is the guided tour:
 what the surgery is, what every annotation column means, how the data flows through the
-pipeline, and which line of which file to read next.
+pipeline, and which line of which file to read next. For the machine-learning side from
+the ground up — what an embedding is and how ours are generated —
+[`notes/embeddings.md`](notes/embeddings.md).
 
 **What's next?** [`notes/roadmap.md`](notes/roadmap.md) tracks everything left to build,
 phased: data engineering → end-to-end pipelining → models → app.
@@ -64,6 +66,7 @@ src/train_baseline.py     frame-wise linear probe baseline
 tests/test_eval.py        pins eval.py to the official metric
 notes/inventory.md        generated dataset inventory
 notes/walkthrough.md      guide to the domain, the data, and the pipeline — start here
+notes/embeddings.md       what the feature cache is and how embeddings are generated
 data/features/            cached per-video features.npy + labels.npy (gitignored)
 26531686/                 raw PitVis download (gitignored, read-only)
 ```
