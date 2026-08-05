@@ -4,6 +4,10 @@ A guide for reading this repository end to end. `CLAUDE.md` is the terse record 
 *decisions*; this document explains the *reasoning* and the domain, and points at
 specific code. Every `file.py:NN` reference below is a real line — follow them.
 
+Companion: [`embeddings.md`](embeddings.md) — a ground-up explanation of what the
+feature cache is and how an embedding is generated. Start there if §8 assumes more
+than you want it to.
+
 **Contents**
 
 1. [The clinical task](#1-the-clinical-task)
@@ -355,6 +359,11 @@ much cheaper to diagnose than a silent label shift discovered three hours into e
 ---
 
 ## 8. Stage 2 — feature extraction
+
+> **New to embeddings?** Read [`embeddings.md`](embeddings.md) first. It covers this
+> same stage from the ground up — what a feature vector *is*, where the 2,048 comes
+> from, and why the values look the way they do — with every number read off the
+> real cache. This section is the terser code tour.
 
 `src/extract_features.py` — the expensive stage. All **2,887,773** frames of 720p H.264 get
 decoded to yield **120,018** feature vectors at 1 fps — a 24:1 throwaway ratio. The output
