@@ -29,7 +29,8 @@ What already exists and has been verified by running it, not just by reading it.
 - [x] Per-video loaders and the 19/5 train/val split — `src/pitvis/data/dataset.py`.
 - [x] Official challenge metric vendored verbatim — `src/pitvis/evaluation/official.py`.
 - [x] Evaluation aligned to the challenge: per video, mean-averaged, with the
-      three official quirks preserved — `src/pitvis/evaluation/metric.py`, pinned by `tests/test_eval.py`
+      three official quirks preserved — `evaluation/metric.py`, pinned by
+      `tests/test_eval.py`
       (23 tests, all passing).
 - [x] Frame-wise linear probe baseline written — `src/pitvis/training/baseline.py`.
 - [x] **First full feature extraction run.** Completed 2026-08-04: all 25
@@ -126,7 +127,7 @@ model-specific.
       per-video predictions as `.npy`, and the console report. Makes runs
       diffable instead of scrollback-dependent.
 
-- [ ] **2.5 `src/pitvis/inference/predict.py`.** Video path → features (1.6) → checkpoint (2.3) →
+- [ ] **2.5 `pitvis/inference/predict.py`.** Video path → features (1.6) → checkpoint (2.3) →
       per-second step predictions, emitted both as a raw array and as merged
       `(start_s, end_s, step)` segments. Optional ground-truth scoring when
       labels are supplied. This is the piece that turns the repo from an

@@ -19,15 +19,15 @@ from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL, load_split
 from pitvis.evaluation.metric import report
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--epochs", type=int, default=10)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--batch-size", type=int, default=1024)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--confusion", action="store_true",
                     help="print the 15-way confusion matrix")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     torch.manual_seed(args.seed)
     device = torch.device(

@@ -106,14 +106,14 @@ The challenge metric is `(macro F1 + normalised edit score) / 2`, excluding clas
 - step 11 (`gasket seal construct`) appears in only 2 videos
 - step 13 (`nasal packing`) appears in only 1 video
 
-**`src/pitvis/evaluation/official.py` is the organisers' `helper_scripts/evaluation_steps.py`, vendored
-verbatim** (commit `b1cb307`, sha256 in the file header). Do not edit it and do not
-reimplement the metric — `src/pitvis/evaluation/metric.py` calls it, so the headline number is the challenge's
-number by construction. If upstream ever changes, re-vendor and diff.
+**`evaluation/official.py` is the organisers' `helper_scripts/evaluation_steps.py`,
+vendored verbatim** (commit `b1cb307`, sha256 in the file header). Do not edit it and do
+not reimplement the metric — `evaluation/metric.py` calls it, so the headline number is
+the challenge's number by construction. If upstream ever changes, re-vendor and diff.
 
-`src/pitvis/evaluation/metric.py` recovers the F1/edit split by replicating the vendored function's two internal
-calls, then **asserts** the two halves recombine to what the vendored one-shot function
-returns. `tests/test_eval.py` pins all of this; run `uv run pytest` after touching eval.
+`evaluation/metric.py` recovers the F1/edit split by replicating the vendored function's
+two internal calls, then **asserts** the two halves recombine to what the vendored
+one-shot function returns. `tests/test_eval.py` pins all of this; run `uv run pytest` after touching eval.
 
 ### The paper's Equation 3 is wrong — do not "fix" the code to match it
 
@@ -232,8 +232,8 @@ TRAIN = [2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,20,22,23]               # 19 vi
 ```
 
 `TRAIN` is the paper's 20 minus video 19, which has no labels (see below) — so our split is
-**19/5**, not 20/5. Keep both lists as explicit constants in `src/pitvis/data/dataset.py`; do not derive
-the split by arithmetic.
+**19/5**, not 20/5. Keep both lists as explicit constants in `src/pitvis/data/dataset.py`;
+do not derive the split by arithmetic.
 
 Note the paper's separate 8-video *testing* set is private and was never released. All 25
 videos we have are "training" videos in challenge terms; the 20/5 is a split within them.
@@ -285,7 +285,10 @@ uv.lock                        pinned resolution — tracked, commit changes to 
 src/pitvis/
   paths.py                     ROOT/RAW/DATA/FEATURES/MANIFEST/CKPT/NOTES — the ONLY
                                place a filesystem location is computed
+  pipeline.py                  Stage record + --only/--skip/--dry-run plumbing
+                               shared by the four run.py workflow runners
   data/
+    run.py                     WORKFLOW: inventory -> extract -> verify
     inventory.py               per-video duration, resolution, fps, annotated
                                seconds, step distribution
     extract_features.py        1 fps decode, frozen timm resnet50 (num_classes=0)
@@ -297,12 +300,16 @@ src/pitvis/
                                independent ffprobe length check
     dataset.py                 per-video (T, D) features + labels, train/val split
   models/
+    run.py                     WORKFLOW: shape/param trace through all 3 stages
+                               — the executable form of notes/citi-dataflow.md
     arst.py                    CITI's task-1 architecture: spatial embedding +
                                TeCNO + ARST (banded causal mask)
   training/
+    run.py                     WORKFLOW: baseline -> arst (+ --ablations)
     arst.py                    three-stage training + CCI auto-regressive inference
     baseline.py                frame-wise linear probe baseline
   evaluation/
+    run.py                     WORKFLOW: score an existing checkpoint, no retrain
     official.py                VENDORED official challenge metric — do not edit
     metric.py                  official metric per video + mean±std, plus pooled
                                diagnostics
@@ -315,16 +322,29 @@ data/arst/                     CITI checkpoints, standardize.npz, result.json
 ```
 
 Commands are console scripts declared in `pyproject.toml`, so the CLI surface and the
-import graph cannot drift apart:
+import graph cannot drift apart. Each package has a `run.py` that runs that directory
+as one workflow, plus per-stage scripts for when you want a single step:
 
 ```
-uv run pitvis-inventory        uv run pitvis-train-baseline
-uv run pitvis-extract          uv run pitvis-train-arst
-uv run pitvis-verify           uv run pytest
+uv run pitvis-data       inventory -> extract -> verify
+uv run pitvis-train      baseline -> arst   (--ablations adds the three variants)
+uv run pitvis-eval       score an existing checkpoint, no retraining
+uv run pitvis-models     shape/param trace through the cascade (~1 s smoke test)
+
+uv run pitvis-inventory  uv run pitvis-extract  uv run pitvis-verify
+uv run pitvis-train-baseline   uv run pitvis-train-arst   uv run pytest
 ```
 
-Two structural rules:
+All four runners share `--dry-run`, `--only`, `--skip` and `--continue-on-error`
+from `pipeline.py`.
 
+Three structural rules:
+
+- **`run.py` orchestrates, never reimplements.** A runner selects and sequences
+  stages; the behaviour lives in the stage module's `main(argv)`, which is also what
+  the per-stage console script calls. There is one definition of "extract features".
+  Every `main()` takes `argv: list[str] | None = None` so runners can compose them
+  without touching `sys.argv`.
 - **Never recompute a path.** Import from `pitvis.paths`. Five modules used to derive
   `ROOT` independently, each encoding "I live one level below the repo root" — a
   constraint that broke the moment anything moved.

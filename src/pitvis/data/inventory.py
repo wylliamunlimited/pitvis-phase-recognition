@@ -13,6 +13,7 @@ Writes notes/inventory.md.
 Usage: uv run pitvis-inventory
 """
 
+import argparse
 import json
 import math
 import subprocess
@@ -61,7 +62,8 @@ def load_annotations(vid: int) -> pd.DataFrame | None:
     return df
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args(argv)
     rows = []
     step_totals = {k: 0 for k in STEP_IDS}
     for vid in range(1, 26):

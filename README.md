@@ -104,6 +104,28 @@ inside it.
 
 ## Usage
 
+Each package under `src/pitvis/` has a `run.py` that runs that directory end to end.
+Start here:
+
+```sh
+uv run pitvis-data     # inventory -> extract -> verify   (the whole data pipeline)
+uv run pitvis-train    # baseline -> arst                 (both models, one metric)
+uv run pitvis-eval     # score an existing checkpoint, no retraining
+uv run pitvis-models   # shape + parameter trace through the cascade (~1 s)
+```
+
+Every runner takes `--dry-run` to print the plan without executing, and
+`--only` / `--skip` to run part of a workflow:
+
+```sh
+uv run pitvis-data --dry-run              # what would run, in what order
+uv run pitvis-data --only verify --probe  # just the slow integrity check
+uv run pitvis-data --videos 1 2 3         # limit extraction to 3 videos
+uv run pitvis-train --only arst --ablations
+```
+
+The individual stages are still addressable when you want one thing:
+
 ```sh
 uv run pitvis-inventory        # sanity-check the raw data, write notes/inventory.md
 uv run pitvis-extract          # one-time feature extraction (all 25 videos)
@@ -114,8 +136,9 @@ uv run pytest                  # verify the metric against the official code
 ```
 
 These are console scripts declared in `pyproject.toml`, so each maps to exactly one
-module's `main()`. Every module is also runnable directly if you prefer
-(`uv run python -m pitvis.training.arst --help`).
+module's `main()` — and the runners call those same `main()`s rather than a copy, so
+`pitvis-data` and `pitvis-extract` cannot drift apart. Every module is also runnable
+directly if you prefer (`uv run python -m pitvis.training.arst --help`).
 
 `uv run` syncs the environment first, so there is no venv to activate. To add or change
 a dependency, use `uv add <pkg>` / `uv remove <pkg>` rather than editing `pyproject.toml`

@@ -22,11 +22,11 @@ would silently mix incompatible features in one training run.
 Usage: uv run pitvis-extract [video_numbers...]
 """
 
+import argparse
 import hashlib
 import json
 import math
 import subprocess
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -187,9 +187,20 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
     print(f"video {vid:02d}: done, {expected} frames in {time.time() - t0:.0f}s")
 
 
-def main() -> None:
-    vids = [int(a) for a in sys.argv[1:]] or list(range(1, 26))
-    device = torch.device(
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("videos", nargs="*", type=int, metavar="N",
+                    help="video numbers to extract (default: all 25)")
+    ap.add_argument("--device", choices=("mps", "cuda", "cpu"),
+                    help="override device autodetection")
+    args = ap.parse_args(argv)
+
+    vids = args.videos or list(range(1, 26))
+    bad = [v for v in vids if not 1 <= v <= 25]
+    if bad:
+        raise SystemExit(f"video numbers must be in 1..25, got {bad}")
+
+    device = torch.device(args.device) if args.device else torch.device(
         "mps" if torch.backends.mps.is_available()
         else "cuda" if torch.cuda.is_available() else "cpu"
     )

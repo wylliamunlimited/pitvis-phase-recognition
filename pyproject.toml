@@ -15,6 +15,12 @@ dependencies = [
 # CLI surface. Each script maps to the `main()` of one module, so the commands
 # and the import graph cannot drift apart.
 [project.scripts]
+# Per-package workflow runners — each runs one directory end to end.
+pitvis-data = "pitvis.data.run:main"
+pitvis-models = "pitvis.models.run:main"
+pitvis-train = "pitvis.training.run:main"
+pitvis-eval = "pitvis.evaluation.run:main"
+# Individual stages. The runners above call these same main()s, never a copy.
 pitvis-inventory = "pitvis.data.inventory:main"
 pitvis-extract = "pitvis.data.extract_features:main"
 pitvis-verify = "pitvis.data.verify_cache:main"

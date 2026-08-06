@@ -119,7 +119,7 @@ unrecoverable** from the annotations. There is no way to tell "we haven't starte
 `map_instruments.csv` has the same problem at `0` (`no_visible_instrument` and
 `occluded_image_inside_patient`).
 
-This is why `src/pitvis/data/inventory.py:100-102` builds the name lookup with `setdefault` rather than
+This is why `data/inventory.py:100-102` builds the name lookup with `setdefault` rather than
 a dict comprehension — a naive `dict(zip(ids, names))` would silently keep only the last
 name for each colliding key. If you load these maps yourself, handle the collision.
 
@@ -301,7 +301,7 @@ flowchart TD
     INV["src/pitvis/data/inventory.py<br/>ffprobe every video<br/>assert every data invariant"]
     NOTES["notes/inventory.md"]
 
-    EX["src/pitvis/data/extract_features.py<br/>1 fps decode via ffmpeg pipe<br/>frozen ResNet-50 to 2048-d"]
+    EX["data/extract_features.py<br/>1 fps decode via ffmpeg pipe<br/>frozen ResNet-50 to 2048-d"]
     FEAT["data/features/video_NN<br/>features.npy - T by 2048<br/>labels.npy - T"]
 
     DS["src/pitvis/data/dataset.py<br/>load per video<br/>TRAIN and VAL constants"]
@@ -365,7 +365,7 @@ much cheaper to diagnose than a silent label shift discovered three hours into e
 > from, and why the values look the way they do — with every number read off the
 > real cache. This section is the terser code tour.
 
-`src/pitvis/data/extract_features.py` — the expensive stage. All **2,887,773** frames of 720p H.264 get
+`data/extract_features.py` — the expensive stage. All **2,887,773** frames of 720p H.264 get
 decoded to yield **120,018** feature vectors at 1 fps — a 24:1 throwaway ratio. The output
 cache is small: 120,018 × 2048 × 4 bytes ≈ **1 GB**. So this stage is compute-bound on video
 decoding, not storage-bound.
@@ -522,9 +522,9 @@ P(same label next second) = 0.985, expect the answer to be "mostly temporal".
 
 ## 12. Stage 5 — evaluation
 
-Two files. **`src/pitvis/evaluation/official.py` is the organisers' code, vendored byte-for-byte** from
+Two files. **`evaluation/official.py` is the organisers' code, vendored byte-for-byte** from
 `dreets/pitvis` commit `b1cb307` (sha256 recorded in its header). Do not edit it. Do not
-reimplement the metric. `src/pitvis/evaluation/metric.py` calls it, so the headline number is the challenge's
+reimplement the metric. `evaluation/metric.py` calls it, so the headline number is the challenge's
 number by construction rather than by our interpretation of a paper.
 
 ```mermaid
