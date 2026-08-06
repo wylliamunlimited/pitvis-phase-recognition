@@ -6,6 +6,10 @@ what we implemented, and — importantly — where we knowingly diverge.
 Code: `src/model_arst.py` (architecture), `src/train_arst.py` (three-stage
 training + inference).
 
+For the same model traced as tensor shapes — mp4 to score, every dimension read
+off the real artifacts — see `citi-dataflow.md`. This note is the *why*; that
+one is the *what shape*.
+
 ---
 
 ## 1. Who CITI are and what they submitted

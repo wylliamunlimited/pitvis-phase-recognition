@@ -297,6 +297,8 @@ notes/embeddings.md       ground-up explanation of the feature cache — what an
 notes/roadmap.md          phased plan of remaining work — keep it updated as parts land
 notes/citi-baseline.md    the CITI/ARST reproduction — architecture, faithfulness table,
                           and the deviations (frozen backbone, chunked attention)
+notes/citi-dataflow.md    the CITI cascade traced with real tensor shapes, mp4 -> score;
+                          where T is chunked vs kept whole, and why
 data/features/            per-video features.npy + labels.npy (gitignored)
 data/arst/                CITI checkpoints, standardize.npz, result.json (gitignored)
 26531686/                 raw PitVis download (gitignored, read-only)
@@ -315,6 +317,10 @@ Do not merge them. Each has a different reader in a different moment:
 - **`notes/walkthrough.md`** — reasoning and domain, with `file.py:NN` pointers.
   A code tour; assumes ML fluency.
 - **`notes/roadmap.md`** — what is left to build, phased.
+- **`notes/citi-baseline.md`** — the CITI reproduction: *why* the architecture is what
+  it is, faithfulness, results.
+- **`notes/citi-dataflow.md`** — the same model as a shape trace: *what shape the data
+  is* at every hop. Reference layer; read alongside `citi-baseline.md`, not instead.
 
 `walkthrough.md` §8 and `embeddings.md` deliberately cover the same extraction stage
 at two depths. They are cross-linked, not deduplicated. When adding docs, pick the
