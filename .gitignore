@@ -5,11 +5,17 @@ __pycache__/
 # uv virtualenv — uv.lock IS tracked, the env is not
 .venv/
 
-# raw PitVis download — read-only input, never tracked
-26531686/
+# Everything below is ANCHORED with a leading slash so it matches only the
+# repo root. An unanchored `data/` also matches `src/pitvis/data/`, which
+# silently kept that package's new files out of git — see the note in
+# CLAUDE.md. Only patterns that genuinely recur at every level
+# (__pycache__, .venv) should be left unanchored.
 
-# extracted features (per-video features.npy + labels.npy)
-data/
+# raw PitVis download — read-only input, never tracked
+/26531686/
+
+# extracted features (per-video features.npy + labels.npy) and checkpoints
+/data/
 
 # prediction outputs from pitvis-predict
-predictions/
+/predictions/
