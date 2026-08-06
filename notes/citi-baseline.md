@@ -245,6 +245,29 @@ almost unchanged — so the per-frame ceiling is set by the features, not by the
 classifier. Fine-tuning the backbone (roadmap 3.6, gated by 1.7) is where the
 remaining F1 lives.
 
+### Inference-time ablations, measured at fixed weights
+
+The table above retrains for every row, so each number carries fresh MPS noise
+on top of the effect being measured. Two of those rows ablate *inference*, not
+training — `--no-cci` and `--mask-excluded` change no weight at all. Scoring one
+checkpoint four ways (`uv run pitvis-eval`) isolates them properly:
+
+| inference config | metric | Δ vs default | leaked |
+|---|---|---|---|
+| default (W=5, CCI on) | 0.3402 ± 0.0484 | — | 1,249 |
+| `--no-cci` | 0.2937 ± 0.0473 | **−0.047** | 1,149 |
+| `--mask-excluded` | 0.4405 ± 0.0457 | **+0.100** | 0 |
+| `--no-cci --mask-excluded` | 0.3969 ± 0.0358 | +0.057 | 0 |
+
+Same weights throughout, so these deltas are the ablation and nothing else.
+Both effects are larger here than the retrain-based table suggests — masking is
+worth +0.100 rather than +0.076 — and the two compose sub-additively: CCI is
+worth +0.047 without masking but only +0.044 with it, which makes sense given
+that both are attacking prediction noise.
+
+Prefer this table when reasoning about inference choices, and the retraining
+table only for things that actually change weights (`--width`).
+
 ### CCI earns its keep
 
 Removing it costs 0.047 (0.3349 -> 0.2875), almost all of it edit score

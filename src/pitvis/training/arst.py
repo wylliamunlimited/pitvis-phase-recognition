@@ -247,8 +247,8 @@ def cci_decode(model, f, args, dev):
 
 # --------------------------------------------------------------------------
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--epochs-spatial", type=int, default=20)
     ap.add_argument("--epochs-tecno", type=int, default=30)
     ap.add_argument("--epochs-arst", type=int, default=20)
@@ -264,7 +264,7 @@ def main() -> None:
     ap.add_argument("--mask-excluded", action="store_true",
                     help="remove classes 0/11/13 from the argmax at inference")
     ap.add_argument("--confusion", action="store_true")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)

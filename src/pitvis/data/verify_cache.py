@@ -140,11 +140,11 @@ def check_video(vid: int, manifest: dict, do_probe: bool) -> list[str]:
     return errors
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--probe", action="store_true",
                         help="also re-probe every video with ffprobe (slow)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not MANIFEST.exists():
         sys.exit("manifest.json missing — cache has no provenance; re-run extraction")
