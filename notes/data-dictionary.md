@@ -245,7 +245,7 @@ ann_rows == ceil(nb_frames / round(fps)) + 1
 The extra row is the final second, for which no frame exists. Every video ends
 in a background run of 6–147 seconds, so the dropped row is verified `-1` in
 all 24 videos. Extraction truncates labels to the frame count and asserts both
-facts (`data/extract_features.py:179`).
+facts (`data/extract_features.py:207-209`).
 
 That truncation is why the labeled corpus is **115,562** frames rather than the
 115,586 annotation rows here — exactly 24 rows, one per video.
