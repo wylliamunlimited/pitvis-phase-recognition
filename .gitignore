@@ -10,3 +10,6 @@ __pycache__/
 
 # extracted features (per-video features.npy + labels.npy)
 data/
+
+# prediction outputs from pitvis-predict
+predictions/

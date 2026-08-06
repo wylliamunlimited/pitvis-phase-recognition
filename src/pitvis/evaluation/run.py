@@ -10,7 +10,7 @@ That separation matters because two of the interesting ablations are
     --no-cci          drop the consistency constraint -> strictly causal
     --mask-excluded   remove classes 0/11/13 from the argmax
 
-Neither changes a weight. Running them through `pitvis-train-arst` retrains all
+Neither changes a weight. Running them through `pitvis-train arst` retrains all
 three stages (~112 s) to answer a question about the decoder, and — because MPS
 kernels are not bit-deterministic — returns a model that differs slightly from
 the one you meant to ablate. Scoring one fixed checkpoint keeps the weights
@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     ckpt_path, std_path = Path(args.ckpt), Path(args.standardize)
     for p, what in [(ckpt_path, "checkpoint"), (std_path, "standardisation stats")]:
         if not p.exists():
-            raise SystemExit(f"{what} not found at {p} — run `uv run pitvis-train-arst` first")
+            raise SystemExit(f"{what} not found at {p} — run `uv run pitvis-train arst` first")
 
     dev = device_of()
     ckpt = torch.load(ckpt_path, map_location=dev, weights_only=False)

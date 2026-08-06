@@ -179,15 +179,15 @@ positions. The encoder at *inference* is chunked with W-overlap and is exact.
 ## 5. Running it
 
 ```bash
-uv run pitvis-train-arst
+uv run pitvis-train arst
 ```
 
 Ablations that isolate each claim:
 
 ```bash
-uv run pitvis-train-arst --no-cci          # strictly causal, no lag
-uv run pitvis-train-arst --width 0         # kill the banded attention
-uv run pitvis-train-arst --mask-excluded   # drop 0/11/13 from the argmax
+uv run pitvis-train arst --no-cci          # strictly causal, no lag
+uv run pitvis-train arst --width 0         # kill the banded attention
+uv run pitvis-train arst --mask-excluded   # drop 0/11/13 from the argmax
 ```
 
 Artifacts land in `data/arst/`: `citi.pt` (all three stages), `result.json`,

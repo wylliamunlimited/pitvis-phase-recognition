@@ -127,7 +127,7 @@ model-specific.
       per-video predictions as `.npy`, and the console report. Makes runs
       diffable instead of scrollback-dependent.
 
-- [ ] **2.5 `pitvis/inference/predict.py`.** Video path → features (1.6) → checkpoint (2.3) →
+- [x] **2.5 `pitvis/inference/predict.py`.** ✅ Video path → features (1.6) → checkpoint (2.3) →
       per-second step predictions, emitted both as a raw array and as merged
       `(start_s, end_s, step)` segments. Optional ground-truth scoring when
       labels are supplied. This is the piece that turns the repo from an

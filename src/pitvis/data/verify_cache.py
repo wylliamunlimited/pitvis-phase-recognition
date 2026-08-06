@@ -56,7 +56,12 @@ def space_id(space: dict) -> str:
 
 
 def probe(video: Path) -> tuple[int, int]:
-    """Return (nb_frames, round(fps)) — same probe as extraction."""
+    """Return (nb_frames, round(fps)).
+
+    Deliberately independent of `extract_features.probe` (which also returns
+    resolution): this is the check, and a check that imports the thing it
+    checks verifies nothing.
+    """
     cmd = [
         "ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
         "-show_entries", "stream=r_frame_rate,nb_read_packets",
