@@ -81,6 +81,7 @@ notes/walkthrough.md        the domain, the data, and the pipeline — start her
 notes/embeddings.md         what the feature cache is and how embeddings are made
 notes/citi-baseline.md      the CITI reproduction: architecture, faithfulness, results
 notes/citi-dataflow.md      the same cascade traced with real tensor dimensions
+notes/data-dictionary.md    every annotation column and what each integer means
 notes/roadmap.md            phased plan of remaining work
 notes/inventory.md          generated dataset inventory
 data/features/              cached per-video features.npy + labels.npy (gitignored)

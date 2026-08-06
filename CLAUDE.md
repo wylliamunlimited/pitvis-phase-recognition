@@ -69,8 +69,13 @@ int_video,int_time,int_step,int_instrument1,int_instrument2
 - `int_time` — **one row per elapsed second**, contiguous `0..N-1`. No gaps, no duplicates.
 - `int_step` — a single integer in `{-1} ∪ {1..14}`. **There is no step 0.**
 - `int_instrument1` / `int_instrument2` — the instrument label is a *pair of columns*, not
-  a list. `int_instrument2 == -2` means no secondary instrument (85.3% of rows). The pair
-  is sorted ascending except in 4 rows dataset-wide.
+  a list, so **two is a structural maximum**. `int_instrument2 == -2` means no secondary
+  instrument (85.3% of rows). Among rows where slot 2 holds a real instrument the pair is
+  sorted ascending with **zero** violations; the 4 rows with `int_instrument2 == 0` are an
+  anomaly (0 = "nothing visible", but the unused-slot sentinel is -2), not an ordering
+  violation. Slot 2 only ever takes 6 of the 18 ids, and 98.6% of two-instrument rows have
+  suction as the secondary — the pair is "working instrument + suction", not two co-equal
+  tools. Full breakdown in `notes/data-dictionary.md`.
 
 `int_step == -1` and `int_instrument1 == -1` coincide exactly (10,476 rows, zero
 disagreement in either direction). Background is one consistent state.
@@ -377,6 +382,9 @@ Do not merge them. Each has a different reader in a different moment:
   it is, faithfulness, results.
 - **`notes/citi-dataflow.md`** — the same model as a shape trace: *what shape the data
   is* at every hop. Reference layer; read alongside `citi-baseline.md`, not instead.
+- **`notes/data-dictionary.md`** — every annotation column and what each integer means,
+  with real distributions. The reference layer for the *data*, as `citi-dataflow.md` is
+  for the model. `CLAUDE.md` keeps only the decisions; look things up there.
 
 `walkthrough.md` §8 and `embeddings.md` deliberately cover the same extraction stage
 at two depths. They are cross-linked, not deduplicated. When adding docs, pick the
