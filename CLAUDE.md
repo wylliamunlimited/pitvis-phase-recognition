@@ -106,12 +106,12 @@ The challenge metric is `(macro F1 + normalised edit score) / 2`, excluding clas
 - step 11 (`gasket seal construct`) appears in only 2 videos
 - step 13 (`nasal packing`) appears in only 1 video
 
-**`src/official_metric.py` is the organisers' `helper_scripts/evaluation_steps.py`, vendored
+**`src/pitvis/evaluation/official.py` is the organisers' `helper_scripts/evaluation_steps.py`, vendored
 verbatim** (commit `b1cb307`, sha256 in the file header). Do not edit it and do not
-reimplement the metric — `src/eval.py` calls it, so the headline number is the challenge's
+reimplement the metric — `src/pitvis/evaluation/metric.py` calls it, so the headline number is the challenge's
 number by construction. If upstream ever changes, re-vendor and diff.
 
-`src/eval.py` recovers the F1/edit split by replicating the vendored function's two internal
+`src/pitvis/evaluation/metric.py` recovers the F1/edit split by replicating the vendored function's two internal
 calls, then **asserts** the two halves recombine to what the vendored one-shot function
 returns. `tests/test_eval.py` pins all of this; run `uv run pytest` after touching eval.
 
@@ -146,7 +146,7 @@ Report lagged and strictly-causal variants side by side rather than conflating t
 ### Aggregation: per video, then mean
 
 Das et al. 2024 §evaluation: scores are *"mean-averaged across the 8-testing-videos"*,
-reported as mean±std, **"not pooled frame-wise"**. So `eval.evaluate` takes
+reported as mean±std, **"not pooled frame-wise"**. So `metric.evaluate` takes
 `[(vid, y_true, y_pred), ...]` and never concatenates.
 
 Pooling is not a harmless approximation — it **inflates the score**. Concatenation merges the
@@ -161,7 +161,7 @@ A "cleaner" reimplementation would silently diverge from the challenge on all th
 1. **Exclusion filters by ground truth only.** A model that *predicts* -1/11/13 on a retained
    row is not filtered. Since `f1_score` is called with **no `labels=`**, sklearn infers the
    label set from the union of cleaned trues *and* preds, so that class joins the macro
-   average at F1 = 0 and drags the score down. `eval.report` counts these as `leaked`.
+   average at F1 = 0 and drags the score down. `metric.report` counts these as `leaked`.
    Corollary worth exploiting: **masking classes 0/11/13 out of the argmax at inference can
    only raise the official metric.** Not yet implemented in any model.
 2. **`zero_division=1`** in the `f1_score` call.
@@ -173,7 +173,7 @@ use a fixed 12-class label set for stability. They are diagnostics, labelled as 
 output, and are not part of the reported metric.
 
 Edge case: if every ground-truth row of a video is an excluded class, the official code
-divides by zero. `eval.evaluate_video` raises a clear `ValueError` instead of patching the
+divides by zero. `metric.evaluate_video` raises a clear `ValueError` instead of patching the
 vendored file. All 12 scored classes are present in all 5 val videos, so this does not arise
 on our split.
 
@@ -232,7 +232,7 @@ TRAIN = [2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,20,22,23]               # 19 vi
 ```
 
 `TRAIN` is the paper's 20 minus video 19, which has no labels (see below) — so our split is
-**19/5**, not 20/5. Keep both lists as explicit constants in `src/dataset.py`; do not derive
+**19/5**, not 20/5. Keep both lists as explicit constants in `src/pitvis/data/dataset.py`; do not derive
 the split by arithmetic.
 
 Note the paper's separate 8-video *testing* set is private and was never released. All 25
@@ -256,13 +256,18 @@ directly comparable to the paper; training is on 19/20 of the intended data.
 Dependencies are managed with **uv**. `pyproject.toml` + `uv.lock` are tracked; `.venv/` is
 not. Python is pinned to **3.13** via `.python-version`.
 
-- Run scripts as `uv run python src/<script>.py`. Do not use bare `python` — the machine's
-  default interpreter is 3.14 with a different, unmanaged set of packages.
+- Run the console scripts (`uv run pitvis-<name>`), or `uv run python -m pitvis.<module>`.
+  Do not use bare `python` — the machine's default interpreter is 3.14 with a different,
+  unmanaged set of packages.
 - Change dependencies with `uv add` / `uv remove`, not by hand-editing `pyproject.toml`, and
   commit the resulting `uv.lock`.
-- `package = false` in `[tool.uv]` — `src/` is a set of entry-point scripts using flat imports
-  (`from dataset import ...`), not an installable package. There are no `__init__.py` files and
-  nothing gets built.
+- **`pitvis` is a real package** (`src/pitvis/`, hatchling, installed editable into `.venv`
+  by `uv sync`). Imports are absolute and fully qualified — `from pitvis.data.dataset import
+  load_split`. Entry points are the console scripts in `[project.scripts]`; run those rather
+  than invoking files by path. Tests import the package the same way, so there is no
+  `pythonpath` hack in the pytest config.
+  *(This reverses the earlier `package = false` / flat-imports decision. That was right when
+  `src/` held four scripts; it stopped being right at nine modules across four concerns.)*
 - **`ffmpeg` / `ffprobe` are hard requirements and are not Python packages** — both
   `inventory.py` and `extract_features.py` shell out to them, so uv cannot supply them.
 - Resolved versions worth knowing: torch 2.13 (MPS available on this Mac), **pandas 3.0**.
@@ -273,39 +278,58 @@ not. Python is pinned to **3.13** via `.python-version`.
 ## Layout
 
 ```
-pyproject.toml            uv-managed dependencies (package = false)
-uv.lock                   pinned resolution — tracked, commit changes to it
-.python-version           3.13
-src/inventory.py          per-video duration, resolution, fps, annotated seconds, step distribution
-src/extract_features.py   1 fps decode, frozen timm resnet50 (num_classes=0) -> data/features/
-                          writes data/features/manifest.json (feature space + per-video provenance);
-                          refuses to extract into a cache from a different feature space
-src/verify_cache.py       integrity check of the whole cache — run after any extraction;
-                          --probe adds the slow annotation-independent ffprobe length check
-src/dataset.py            per-video (T, D) features + aligned labels, train/val split
-src/official_metric.py    VENDORED official challenge metric — do not edit
-src/eval.py               official metric per video + mean±std, plus pooled diagnostics
-src/train_baseline.py     frame-wise linear probe baseline
-src/model_arst.py         CITI's task-1 winning architecture: spatial embedding + TeCNO
-                          + ARST (auto-regressive transformer, banded causal mask)
-src/train_arst.py         three-stage training + CCI auto-regressive inference
-tests/test_eval.py        pins eval.py to the official metric — `uv run pytest`
-notes/inventory.md        generated by src/inventory.py
-notes/walkthrough.md      hand-written guide: domain, data semantics, pipeline, diagrams
-notes/embeddings.md       ground-up explanation of the feature cache — what an embedding is,
-                          how extraction generates it, why the pipeline is shaped that way
-notes/roadmap.md          phased plan of remaining work — keep it updated as parts land
-notes/citi-baseline.md    the CITI/ARST reproduction — architecture, faithfulness table,
-                          and the deviations (frozen backbone, chunked attention)
-notes/citi-dataflow.md    the CITI cascade traced with real tensor shapes, mp4 -> score;
-                          where T is chunked vs kept whole, and why
-data/features/            per-video features.npy + labels.npy (gitignored)
-data/arst/                CITI checkpoints, standardize.npz, result.json (gitignored)
-26531686/                 raw PitVis download (gitignored, read-only)
+pyproject.toml                 uv-managed deps, console scripts, hatchling build
+uv.lock                        pinned resolution — tracked, commit changes to it
+.python-version                3.13
+
+src/pitvis/
+  paths.py                     ROOT/RAW/DATA/FEATURES/MANIFEST/CKPT/NOTES — the ONLY
+                               place a filesystem location is computed
+  data/
+    inventory.py               per-video duration, resolution, fps, annotated
+                               seconds, step distribution
+    extract_features.py        1 fps decode, frozen timm resnet50 (num_classes=0)
+                               -> data/features/; writes manifest.json (feature
+                               space + per-video provenance); refuses to extract
+                               into a cache from a different feature space
+    verify_cache.py            integrity check of the whole cache — run after any
+                               extraction; --probe adds the slow, annotation-
+                               independent ffprobe length check
+    dataset.py                 per-video (T, D) features + labels, train/val split
+  models/
+    arst.py                    CITI's task-1 architecture: spatial embedding +
+                               TeCNO + ARST (banded causal mask)
+  training/
+    arst.py                    three-stage training + CCI auto-regressive inference
+    baseline.py                frame-wise linear probe baseline
+  evaluation/
+    official.py                VENDORED official challenge metric — do not edit
+    metric.py                  official metric per video + mean±std, plus pooled
+                               diagnostics
+
+tests/test_eval.py             pins evaluation/metric.py to the official metric
+notes/                         see the doc-layer section below
+data/features/                 per-video features.npy + labels.npy (gitignored)
+data/arst/                     CITI checkpoints, standardize.npz, result.json
+26531686/                      raw PitVis download (gitignored, read-only)
 ```
 
-`extract_features.py` must be **resumable** — decoding 40 GB is expensive; skip videos whose
-outputs already exist and are the expected length.
+Commands are console scripts declared in `pyproject.toml`, so the CLI surface and the
+import graph cannot drift apart:
+
+```
+uv run pitvis-inventory        uv run pitvis-train-baseline
+uv run pitvis-extract          uv run pitvis-train-arst
+uv run pitvis-verify           uv run pytest
+```
+
+Two structural rules:
+
+- **Never recompute a path.** Import from `pitvis.paths`. Five modules used to derive
+  `ROOT` independently, each encoding "I live one level below the repo root" — a
+  constraint that broke the moment anything moved.
+- **`extract_features.py` must stay resumable** — decoding 40 GB is expensive; skip
+  videos whose outputs already exist and are the expected length.
 
 ### The docs are layered by depth, on purpose
 

@@ -13,28 +13,26 @@ Inference is a sequential auto-regressive rollout with Consistency Constraint
 Inference (ARST §2.3, Algorithm 1), then the official challenge metric.
 
 Usage:
-    uv run python src/train_arst.py                      # full three-stage run
-    uv run python src/train_arst.py --no-cci             # ablate CCI
-    uv run python src/train_arst.py --width 0            # ablate the banded mask
-    uv run python src/train_arst.py --mask-excluded      # drop 0/11/13 from argmax
+    uv run pitvis-train-arst                      # full three-stage run
+    uv run pitvis-train-arst --no-cci             # ablate CCI
+    uv run pitvis-train-arst --width 0            # ablate the banded mask
+    uv run pitvis-train-arst --mask-excluded      # drop 0/11/13 from argmax
 """
 
 import argparse
 import json
 import time
-from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from dataset import NUM_CLASSES, TRAIN, VAL, load_split
-from eval import report
-from model_arst import ARST, BAND_WIDTH, CCI_N, SpatialEmbedding, TeCNO
+from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL, load_split
+from pitvis.evaluation.metric import report
+from pitvis.models.arst import ARST, BAND_WIDTH, CCI_N, SpatialEmbedding, TeCNO
+from pitvis.paths import CKPT
 
-ROOT = Path(__file__).resolve().parent.parent
-CKPT = ROOT / "data" / "arst"
 EXCLUDED = [0, 11, 13]      # encoded; scored classes are the other 12
 
 

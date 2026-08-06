@@ -3,7 +3,7 @@
 Our reference model. This note records what the published method actually is,
 what we implemented, and — importantly — where we knowingly diverge.
 
-Code: `src/model_arst.py` (architecture), `src/train_arst.py` (three-stage
+Code: `src/pitvis/models/arst.py` (architecture), `src/pitvis/training/arst.py` (three-stage
 training + inference).
 
 For the same model traced as tensor shapes — mp4 to score, every dimension read
@@ -179,15 +179,15 @@ positions. The encoder at *inference* is chunked with W-overlap and is exact.
 ## 5. Running it
 
 ```bash
-uv run python src/train_arst.py
+uv run pitvis-train-arst
 ```
 
 Ablations that isolate each claim:
 
 ```bash
-uv run python src/train_arst.py --no-cci          # strictly causal, no lag
-uv run python src/train_arst.py --width 0         # kill the banded attention
-uv run python src/train_arst.py --mask-excluded   # drop 0/11/13 from the argmax
+uv run pitvis-train-arst --no-cci          # strictly causal, no lag
+uv run pitvis-train-arst --width 0         # kill the banded attention
+uv run pitvis-train-arst --mask-excluded   # drop 0/11/13 from the argmax
 ```
 
 Artifacts land in `data/arst/`: `citi.pt` (all three stages), `result.json`,
@@ -217,6 +217,19 @@ The internally comparable number is our own frame-wise linear probe on the same
 
 Training is cheap: **112 s** for all three stages on MPS, plus ~50 s inference
 across the 5 val videos. The frozen feature cache is what buys that.
+
+### These numbers are not bit-reproducible
+
+Re-running the faithful config after the package restructure gave **0.3402 ±
+0.0484** (macro-F1 0.3255, edit 0.3548, 1,249 leaked) against the 0.3349 ±
+0.0473 in the table — same seed, same data, same code path.
+
+The gap is 0.005, an order of magnitude below the ±0.048 per-video spread. MPS
+reduction kernels are not bit-deterministic across runs, so `torch.manual_seed`
+fixes the initialisation and the shuffle order but not the arithmetic. Treat the
+table's third decimal as noise, and do not read a difference of <0.01 between
+any two configs here as signal — the `--width 0` result in particular sits well
+inside this band.
 
 ### What moved, and what did not
 

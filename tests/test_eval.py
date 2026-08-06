@@ -1,4 +1,4 @@
-"""Tests pinning src/eval.py to the official PitVis metric.
+"""Tests pinning pitvis/evaluation/metric.py to the official PitVis metric.
 
 These exist because the official metric has three behaviours that a reasonable
 reimplementation would "fix" and thereby silently diverge from the challenge:
@@ -13,8 +13,8 @@ Run: uv run pytest
 import numpy as np
 import pytest
 
-from eval import decode, evaluate, evaluate_video
-from official_metric import calculate_steps_evaluation_metric
+from pitvis.evaluation.metric import decode, evaluate, evaluate_video
+from pitvis.evaluation.official import calculate_steps_evaluation_metric
 
 
 def enc(*labels: int) -> np.ndarray:

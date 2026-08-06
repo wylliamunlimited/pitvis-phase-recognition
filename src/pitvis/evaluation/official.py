@@ -12,8 +12,8 @@ file stays diffable against upstream and the headline number is the challenge's
 number by construction rather than by our reinterpretation of it. Naming style
 (`ls_`/`flt_`/`int_` prefixes) is theirs; do not "fix" it.
 
-Consumed by src/eval.py. Behaviours worth knowing before you read it — all are
-faithful to upstream and deliberately preserved:
+Consumed by `pitvis.evaluation.metric`. Behaviours worth knowing before you
+read it — all are faithful to upstream and deliberately preserved:
 
 - `remove_background_steps` filters rows by GROUND TRUTH only (-1, 11, 13).
   Predictions of those classes survive on retained rows.
@@ -24,13 +24,13 @@ faithful to upstream and deliberately preserved:
 - `zero_division=1`.
 - `calculate_edit_score` runs on the sequence AFTER background removal, so
   excluded rows are spliced out and the segments either side of a gap merge.
-- Inputs are RAW step labels (background is -1, not 0). See `eval.decode`.
+- Inputs are RAW step labels (background is -1, not 0). See `metric.decode`.
 - Scores ONE video. The paper mean-averages per-video scores across videos;
   never concatenate videos before calling this.
 
 Edge case upstream does not handle: if every ground-truth row is excluded, the
-cleaned lists are empty and `calculate_edit_score` divides by zero. src/eval.py
-guards against this rather than patching it here.
+cleaned lists are empty and `calculate_edit_score` divides by zero.
+`pitvis.evaluation.metric` guards against this rather than patching it here.
 """
 
 # global imports

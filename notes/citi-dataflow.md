@@ -49,7 +49,7 @@ pipeline is shaped this way.
 
 ## 1. Raw video → frames
 
-`extract_features.py` shells out to `ffprobe` for two numbers, then to `ffmpeg`
+`data/extract_features.py` shells out to `ffprobe` for two numbers, then to `ffmpeg`
 to decode.
 
 ```
@@ -86,7 +86,7 @@ Annotation rows are always exactly `T+1`. The extra row is the last second, for
 which no frame exists (a 172,812-frame video at 24 fps is 7,200.5 seconds long;
 you get 7,201 sampled frames indexed 0..7200, and 7,202 annotation rows).
 
-`extract_features.py:181` handles it by assertion, not by trust:
+`data/extract_features.py:179` handles it by assertion, not by trust:
 
 ```python
 assert len(steps) == expected + 1
@@ -149,7 +149,7 @@ across 25 video directories — video 19 has features but no labels).
 > **Cache state note.** `data/features/manifest.json` is currently **absent** —
 > this cache was extracted before the manifest commit (`e3a8d31`) landed. The
 > manifest records the feature-space content hash and per-video provenance, and
-> `extract_features.py` uses it to refuse writing incompatible features into an
+> `data/extract_features.py` uses it to refuse writing incompatible features into an
 > existing cache. Re-running extraction backfills it without re-decoding, since
 > the length check short-circuits. Worth doing before any further extraction.
 
@@ -157,7 +157,7 @@ across 25 video directories — video 19 has features but no labels).
 
 ## 3. Cache → split
 
-`dataset.py` loads per video and never concatenates across the split boundary.
+`data/dataset.py` loads per video and never concatenates across the split boundary.
 
 ```python
 VAL   = [1, 12, 21, 24, 25]
@@ -175,7 +175,7 @@ validation videos happen to be long ones (7,201 / 4,942 / 6,767 / 7,649 /
 4,337).
 
 Standardisation statistics come from the train split only and are computed once
-in `train_arst.py:277`:
+in `training/arst.py:275`:
 
 ```
 X = concat over TRAIN            (84666, 2048)
@@ -406,7 +406,7 @@ truth (7201,) int64 ──┴─→ [(vid, truth, pred), ...]  5 tuples
                               │
                               │  per video, never concatenated
                               ▼
-                     official_metric.py  (vendored verbatim)
+                     evaluation/official.py  (vendored verbatim)
                               │
                      (macro-F1 + normalised edit) / 2
                               │

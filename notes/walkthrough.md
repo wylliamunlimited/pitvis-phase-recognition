@@ -71,7 +71,7 @@ deposit ID.
 
 ### The annotation schema
 
-Five integer columns, no nulls, verified across all 24 files by `src/inventory.py:50`.
+Five integer columns, no nulls, verified across all 24 files by `src/pitvis/data/inventory.py:50`.
 The first rows of `annotations_01.csv`:
 
 ```
@@ -119,7 +119,7 @@ unrecoverable** from the annotations. There is no way to tell "we haven't starte
 `map_instruments.csv` has the same problem at `0` (`no_visible_instrument` and
 `occluded_image_inside_patient`).
 
-This is why `src/inventory.py:100-102` builds the name lookup with `setdefault` rather than
+This is why `src/pitvis/data/inventory.py:100-102` builds the name lookup with `setdefault` rather than
 a dict comprehension — a naive `dict(zip(ids, names))` would silently keep only the last
 name for each colliding key. If you load these maps yourself, handle the collision.
 
@@ -136,7 +136,7 @@ name for each colliding key. If you load these maps yourself, handle the collisi
 
 The consistency check worth knowing about: `int_step == -1` and `int_instrument1 == -1`
 coincide **exactly** — 10,476 rows, zero disagreement either way. Background is one coherent
-state across both label tracks, and `src/inventory.py:58-60` asserts it. It also
+state across both label tracks, and `src/pitvis/data/inventory.py:58-60` asserts it. It also
 cross-checks: 9.06% of 115,586 labelled seconds = 10,476.
 
 ---
@@ -298,16 +298,16 @@ flowchart TD
         A["annotations_NN.csv<br/>one row per second"]
     end
 
-    INV["src/inventory.py<br/>ffprobe every video<br/>assert every data invariant"]
+    INV["src/pitvis/data/inventory.py<br/>ffprobe every video<br/>assert every data invariant"]
     NOTES["notes/inventory.md"]
 
-    EX["src/extract_features.py<br/>1 fps decode via ffmpeg pipe<br/>frozen ResNet-50 to 2048-d"]
+    EX["src/pitvis/data/extract_features.py<br/>1 fps decode via ffmpeg pipe<br/>frozen ResNet-50 to 2048-d"]
     FEAT["data/features/video_NN<br/>features.npy - T by 2048<br/>labels.npy - T"]
 
-    DS["src/dataset.py<br/>load per video<br/>TRAIN and VAL constants"]
-    TR["src/train_baseline.py<br/>standardize then Linear 2048 to 15"]
-    EV["src/eval.py<br/>per-video scoring plus diagnostics"]
-    OM["src/official_metric.py<br/>VENDORED, unmodified"]
+    DS["src/pitvis/data/dataset.py<br/>load per video<br/>TRAIN and VAL constants"]
+    TR["src/pitvis/training/baseline.py<br/>standardize then Linear 2048 to 15"]
+    EV["src/pitvis/evaluation/metric.py<br/>per-video scoring plus diagnostics"]
+    OM["src/pitvis/evaluation/official.py<br/>VENDORED, unmodified"]
     OUT["challenge metric<br/>mean plus or minus std"]
 
     V --> INV
@@ -336,7 +336,7 @@ experiment loop for the temporal models, which are the actual point.
 
 ## 7. Stage 1 — inventory
 
-`src/inventory.py` — run this first, it touches nothing and verifies everything.
+`src/pitvis/data/inventory.py` — run this first, it touches nothing and verifies everything.
 
 It is not really a data-processing script; it is **a set of executable assertions about the
 dataset**, plus a generated report at `notes/inventory.md`.
@@ -365,7 +365,7 @@ much cheaper to diagnose than a silent label shift discovered three hours into e
 > from, and why the values look the way they do — with every number read off the
 > real cache. This section is the terser code tour.
 
-`src/extract_features.py` — the expensive stage. All **2,887,773** frames of 720p H.264 get
+`src/pitvis/data/extract_features.py` — the expensive stage. All **2,887,773** frames of 720p H.264 get
 decoded to yield **120,018** feature vectors at 1 fps — a 24:1 throwaway ratio. The output
 cache is small: 120,018 × 2048 × 4 bytes ≈ **1 GB**. So this stage is compute-bound on video
 decoding, not storage-bound.
@@ -389,26 +389,26 @@ flowchart LR
 
 Reading order in the code:
 
-- `extract_features.py:41` `probe()` — a slimmer ffprobe than inventory's, returns
+- `extract_features.py:49` `probe()` — a slimmer ffprobe than inventory's, returns
   `(nb_frames, round(fps))`. **`round(fps)` per video** is what handles `video_24` being
   25 fps. Hard-coding 24 would shift that video's labels by up to 4% of its length.
-- `extract_features.py:53` `build_model()` — `timm.create_model("resnet50",
+- `extract_features.py:51` `build_model()` — `timm.create_model("resnet50",
   pretrained=True, num_classes=0)`. The `num_classes=0` is the important argument: it strips
   the classifier and returns the 2048-d global-pooled embedding instead of 1000 logits.
-- `extract_features.py:70-76` — the **resume check**. If `features.npy` exists and has the
+- `extract_features.py:68-76` — the **resume check**. If `features.npy` exists and has the
   expected length, skip the video. This makes an interrupted 3-hour run cheap to restart.
   Length mismatch triggers a redo, so a half-written file self-heals.
-- `extract_features.py:78-83` — the ffmpeg command. The `select` filter keeps frames
+- `extract_features.py:76-83` — the ffmpeg command. The `select` filter keeps frames
   `0, r, 2r, …`. Worth understanding: **ffmpeg still decodes every frame**; the filter only
   discards them afterwards. That's why this stage is slow, and why `-hwaccel videotoolbox`
   is the lever if you want it faster.
-- `extract_features.py:95-106` — the read loop. Frames arrive as a raw byte stream with no
+- `extract_features.py:93-106` — the read loop. Frames arrive as a raw byte stream with no
   delimiters, so the loop reads exactly `1280*720*3 = 2,764,800` bytes per frame and treats a
   short read as end-of-stream. Batches of 64 go to the model.
-- `extract_features.py:110-111` — asserts the extracted count equals
+- `extract_features.py:108-111` — asserts the extracted count equals
   `ceil(nb_frames / r)`. If ffmpeg's filter and our arithmetic ever disagree, this fails
   loudly rather than silently misaligning labels.
-- `extract_features.py:116-124` — labels. Reads `int_step`, asserts there are exactly
+- `extract_features.py:114-124` — labels. Reads `int_step`, asserts there are exactly
   `expected + 1` rows, asserts the dropped last row is background, truncates, and maps
   `-1 -> 0`.
 
@@ -452,7 +452,7 @@ whole seconds of frames.
 
 **Decision: truncate labels to the frame count.** Safe because every video ends in a run of
 background 6 to 147 seconds long, so the dropped row is verified background in all 24 videos
-— asserted at `extract_features.py:121`, not assumed.
+— asserted at `extract_features.py:181`, not assumed.
 
 The alternative (pad features with a duplicate frame) would invent data. Truncating discards
 one verified-background second per video: 24 seconds total out of 115,586.
@@ -461,11 +461,11 @@ one verified-background second per video: 24 seconds total out of 115,586.
 
 ## 10. Stage 3 — dataset and split
 
-`src/dataset.py` — only 37 lines, and deliberately dumb.
+`src/pitvis/data/dataset.py` — only 37 lines, and deliberately dumb.
 
 ```python
-VAL   = [1, 12, 21, 24, 25]                                          # dataset.py:18
-TRAIN = [2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,20,22,23]           # dataset.py:19
+VAL   = [1, 12, 21, 24, 25]                                          # dataset.py:15
+TRAIN = [2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,20,22,23]           # dataset.py:16
 ```
 
 The split is from Das et al. 2024, verbatim: *"A 20-training to 5-validation (01, 12, 21, 24,
@@ -485,7 +485,7 @@ Three things to note:
   situation changes.
 - **`video_24`, the 25 fps outlier, is in VAL.** So a per-video fps bug shows up as a
   validation anomaly, not a training one.
-- `load_video()` at `dataset.py:25` asserts features and labels have equal length. Cheap
+- `load_video()` at `dataset.py:22` asserts features and labels have equal length. Cheap
   guard against a stale half-extracted cache.
 
 The paper's separate 8-video *test* set was never publicly released. All 25 videos here are
@@ -496,7 +496,7 @@ the paper's exact leaderboard numbers — only comparable validation numbers.
 
 ## 11. Stage 4 — the baseline model
 
-`src/train_baseline.py` — a linear probe, intentionally the weakest reasonable model.
+`src/pitvis/training/baseline.py` — a linear probe, intentionally the weakest reasonable model.
 
 ```
 cached features           standardize          Linear(2048 -> 15)      argmax
@@ -522,15 +522,15 @@ P(same label next second) = 0.985, expect the answer to be "mostly temporal".
 
 ## 12. Stage 5 — evaluation
 
-Two files. **`src/official_metric.py` is the organisers' code, vendored byte-for-byte** from
+Two files. **`src/pitvis/evaluation/official.py` is the organisers' code, vendored byte-for-byte** from
 `dreets/pitvis` commit `b1cb307` (sha256 recorded in its header). Do not edit it. Do not
-reimplement the metric. `src/eval.py` calls it, so the headline number is the challenge's
+reimplement the metric. `src/pitvis/evaluation/metric.py` calls it, so the headline number is the challenge's
 number by construction rather than by our interpretation of a paper.
 
 ```mermaid
 flowchart TD
     P["per-video predictions<br/>one entry per video<br/>15-way encoded"]
-    P --> D["eval.decode<br/>0 becomes -1<br/>back to raw labels"]
+    P --> D["metric.decode<br/>0 becomes -1<br/>back to raw labels"]
     D --> C["official.clean_steps<br/>drop rows where<br/>TRUTH is -1, 11 or 13"]
     C --> F1["f1_score<br/>average is macro<br/>no labels argument<br/>zero_division is 1"]
     C --> ED["official.calculate_edit_score<br/>collapse to segments<br/>normalised Levenshtein"]
@@ -558,23 +558,23 @@ computed **per video**, then mean-averaged, reported as mean±std. The paper: sc
 Pooling is not a harmless shortcut — **it inflates the score**. Concatenating videos merges
 the last segment of one with the first of the next, and lets opposite per-video errors cancel
 in the frame-wise F1. `test_pooling_videos_flatters_the_score` shows 0.583 pooled against an
-honest 0.417 on a two-video toy case. The previous version of `eval.py` pooled, so any
+honest 0.417 on a two-video toy case. The previous version of `evaluation/metric.py` pooled, so any
 number it had produced would have been optimistic.
 
 ### Three official behaviours that look like bugs
 
-A "cleaner" reimplementation would silently diverge on all three. `eval.py` preserves them
+A "cleaner" reimplementation would silently diverge on all three. `evaluation/metric.py` preserves them
 and `tests/test_eval.py` pins them.
 
 **1. Exclusion filters by ground truth only — so predictions leak in.**
-`remove_background_steps` (`official_metric.py:83`) drops rows where the *truth* is in
+`remove_background_steps` (`evaluation/official.py:83`) drops rows where the *truth* is in
 `{-1, 11, 13}`. A prediction of one of those classes on a *retained* row survives. And
-because `f1_score` is called with **no `labels=`** (`official_metric.py:57-62`), sklearn infers
+because `f1_score` is called with **no `labels=`** (`evaluation/official.py:57-62`), sklearn infers
 the label set from the union of cleaned truths *and* predictions — so a class the model
 predicts but that is never true still joins the macro average, at F1 = 0, dragging the mean
 down.
 
-`eval.py:108` counts these as `leaked` and `report` prints them. The corollary is a free
+`evaluation/metric.py:112` counts these as `leaked` and `report` prints them. The corollary is a free
 win nobody has taken yet: **masking classes 0/11/13 out of the argmax at inference can only
 raise this metric.** `test_leaking_costs_more_than_an_equally_wrong_scored_prediction` shows
 one wrong frame costing 0.667 when it leaks versus 0.822 when it is an equally-wrong guess at
@@ -587,16 +587,17 @@ segments either side of a gap merge. `[1,1,bg,bg,1,1]` collapses to **one** segm
 three. A naive implementation that segmented before excluding would score this below 1.0 and
 be wrong. See `test_excluded_rows_merge_the_segments_around_them`.
 
-### How eval.py recovers the split
+### How `evaluation/metric.py` recovers the split
 
 The vendored function returns one number. We want the F1 and edit halves separately, so
-`eval.py:89-95` replicates its two internal calls — then `eval.py:97-99` **asserts** the
+`evaluation/metric.py:91-99` replicates its two internal calls — then
+`evaluation/metric.py:101-103` **asserts** the
 halves recombine to what the vendored one-shot function returns. If someone later "fixes" the
 `zero_division` or adds a `labels=`, that assert fires.
 
 ### Diagnostics vs the metric
 
-Per-class recall/F1 and the 15x15 confusion matrix (`eval.py:136-144`) are **pooled** across
+Per-class recall/F1 and the 15x15 confusion matrix (`evaluation/metric.py:131-143`) are **pooled** across
 videos and use a fixed 12-class label set for stability. They are labelled
 `NOT the official metric` in the output. They are for debugging — which classes collapse into
 which — not for reporting.
@@ -604,7 +605,7 @@ which — not for reporting.
 ### The guard
 
 If every ground-truth row of a video is an excluded class, the official code divides by zero.
-`eval.py:81-85` raises a clear `ValueError` rather than patching the vendored file. All 12
+`evaluation/metric.py:86-89` raises a clear `ValueError` rather than patching the vendored file. All 12
 scored classes appear in all 5 val videos, so this cannot arise on our split — verified.
 
 ---
@@ -680,7 +681,7 @@ cat notes/inventory.md
 **B. Verify the invariants.** No side effects beyond rewriting `notes/inventory.md`.
 
 ```sh
-uv run python src/inventory.py
+uv run pitvis-inventory
 ```
 
 Read the asserts in `load_annotations` as you go — they are the contract everything else
@@ -693,8 +694,8 @@ grasp without waiting hours for features, and it is where the subtlety lives.
 uv run pytest -v
 ```
 
-Then open `tests/test_eval.py` next to `src/official_metric.py` and step through
-`test_known_values_by_hand` against §13 above. Try deliberately breaking `eval.py` — change
+Then open `tests/test_eval.py` next to `src/pitvis/evaluation/official.py` and step through
+`test_known_values_by_hand` against §13 above. Try deliberately breaking `evaluation/metric.py` — change
 `zero_division=1` to `0`, or add `labels=SCORED` to the F1 call — and watch which tests fail.
 That will teach you the metric faster than reading it.
 
@@ -702,20 +703,20 @@ That will teach you the metric faster than reading it.
 `video_25` the shortest in VAL (4,337 s). One from each side means the whole chain runs.
 
 ```sh
-uv run python src/extract_features.py 7 25
+uv run pitvis-extract 7 25
 ```
 
-Watch the asserts at `extract_features.py:110` and `:119-121` pass on real data.
+Watch the asserts at `extract_features.py:108` and `:119-121` pass on real data.
 
 **E. Run the baseline on those two.** It will be a meaningless model — one training video —
-but it exercises `dataset.py`, `train_baseline.py` and `eval.py` end to end. You will need to
+but it exercises `dataset.py`, `train_baseline.py` and `evaluation/metric.py` end to end. You will need to
 temporarily narrow `TRAIN`/`VAL`, or just call the functions from a REPL.
 
 **F. Then commit to the full extraction.** Hours, resumable, run it in the background.
 
 ```sh
-uv run python src/extract_features.py
-uv run python src/train_baseline.py --confusion
+uv run pitvis-extract
+uv run pitvis-train-baseline --confusion
 ```
 
 Compare the resulting edit score against the prediction in §5. If macro F1 is decent and

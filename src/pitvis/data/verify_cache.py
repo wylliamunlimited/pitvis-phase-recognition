@@ -26,7 +26,7 @@ raw videos or the cache have been touched; skip it day to day.
 
 Exit code 0 iff every check passes.
 
-Usage: python src/verify_cache.py [--probe]
+Usage: uv run pitvis-verify [--probe]
 """
 
 import argparse
@@ -40,12 +40,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from dataset import TRAIN, VAL
-
-ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "26531686"
-FEATURES = ROOT / "data" / "features"
-MANIFEST = FEATURES / "manifest.json"
+from pitvis.data.dataset import TRAIN, VAL
+from pitvis.paths import FEATURES, MANIFEST, RAW
 
 ALL_VIDEOS = list(range(1, 26))
 LABELED = set(TRAIN) | set(VAL)  # 24 videos; 19 has no annotations
@@ -73,7 +69,7 @@ def probe(video: Path) -> tuple[int, int]:
 
 def expected_labels(vid: int) -> np.ndarray:
     """Re-derive labels from the raw annotation CSV, independently of the cache."""
-    steps = pd.read_csv(DATA / f"annotations_{vid:02d}.csv")["int_step"].to_numpy()
+    steps = pd.read_csv(RAW / f"annotations_{vid:02d}.csv")["int_step"].to_numpy()
     assert steps[-1] == -1, f"video {vid:02d}: trailing annotation row is not background"
     labels = steps[:-1].copy()
     labels[labels == -1] = 0
@@ -134,7 +130,7 @@ def check_video(vid: int, manifest: dict, do_probe: bool) -> list[str]:
             errors.append(f"{key}: manifest labels flag {entry['labels']} != on-disk")
 
     if do_probe:
-        nb_frames, r = probe(DATA / f"{key}.mp4")
+        nb_frames, r = probe(RAW / f"{key}.mp4")
         expected = math.ceil(nb_frames / r)
         if t != expected:
             errors.append(f"{key}: probe expects {expected} frames, cache has {t}")
