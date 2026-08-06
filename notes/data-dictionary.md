@@ -176,7 +176,7 @@ slot 1 for 24,795 frames. Any model treating the two columns as an unordered
 set is technically correct (the official metric multi-hot encodes them) but is
 throwing away a strong regularity.
 
-### The pair is sorted ascending — with two genuine anomalies
+### The pair is sorted ascending — with four anomalous rows
 
 Among rows where slot 2 holds a real instrument (`> 0`), **zero** violate
 ascending order. Four rows have `int_instrument2 == 0`, which is itself the
