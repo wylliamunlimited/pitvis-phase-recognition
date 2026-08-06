@@ -4,11 +4,11 @@ Automatic recognition of surgical steps (phases) in endoscopic pituitary surgery
 using the [PitVis Challenge](https://arxiv.org/abs/2409.01184) dataset
 (EndoVis / MICCAI 2023, Das et al. 2024).
 
-**New to this repo?** [`notes/walkthrough.md`](notes/walkthrough.md) is the guided tour:
-what the surgery is, what every annotation column means, how the data flows through the
-pipeline, and which line of which file to read next. For the machine-learning side from
-the ground up — what an embedding is and how ours are generated —
-[`notes/embeddings.md`](notes/embeddings.md).
+**New to this repo?** [**Getting started**](#getting-started) is the run-it-yourself
+sequence, from a fresh clone to a prediction on a video.
+[`notes/walkthrough.md`](notes/walkthrough.md) is the guided tour of the *ideas*: what
+the surgery is, what every annotation column means, how the data flows through the
+pipeline, and which line of which file to read next.
 
 **What's next?** [`notes/roadmap.md`](notes/roadmap.md) tracks everything left to build,
 phased: data engineering → end-to-end pipelining → models → app.
@@ -89,27 +89,134 @@ data/arst/                  CITI checkpoints + result.json (gitignored)
 26531686/                   raw PitVis download (gitignored, read-only)
 ```
 
-## Setup
+## Getting started
 
-Python dependencies are managed with [uv](https://docs.astral.sh/uv/); `pyproject.toml`
-and `uv.lock` are tracked, so the environment is reproducible. Python 3.13 is pinned
-via `.python-version` — uv will fetch it if you don't have it.
+Run these in order. Steps 1–3 take minutes; step 4 takes hours and is the one to
+plan around.
+
+**Already have `data/features/`?** Skip to step 5 — `uv run pitvis-verify`
+confirms the cache in about a minute, and steps 5–6 take under five minutes total.
+
+### 0. Prerequisites
+
+Three things the repo cannot install for you:
+
+- **[uv](https://docs.astral.sh/uv/)** — manages Python and every dependency.
+  Python 3.13 is pinned via `.python-version`; uv fetches it if you don't have it.
+- **`ffmpeg` and `ffprobe`** — hard requirements, and **not** Python packages, so
+  uv cannot supply them: `brew install ffmpeg`.
+- **The PitVis download**, placed at `26531686/` in the project root — videos,
+  `annotations_*.csv` and `map_*.csv` directly inside it. **40 GB.** Gitignored
+  and treated as read-only.
+
+### 1. Install
 
 ```sh
-uv sync                           # create .venv and install the locked dependencies
+uv sync
 ```
 
-`ffmpeg` / `ffprobe` are also required and are **not** Python packages — install them
-separately (`brew install ffmpeg`).
+Creates `.venv`, installs the locked dependencies, and installs `pitvis` itself as
+an editable package. There is no venv to activate — `uv run` handles it.
 
-Place the raw PitVis download at `26531686/` in the project root (gitignored,
-treated as read-only), with the videos, `annotations_*.csv`, and `map_*.csv` directly
-inside it.
+### 2. Check the install before spending hours on data
+
+Both of these run with **no data at all**, so they separate "is my environment
+right?" from "is my data right?" — worth doing before committing to step 4.
+
+```sh
+uv run pitvis-models      # ~1 s: every tensor shape and parameter count
+uv run pytest             # ~2 s: 23 tests pinning our metric to the official code
+```
+
+`pitvis-models` falls back to a synthetic tensor when the cache is absent, so it
+works on a fresh clone.
+
+### 3. Look at the raw data (optional, ~13 s)
+
+```sh
+uv run pitvis-inventory
+```
+
+Probes all 25 videos, asserts the annotation invariants, and writes
+`notes/inventory.md`. Step 4 runs this first anyway — do it separately if you
+want to see the dataset before committing to the decode.
+
+### 4. Build the feature cache — the long one
+
+```sh
+uv run pitvis-data        # inventory -> extract -> verify
+```
+
+| stage | what it does | cost |
+|---|---|---|
+| `inventory` | probe videos, check annotation invariants | ~13 s |
+| **`extract`** | decode 40 GB at 1 fps, embed with a frozen ResNet-50 | **hours** |
+| `verify` | re-derive labels from the raw CSVs and diff against the cache | ~1 min |
+
+Order matters: `inventory` asserts the invariants `extract` relies on, so a bad
+download fails in 13 seconds rather than after hours of decoding.
+
+**Extraction is resumable** — videos already present at the expected length are
+skipped, so interrupting it is safe and re-running continues where it stopped. It
+prints per-video progress in frames/sec. End state is a **939 MB** cache.
+
+Preview without committing:
+
+```sh
+uv run pitvis-data --dry-run
+```
+
+### 5. Train
+
+```sh
+uv run pitvis-train       # baseline -> arst, ~3 min total
+```
+
+Runs both models against the same 5 validation videos with the same official
+metric — which is the point. The linear probe's edit score (~0.01) against ARST's
+(~0.35) is the whole argument for the temporal architecture, and it is only
+credible when both numbers come from one command on one machine.
+
+ARST alone is ~112 s training plus ~50 s inference:
+
+```sh
+uv run pitvis-train arst
+uv run pitvis-train --list      # what models are registered
+```
+
+### 6. Predict on a video
+
+```sh
+uv run pitvis-predict --video 26531686/video_19.mp4
+```
+
+Video 19 is the one to try first: it has **no annotations**, so it exercises the
+real "point this at a new case" path. ~5 s on a cache hit. Writes
+`predictions/video_19/` — `predictions.csv` (the challenge's own
+`int_time,int_step` format), `segments.csv`, and `summary.json`.
+
+To see it scored against ground truth:
+
+```sh
+uv run pitvis-predict --video 26531686/video_25.mp4 \
+                      --labels 26531686/annotations_25.csv
+```
+
+### Then read, in this order
+
+1. [`notes/walkthrough.md`](notes/walkthrough.md) — the surgery, the data, the pipeline
+2. [`notes/data-dictionary.md`](notes/data-dictionary.md) — what every annotation integer means
+3. [`notes/embeddings.md`](notes/embeddings.md) — what the feature cache *is*
+4. [`notes/citi-baseline.md`](notes/citi-baseline.md) — why the model is what it is, and results
+5. [`notes/citi-dataflow.md`](notes/citi-dataflow.md) — the same model as a shape trace
+6. [`CLAUDE.md`](CLAUDE.md) — decisions and constraints; terse, read it when something surprises you
 
 ## Usage
 
-Each package under `src/pitvis/` has a `run.py` that runs that directory end to end.
-Start here:
+Reference for the full command surface — see [Getting started](#getting-started) for
+the order to run them in the first time.
+
+Each package under `src/pitvis/` has a `run.py` that runs that directory end to end:
 
 ```sh
 uv run pitvis-data      # inventory -> extract -> verify  (the whole data pipeline)
