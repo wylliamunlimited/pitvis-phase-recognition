@@ -348,6 +348,15 @@ uv run pitvis-inventory   uv run pitvis-extract   uv run pitvis-verify   uv run 
 All four runners share `--dry-run`, `--only`, `--skip` and `--continue-on-error`
 from `pipeline.py`.
 
+**`.gitignore` patterns must be anchored.** An unanchored `data/` matches
+`src/pitvis/data/` as well as the repo-root cache, which silently kept that
+package's `run.py` and `__init__.py` out of git — `uv run pitvis-data` was broken
+on a fresh clone while working perfectly locally. Anything ignored at the repo
+root gets a leading slash; leave only genuinely recursive patterns
+(`__pycache__/`, `.venv/`) unanchored. Note `git mv` moves *tracked* files, which
+stay tracked regardless of ignore rules — so the breakage only shows up in files
+created after a rename, and only on a clone.
+
 Three structural rules:
 
 - **`run.py` orchestrates, never reimplements.** A runner selects and sequences
