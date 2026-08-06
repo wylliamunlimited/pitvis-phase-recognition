@@ -716,7 +716,7 @@ temporarily narrow `TRAIN`/`VAL`, or just call the functions from a REPL.
 
 ```sh
 uv run pitvis-extract
-uv run pitvis-train-baseline --confusion
+uv run pitvis-train baseline --confusion
 ```
 
 Compare the resulting edit score against the prediction in §5. If macro F1 is decent and

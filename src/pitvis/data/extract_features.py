@@ -41,21 +41,26 @@ from pitvis.paths import MANIFEST, RAW
 
 BACKBONE = "resnet50"
 TARGET_FPS = 1
-WIDTH, HEIGHT = 1280, 720  # uniform across all 25 videos (verified)
-FRAME_BYTES = WIDTH * HEIGHT * 3
 BATCH = 64
 
 
-def probe(video: Path) -> tuple[int, int]:
-    """Return (nb_frames, round(fps))."""
+def probe(video: Path) -> tuple[int, int, int, int]:
+    """Return (nb_frames, round(fps), width, height).
+
+    Resolution is probed rather than assumed: the 25 challenge videos are all
+    1280x720, but `embed_video` accepts arbitrary files and the raw ffmpeg pipe
+    is read in fixed-size frames — a wrong size desynchronises every frame
+    after the first.
+    """
     cmd = [
         "ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
-        "-show_entries", "stream=r_frame_rate,nb_read_packets",
+        "-show_entries", "stream=r_frame_rate,nb_read_packets,width,height",
         "-of", "json", str(video),
     ]
     s = json.loads(subprocess.run(cmd, capture_output=True, check=True).stdout)["streams"][0]
     num, den = s["r_frame_rate"].split("/")
-    return int(s["nb_read_packets"]), round(int(num) / int(den))
+    return (int(s["nb_read_packets"]), round(int(num) / int(den)),
+            int(s["width"]), int(s["height"]))
 
 
 def space_id(space: dict) -> str:
@@ -115,10 +120,65 @@ def record_video(manifest: dict, vid: int, frames: int, fps_rounded: int,
 
 
 @torch.no_grad()
+def embed_video(video: Path, model, transform, device: torch.device,
+                tag: str | None = None) -> tuple[np.ndarray, int]:
+    """Decode `video` at 1 fps and embed every frame. Returns (features, fps).
+
+    The one path from pixels to a feature matrix — used both by cache
+    extraction and by `pitvis.inference.predict`, so a prediction is computed
+    from exactly the feature space the model was trained on. Accepts any video
+    file; nothing here assumes the challenge's naming or resolution.
+    """
+    tag = tag or video.stem
+    nb_frames, r, width, height = probe(video)
+    expected = math.ceil(nb_frames / r)
+    frame_bytes = width * height * 3
+
+    cmd = [
+        "ffmpeg", "-v", "error", "-i", str(video),
+        "-vf", f"select=not(mod(n\\,{r}))", "-vsync", "0",
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+    ]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=frame_bytes * 4)
+
+    t0 = time.time()
+    feats, batch = [], []
+
+    def flush():
+        if batch:
+            x = torch.stack(batch).to(device)
+            feats.append(model(x).float().cpu().numpy())
+            batch.clear()
+
+    n = 0
+    while True:
+        buf = proc.stdout.read(frame_bytes)
+        if len(buf) < frame_bytes:
+            break
+        frame = np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 3)
+        batch.append(transform(Image.fromarray(frame)))
+        n += 1
+        if len(batch) == BATCH:
+            flush()
+        if n % 500 == 0:
+            print(f"  {tag}: {n}/{expected} ({n / (time.time() - t0):.1f} fps)")
+    flush()
+    proc.wait()
+
+    features = np.concatenate(feats) if feats else np.empty((0, model.num_features), np.float32)
+    if len(features) != expected:
+        raise RuntimeError(
+            f"{tag}: decoded {len(features)} frames, expected {expected} "
+            f"(ceil({nb_frames}/{r})) — the ffmpeg pipe desynchronised"
+        )
+    return features.astype(np.float32), r
+
+
+@torch.no_grad()
 def extract_video(vid: int, model, transform, device: torch.device, manifest: dict) -> None:
     video = RAW / f"video_{vid:02d}.mp4"
     out_dir = OUT / f"video_{vid:02d}"
-    nb_frames, r = probe(video)
+    nb_frames, r, _, _ = probe(video)
     expected = math.ceil(nb_frames / r)
 
     feat_path = out_dir / "features.npy"
@@ -135,43 +195,11 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
             return
         print(f"video {vid:02d}: found {len(existing)} != {expected} frames, redoing")
 
-    cmd = [
-        "ffmpeg", "-v", "error", "-i", str(video),
-        "-vf", f"select=not(mod(n\\,{r}))", "-vsync", "0",
-        "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
-    ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=FRAME_BYTES * 4)
-
     t0 = time.time()
-    feats, batch = [], []
-
-    def flush():
-        if batch:
-            x = torch.stack(batch).to(device)
-            feats.append(model(x).float().cpu().numpy())
-            batch.clear()
-
-    n = 0
-    while True:
-        buf = proc.stdout.read(FRAME_BYTES)
-        if len(buf) < FRAME_BYTES:
-            break
-        frame = np.frombuffer(buf, dtype=np.uint8).reshape(HEIGHT, WIDTH, 3)
-        batch.append(transform(Image.fromarray(frame)))
-        n += 1
-        if len(batch) == BATCH:
-            flush()
-        if n % 500 == 0:
-            print(f"  video {vid:02d}: {n}/{expected} ({n / (time.time() - t0):.1f} fps)")
-    flush()
-    proc.wait()
-
-    features = np.concatenate(feats) if feats else np.empty((0, 2048), np.float32)
-    assert len(features) == expected, \
-        f"video {vid:02d}: extracted {len(features)}, expected {expected}"
+    features, r = embed_video(video, model, transform, device, tag=f"video {vid:02d}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    np.save(feat_path, features.astype(np.float32))
+    np.save(feat_path, features)
 
     ann_path = RAW / f"annotations_{vid:02d}.csv"
     if ann_path.exists():

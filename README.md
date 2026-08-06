@@ -67,8 +67,11 @@ src/pitvis/
   models/
     arst.py                 CITI's task-1 architecture (spatial + TeCNO + ARST)
   training/
+    registry.py             the only list of trainable models — add one here
     arst.py                 three-stage training + auto-regressive inference
     baseline.py             frame-wise linear probe baseline
+  inference/
+    predict.py              mp4 -> per-second steps + segments; no labels needed
   evaluation/
     official.py             organisers' scoring code, vendored verbatim — do not edit
     metric.py               official metric per video + mean±std, plus diagnostics
@@ -108,10 +111,11 @@ Each package under `src/pitvis/` has a `run.py` that runs that directory end to 
 Start here:
 
 ```sh
-uv run pitvis-data     # inventory -> extract -> verify   (the whole data pipeline)
-uv run pitvis-train    # baseline -> arst                 (both models, one metric)
-uv run pitvis-eval     # score an existing checkpoint, no retraining
-uv run pitvis-models   # shape + parameter trace through the cascade (~1 s)
+uv run pitvis-data      # inventory -> extract -> verify  (the whole data pipeline)
+uv run pitvis-train     # train every registered model    (baseline, then arst)
+uv run pitvis-predict --video case.mp4   # point a trained model at any video
+uv run pitvis-eval      # score an existing checkpoint, no retraining
+uv run pitvis-models    # shape + parameter trace through the cascade (~1 s)
 ```
 
 Every runner takes `--dry-run` to print the plan without executing, and
@@ -121,7 +125,17 @@ Every runner takes `--dry-run` to print the plan without executing, and
 uv run pitvis-data --dry-run              # what would run, in what order
 uv run pitvis-data --only verify --probe  # just the slow integrity check
 uv run pitvis-data --videos 1 2 3         # limit extraction to 3 videos
-uv run pitvis-train --only arst --ablations
+uv run pitvis-train arst --ablations       # one model plus its variants
+uv run pitvis-train --list                 # what models are registered
+```
+
+Models are named positionally and come from `training/registry.py`, so adding a
+model needs no new console script:
+
+```sh
+uv run pitvis-train arst              # just ARST
+uv run pitvis-train baseline arst     # both, in the order given
+uv run pitvis-train arst --no-cci     # unknown flags pass through to the model
 ```
 
 The individual stages are still addressable when you want one thing:
@@ -130,8 +144,6 @@ The individual stages are still addressable when you want one thing:
 uv run pitvis-inventory        # sanity-check the raw data, write notes/inventory.md
 uv run pitvis-extract          # one-time feature extraction (all 25 videos)
 uv run pitvis-verify           # integrity-check the feature cache
-uv run pitvis-train-baseline   # train + evaluate the linear probe
-uv run pitvis-train-arst       # train + evaluate the CITI/ARST model
 uv run pytest                  # verify the metric against the official code
 ```
 

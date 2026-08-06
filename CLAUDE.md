@@ -299,13 +299,17 @@ src/pitvis/
                                extraction; --probe adds the slow, annotation-
                                independent ffprobe length check
     dataset.py                 per-video (T, D) features + labels, train/val split
+  inference/
+    run.py                     WORKFLOW: mp4 -> per-second steps + segments CSV
+    predict.py                 decode -> embed -> cascade; no labels required
   models/
     run.py                     WORKFLOW: shape/param trace through all 3 stages
                                — the executable form of notes/citi-dataflow.md
     arst.py                    CITI's task-1 architecture: spatial embedding +
                                TeCNO + ARST (banded causal mask)
   training/
-    run.py                     WORKFLOW: baseline -> arst (+ --ablations)
+    run.py                     WORKFLOW: `pitvis-train <model ...>`, registry-driven
+    registry.py                the ONLY list of trainable models — add one here
     arst.py                    three-stage training + CCI auto-regressive inference
     baseline.py                frame-wise linear probe baseline
   evaluation/
@@ -326,13 +330,14 @@ import graph cannot drift apart. Each package has a `run.py` that runs that dire
 as one workflow, plus per-stage scripts for when you want a single step:
 
 ```
-uv run pitvis-data       inventory -> extract -> verify
-uv run pitvis-train      baseline -> arst   (--ablations adds the three variants)
-uv run pitvis-eval       score an existing checkpoint, no retraining
-uv run pitvis-models     shape/param trace through the cascade (~1 s smoke test)
+uv run pitvis-data              inventory -> extract -> verify
+uv run pitvis-train [model ...] models from the registry (default: all)
+uv run pitvis-predict --video   mp4 -> per-second steps; labels optional
+uv run pitvis-eval              score an existing checkpoint, no retraining
+uv run pitvis-models            shape/param trace (~1 s smoke test)
 
-uv run pitvis-inventory  uv run pitvis-extract  uv run pitvis-verify
-uv run pitvis-train-baseline   uv run pitvis-train-arst   uv run pytest
+uv run pitvis-train --list      what models exist
+uv run pitvis-inventory   uv run pitvis-extract   uv run pitvis-verify   uv run pytest
 ```
 
 All four runners share `--dry-run`, `--only`, `--skip` and `--continue-on-error`
@@ -345,6 +350,13 @@ Three structural rules:
   the per-stage console script calls. There is one definition of "extract features".
   Every `main()` takes `argv: list[str] | None = None` so runners can compose them
   without touching `sys.argv`.
+- **Models live in `training/registry.py`, not in `pyproject.toml`.** Adding a model is
+  one `Model(...)` entry; `pitvis-train <name>` then works with no CLI or packaging
+  change. Per-model console scripts (`pitvis-train-arst`) are gone — three places to
+  edit meant three chances to forget one.
+- **One path from pixels to features.** `extract_features.embed_video` is used by both
+  cache extraction and `pitvis-predict`, so a prediction is always computed in the
+  feature space the checkpoint was trained on.
 - **Never recompute a path.** Import from `pitvis.paths`. Five modules used to derive
   `ROOT` independently, each encoding "I live one level below the repo root" — a
   constraint that broke the moment anything moved.
