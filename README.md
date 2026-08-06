@@ -50,25 +50,39 @@ Evaluation is the official challenge metric, not an approximation of it:
 `(macro F1 + normalised edit score) / 2`, with the rare classes (background,
 *gasket seal construct*, *nasal packing*) excluded from scoring, computed **per
 video and mean-averaged** as in the paper. The organisers' scoring code is
-vendored verbatim as `src/official_metric.py` and called directly, so reported
+vendored verbatim as `src/pitvis/evaluation/official.py` and called directly, so reported
 numbers are directly comparable to the paper. Per-class recall/F1 and a
 confusion matrix are printed alongside as diagnostics.
 
 ## Layout
 
 ```
-src/inventory.py          probe videos + verify annotation invariants -> notes/inventory.md
-src/extract_features.py   1 fps decode -> frozen ResNet-50 features (resumable)
-src/dataset.py            per-video (T, 2048) features + labels, train/val split constants
-src/official_metric.py    organisers' scoring code, vendored verbatim — do not edit
-src/eval.py               official metric per video + mean±std, plus pooled diagnostics
-src/train_baseline.py     frame-wise linear probe baseline
-tests/test_eval.py        pins eval.py to the official metric
-notes/inventory.md        generated dataset inventory
-notes/walkthrough.md      guide to the domain, the data, and the pipeline — start here
-notes/embeddings.md       what the feature cache is and how embeddings are generated
-data/features/            cached per-video features.npy + labels.npy (gitignored)
-26531686/                 raw PitVis download (gitignored, read-only)
+src/pitvis/
+  paths.py                  every filesystem location, defined once
+  data/
+    inventory.py            probe videos + verify annotation invariants
+    extract_features.py     1 fps decode -> frozen ResNet-50 features (resumable)
+    verify_cache.py         integrity check of the feature cache
+    dataset.py              per-video (T, 2048) features + labels, split constants
+  models/
+    arst.py                 CITI's task-1 architecture (spatial + TeCNO + ARST)
+  training/
+    arst.py                 three-stage training + auto-regressive inference
+    baseline.py             frame-wise linear probe baseline
+  evaluation/
+    official.py             organisers' scoring code, vendored verbatim — do not edit
+    metric.py               official metric per video + mean±std, plus diagnostics
+
+tests/test_eval.py          pins the metric to the official code
+notes/walkthrough.md        the domain, the data, and the pipeline — start here
+notes/embeddings.md         what the feature cache is and how embeddings are made
+notes/citi-baseline.md      the CITI reproduction: architecture, faithfulness, results
+notes/citi-dataflow.md      the same cascade traced with real tensor dimensions
+notes/roadmap.md            phased plan of remaining work
+notes/inventory.md          generated dataset inventory
+data/features/              cached per-video features.npy + labels.npy (gitignored)
+data/arst/                  CITI checkpoints + result.json (gitignored)
+26531686/                   raw PitVis download (gitignored, read-only)
 ```
 
 ## Setup
@@ -91,11 +105,17 @@ inside it.
 ## Usage
 
 ```sh
-uv run python src/inventory.py         # sanity-check the raw data, write notes/inventory.md
-uv run python src/extract_features.py  # one-time feature extraction (all 25 videos)
-uv run python src/train_baseline.py    # train + evaluate the linear probe
-uv run pytest                          # verify eval.py against the official metric
+uv run pitvis-inventory        # sanity-check the raw data, write notes/inventory.md
+uv run pitvis-extract          # one-time feature extraction (all 25 videos)
+uv run pitvis-verify           # integrity-check the feature cache
+uv run pitvis-train-baseline   # train + evaluate the linear probe
+uv run pitvis-train-arst       # train + evaluate the CITI/ARST model
+uv run pytest                  # verify the metric against the official code
 ```
+
+These are console scripts declared in `pyproject.toml`, so each maps to exactly one
+module's `main()`. Every module is also runnable directly if you prefer
+(`uv run python -m pitvis.training.arst --help`).
 
 `uv run` syncs the environment first, so there is no venv to activate. To add or change
 a dependency, use `uv add <pkg>` / `uv remove <pkg>` rather than editing `pyproject.toml`

@@ -12,10 +12,21 @@ dependencies = [
     "torch>=2.4",
 ]
 
-[tool.uv]
-# src/ is a collection of entry-point scripts with flat imports (`from dataset
-# import ...`), not an installable package. Nothing to build.
-package = false
+# CLI surface. Each script maps to the `main()` of one module, so the commands
+# and the import graph cannot drift apart.
+[project.scripts]
+pitvis-inventory = "pitvis.data.inventory:main"
+pitvis-extract = "pitvis.data.extract_features:main"
+pitvis-verify = "pitvis.data.verify_cache:main"
+pitvis-train-arst = "pitvis.training.arst:main"
+pitvis-train-baseline = "pitvis.training.baseline:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pitvis"]
 
 [dependency-groups]
 dev = [
@@ -23,7 +34,6 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-# src/ is not importable as a package, so put it on sys.path for the tests that
-# import `eval` / `official_metric` / `dataset` directly.
-pythonpath = ["src"]
+# `pitvis` is installed editable into .venv, so tests import it exactly as the
+# entry points do. No sys.path manipulation.
 testpaths = ["tests"]

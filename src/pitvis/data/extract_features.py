@@ -19,7 +19,7 @@ target fps, content-hash id) plus per-video provenance. Extraction refuses to
 write into a cache whose manifest describes a different feature space — that
 would silently mix incompatible features in one training run.
 
-Usage: python src/extract_features.py [video_numbers...]
+Usage: uv run pitvis-extract [video_numbers...]
 """
 
 import hashlib
@@ -36,10 +36,8 @@ import pandas as pd
 import torch
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "26531686"
-OUT = ROOT / "data" / "features"
-MANIFEST = OUT / "manifest.json"
+from pitvis.paths import FEATURES as OUT
+from pitvis.paths import MANIFEST, RAW
 
 BACKBONE = "resnet50"
 TARGET_FPS = 1
@@ -118,7 +116,7 @@ def record_video(manifest: dict, vid: int, frames: int, fps_rounded: int,
 
 @torch.no_grad()
 def extract_video(vid: int, model, transform, device: torch.device, manifest: dict) -> None:
-    video = DATA / f"video_{vid:02d}.mp4"
+    video = RAW / f"video_{vid:02d}.mp4"
     out_dir = OUT / f"video_{vid:02d}"
     nb_frames, r = probe(video)
     expected = math.ceil(nb_frames / r)
@@ -175,7 +173,7 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
     out_dir.mkdir(parents=True, exist_ok=True)
     np.save(feat_path, features.astype(np.float32))
 
-    ann_path = DATA / f"annotations_{vid:02d}.csv"
+    ann_path = RAW / f"annotations_{vid:02d}.csv"
     if ann_path.exists():
         steps = pd.read_csv(ann_path)["int_step"].to_numpy()
         assert len(steps) == expected + 1, \

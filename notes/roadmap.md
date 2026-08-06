@@ -19,22 +19,22 @@ decision from us before it can be built.
 
 What already exists and has been verified by running it, not just by reading it.
 
-- [x] Raw data inventoried and invariants verified — `src/inventory.py`,
+- [x] Raw data inventoried and invariants verified — `src/pitvis/data/inventory.py`,
       `notes/inventory.md`. Resolution uniform, fps *not* uniform (video 24),
       annotation off-by-one confirmed on all 24 labeled videos.
 - [x] Annotation semantics pinned down — no step 0, `-1` is a collapsed
       three-way background, map files are not uniquely keyed. See `CLAUDE.md`.
-- [x] 1 fps decode + frozen ResNet-50 feature extraction — `src/extract_features.py`.
+- [x] 1 fps decode + frozen ResNet-50 feature extraction — `src/pitvis/data/extract_features.py`.
       Resumable. Smoke-tested on video 07: 2,646 frames in 47 s (~56 fps) on MPS.
-- [x] Per-video loaders and the 19/5 train/val split — `src/dataset.py`.
-- [x] Official challenge metric vendored verbatim — `src/official_metric.py`.
+- [x] Per-video loaders and the 19/5 train/val split — `src/pitvis/data/dataset.py`.
+- [x] Official challenge metric vendored verbatim — `src/pitvis/evaluation/official.py`.
 - [x] Evaluation aligned to the challenge: per video, mean-averaged, with the
-      three official quirks preserved — `src/eval.py`, pinned by `tests/test_eval.py`
+      three official quirks preserved — `src/pitvis/evaluation/metric.py`, pinned by `tests/test_eval.py`
       (23 tests, all passing).
-- [x] Frame-wise linear probe baseline written — `src/train_baseline.py`.
+- [x] Frame-wise linear probe baseline written — `src/pitvis/training/baseline.py`.
 - [x] **First full feature extraction run.** Completed 2026-08-04: all 25
       videos, 120,018 frames, 939 MB. Verified end to end by
-      `src/verify_cache.py --probe` (every check passing).
+      `src/pitvis/data/verify_cache.py --probe` (every check passing).
 
 Getting evaluation provably correct *before* any model exists is the right
 order, and it is the strongest part of the foundation. The weakest part is that
@@ -48,7 +48,7 @@ Goal: the feature cache becomes a trustworthy, self-describing asset, and every
 model we later write can get the data shape it needs without re-inventing a
 loader.
 
-- [x] **1.1 Cache verifier.** `src/verify_cache.py`. Checks features
+- [x] **1.1 Cache verifier.** `src/pitvis/data/verify_cache.py`. Checks features
       (dtype, shape, finiteness), labels (re-derived byte-for-byte from the raw
       annotation CSVs, which also re-verifies the off-by-one alignment), the
       video-19 special case, and manifest consistency. `--probe` adds the
@@ -63,13 +63,13 @@ loader.
       silently. Checkpoints (2.3) should record `space.id`.
 
 - [ ] **1.3 Normalisation statistics as a saved artifact.** `train_baseline.py`
-      computes train-split mean/std inline (`src/train_baseline.py:45`) and
+      computes train-split mean/std inline (`src/pitvis/training/baseline.py:45`) and
       discards them when the process exits. Any inference path must apply the
       *same* transform, so these have to become a saved artifact keyed to the
       cache + split. This is a correctness blocker for the app, not a
       convenience.
 
-- [ ] **1.4 Sequence dataset.** `src/dataset.py` is 37 lines of whole-array
+- [ ] **1.4 Sequence dataset.** `src/pitvis/data/dataset.py` is 37 lines of whole-array
       loading. Temporal models need: full-video sequences (an MS-TCN trains on
       one whole video per batch — 8,645 × 2048 fits in memory comfortably),
       fixed-length windows with stride and padding, and a collate that handles
@@ -84,7 +84,7 @@ loader.
 
 - [ ] **1.6 Generalised extraction path.** `extract_features.py` is hardcoded to
       `26531686/video_{n:02d}.mp4` and the `annotations_{n}.csv` convention
-      (`src/extract_features.py:65`, `:116`). Accept an arbitrary video path with
+      (`src/pitvis/data/extract_features.py:63`, `:116`). Accept an arbitrary video path with
       optional labels. Required by `predict.py` in Phase 2 — an app cannot only
       work on the 25 videos we happen to have.
 
@@ -122,11 +122,11 @@ model-specific.
       blocker shared by both the modeling and app tracks.
 
 - [ ] **2.4 Run artifacts.** Per-run directory: `config.json`, `metrics.json`
-      (the full dict from `eval.evaluate`, per video and aggregate),
+      (the full dict from `metric.evaluate`, per video and aggregate),
       per-video predictions as `.npy`, and the console report. Makes runs
       diffable instead of scrollback-dependent.
 
-- [ ] **2.5 `src/predict.py`.** Video path → features (1.6) → checkpoint (2.3) →
+- [ ] **2.5 `src/pitvis/inference/predict.py`.** Video path → features (1.6) → checkpoint (2.3) →
       per-second step predictions, emitted both as a raw array and as merged
       `(start_s, end_s, step)` segments. Optional ground-truth scoring when
       labels are supplied. This is the piece that turns the repo from an

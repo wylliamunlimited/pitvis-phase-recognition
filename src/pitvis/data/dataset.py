@@ -8,12 +8,9 @@ constants — do not derive by arithmetic.
 Labels use the 15-way encoding: 0 = background (-1 raw), k = step k (1..14).
 """
 
-from pathlib import Path
-
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-FEATURES = ROOT / "data" / "features"
+from pitvis.paths import FEATURES
 
 VAL = [1, 12, 21, 24, 25]
 TRAIN = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 20, 22, 23]

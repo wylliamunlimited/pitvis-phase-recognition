@@ -6,7 +6,7 @@ the official challenge metric — (macro F1 + normalised edit score) / 2, scored
 per video and mean-averaged. No temporal context, so expect a very low edit
 score: this is the floor that temporal models must beat.
 
-Usage: python src/train_baseline.py [--epochs 10] [--lr 1e-3] [--confusion]
+Usage: uv run pitvis-train-baseline [--epochs 10] [--lr 1e-3] [--confusion]
 """
 
 import argparse
@@ -15,8 +15,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from dataset import NUM_CLASSES, TRAIN, VAL, load_split
-from eval import report
+from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL, load_split
+from pitvis.evaluation.metric import report
 
 
 def main() -> None:

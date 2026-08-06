@@ -1,7 +1,7 @@
 """Evaluation for PitVis step recognition, aligned to the challenge standard.
 
 The headline number is the official one, computed by the vendored organisers'
-code in src/official_metric.py:
+code in pitvis/evaluation/official.py:
 
     metric = (macro F1 + normalised edit score) / 2
 
@@ -36,8 +36,12 @@ k = step k). `decode` maps back to the raw space the official code expects.
 import numpy as np
 from sklearn.metrics import confusion_matrix, f1_score
 
-from dataset import BACKGROUND, NUM_CLASSES
-from official_metric import calculate_edit_score, calculate_steps_evaluation_metric, clean_steps
+from pitvis.data.dataset import BACKGROUND, NUM_CLASSES
+from pitvis.evaluation.official import (
+    calculate_edit_score,
+    calculate_steps_evaluation_metric,
+    clean_steps,
+)
 
 EXCLUDED = [0, 11, 13]      # encoded; raw [-1, 11, 13]
 EXCLUDED_RAW = [-1, 11, 13]
@@ -84,7 +88,7 @@ def evaluate_video(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
             "metric is undefined here (it would divide by zero)"
         )
 
-    # Replicates official_metric.calculate_steps_evaluation_metric exactly: no
+    # Replicates evaluation.official.calculate_steps_evaluation_metric exactly: no
     # `labels=` (so predicted-only classes join the average) and zero_division=1.
     macro_f1 = f1_score(
         y_true=trues_clean, y_pred=preds_clean, average="macro", zero_division=1
