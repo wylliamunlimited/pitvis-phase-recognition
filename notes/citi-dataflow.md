@@ -74,11 +74,12 @@ is 24. `select=not(mod(n,25))` for that one, `mod(n,24)` for the rest. Hardcodin
 4% temporal stretch, and the labels would drift further out of alignment the
 deeper into the operation you go.
 
-**Resolution is uniform, so the raw pipe is fixed-width.** All 25 videos are
-1280x720, which lets extraction read exactly `1280*720*3 = 2,764,800` bytes per
-frame off the pipe with no parsing. A resolution outlier would desynchronise
-that read and corrupt everything downstream, so the constant is asserted rather
-than probed.
+**Resolution is probed too, and the raw pipe is sized from it.** All 25 challenge
+videos are 1280x720 — `1280*720*3 = 2,764,800` bytes per frame — but the size is
+read per video rather than hardcoded, because `embed_video` also serves
+`pitvis-predict` on arbitrary files. A wrong frame size desynchronises the pipe
+and corrupts every frame after the first, so this is not a constant worth
+assuming.
 
 ### The off-by-one
 
@@ -86,7 +87,7 @@ Annotation rows are always exactly `T+1`. The extra row is the last second, for
 which no frame exists (a 172,812-frame video at 24 fps is 7,200.5 seconds long;
 you get 7,201 sampled frames indexed 0..7200, and 7,202 annotation rows).
 
-`data/extract_features.py:179` handles it by assertion, not by trust:
+`data/extract_features.py:207-209` handles it by assertion, not by trust:
 
 ```python
 assert len(steps) == expected + 1
@@ -146,12 +147,11 @@ on video 01 is `[0, 14]`.
 Whole cache: **115,562 frames × 2,048 float32 = 0.95 GB** (939 MB on disk
 across 25 video directories — video 19 has features but no labels).
 
-> **Cache state note.** `data/features/manifest.json` is currently **absent** —
-> this cache was extracted before the manifest commit (`e3a8d31`) landed. The
-> manifest records the feature-space content hash and per-video provenance, and
-> `data/extract_features.py` uses it to refuse writing incompatible features into an
-> existing cache. Re-running extraction backfills it without re-decoding, since
-> the length check short-circuits. Worth doing before any further extraction.
+> **Cache provenance.** `data/features/manifest.json` records the feature-space
+> content hash (`67912d3efc6852e7`) and per-video provenance. `extract_features.py`
+> refuses to write into a cache whose manifest describes a different feature
+> space, which is what makes a backbone swap safe rather than silently corrupting.
+> `uv run pitvis-verify` checks the whole cache against it.
 
 ---
 
