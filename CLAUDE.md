@@ -404,8 +404,13 @@ uv run pitvis-train --list      what models exist
 uv run pitvis-inventory   uv run pitvis-extract   uv run pitvis-verify   uv run pytest
 ```
 
-All four runners share `--dry-run`, `--only`, `--skip` and `--continue-on-error`
-from `pipeline.py`.
+Only `pitvis-data` and `pitvis-train` use `pipeline.py`, and only `pitvis-data`
+takes the full `--only`/`--skip`/`--dry-run`/`--continue-on-error` set;
+`pitvis-train` declares `--dry-run` and `--continue-on-error` itself because its
+stages are positional. `pitvis-predict`, `pitvis-eval` and `pitvis-app` are
+single-workflow scripts and have none of them — `pipeline.py` sequences a finite
+stage list and prints a timing summary, which a one-stage command does not need
+and a blocking server would never reach.
 
 ## App (`pitvis-app`) — decisions
 
