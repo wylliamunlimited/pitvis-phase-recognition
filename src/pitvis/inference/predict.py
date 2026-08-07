@@ -113,14 +113,18 @@ def load_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int,
 @torch.no_grad()
 def predict(features: np.ndarray, spatial, tecno, arst, mean, std,
             device: torch.device, chunk: int, cci: bool,
-            mask_excluded: bool) -> np.ndarray:
-    """Run the cascade. Returns (T,) encoded predictions (0 = background)."""
+            mask_excluded: bool, *, return_probs: bool = False):
+    """Run the cascade. Returns (T,) encoded predictions (0 = background).
+
+    With `return_probs`, also returns the decoder's (T, 15) softmax — see
+    `cci_decode` for why that distribution is pre-CCI and what that means.
+    """
     from pitvis.training.arst import cci_decode
     x = torch.from_numpy((features - mean) / std).to(device)
     z, _ = spatial(x)
     _, ft = tecno(z.unsqueeze(0))
     opts = SimpleNamespace(chunk=chunk, cci=cci, mask_excluded=mask_excluded)
-    return cci_decode(arst, ft, opts, device)
+    return cci_decode(arst, ft, opts, device, return_probs=return_probs)
 
 
 def to_segments(preds: np.ndarray) -> pd.DataFrame:
@@ -166,15 +170,17 @@ def load_instrument_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int
 @torch.no_grad()
 def predict_instruments(features: np.ndarray, model, mean, std,
                         device: torch.device, threshold: float,
-                        chunk: int) -> np.ndarray:
+                        chunk: int, *, return_probs: bool = False):
     """Run SANO. Returns (T, 2) instrument pairs in the raw challenge encoding.
 
     Delegates to the training module's `predict_video` so inference here and at
     training time cannot diverge — the same rule the workflow runners follow.
+    With `return_probs`, also returns the (T, 19) sigmoid and the binary mask.
     """
     from pitvis.training.instruments import predict_video
     x = torch.from_numpy((features - mean) / std).float()
-    return predict_video(model, x, threshold, chunk, device)
+    return predict_video(model, x, threshold, chunk, device,
+                         return_probs=return_probs)
 
 
 def load_instrument_labels(path: Path, expected: int) -> np.ndarray | None:

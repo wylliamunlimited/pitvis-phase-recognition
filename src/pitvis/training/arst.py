@@ -192,7 +192,7 @@ def encode_memory(model, f, chunk, dev):
 
 
 @torch.no_grad()
-def cci_decode(model, f, args, dev):
+def cci_decode(model, f, args, dev, *, return_probs: bool = False):
     """Auto-regressive rollout with Consistency Constraint Inference.
 
     ARST Algorithm 1. On a predicted transition at t, keep feeding the OLD
@@ -207,6 +207,20 @@ def cci_decode(model, f, args, dev):
     Exactness: with a banded mask of width W, position t attends only to
     [t-W, t], so a rolling window of W+1 gives bit-identical results to
     decoding the full prefix — that is what makes this tractable at T~8,600.
+
+    `return_probs` additionally returns the (T, C) softmax the decoder produced
+    at each position. Two things about it that must not be forgotten by anyone
+    displaying it:
+
+    - It is the distribution **before** the consistency constraint, so on a
+      reverted transition `probs[t].argmax() != preds[t]`. That disagreement is
+      the useful signal (it is exactly where CCI intervened), not an error.
+    - Only the first `step(t, prev)` per position is recorded. The lookahead
+      calls below ask a counterfactual — "what would t+j say if the OLD phase
+      kept being asserted?" — so they are not distributions over frame t.
+
+    Keyword-only and defaulted, so the three existing call sites, which all
+    pass four positional arguments and unpack one value, are untouched.
     """
     T = f.size(1)
     W = model.width
@@ -216,6 +230,9 @@ def cci_decode(model, f, args, dev):
     prev = torch.full((1, T + CCI_N + 1), sos, dtype=torch.long, device=dev)
     preds = np.zeros(T, dtype=np.int64)
     banned = torch.tensor(EXCLUDED, device=dev) if args.mask_excluded else None
+    # Accumulated on-device and transferred once: a .cpu() inside a T-long loop
+    # forces an MPS sync per iteration, which is measurable at T~4,300.
+    probs = torch.empty(T, model.head.out_features, device=dev) if return_probs else None
 
     def step(t, prev_seq):
         """logits at absolute position t given decoder inputs prev_seq."""
@@ -226,7 +243,10 @@ def cci_decode(model, f, args, dev):
         return logits
 
     for t in range(T):
-        p = int(step(t, prev).argmax())
+        logits = step(t, prev)
+        if return_probs:
+            probs[t] = logits.softmax(-1)
+        p = int(logits.argmax())
         if args.cci and t > 0 and p != preds[t - 1]:
             probe = prev.clone()
             accept = True
@@ -242,6 +262,8 @@ def cci_decode(model, f, args, dev):
         preds[t] = p
         if t + 1 < prev.size(1):
             prev[0, t + 1] = p                          # shifted input for next step
+    if return_probs:
+        return preds, probs.cpu().numpy().astype(np.float32)
     return preds
 
 

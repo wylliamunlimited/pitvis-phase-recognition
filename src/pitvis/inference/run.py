@@ -70,6 +70,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="skip task 1 (steps)")
     ap.add_argument("--no-instruments", dest="instruments", action="store_false",
                     help="skip task 2 (instruments)")
+    ap.add_argument("--probs", action="store_true",
+                    help="also write step_probs.npy / instrument_probs.npy "
+                         "(per-second class distributions; pitvis-app needs these)")
     ap.add_argument("--no-cache", dest="cache", action="store_false",
                     help="always decode from the video, never reuse the feature cache")
     ap.add_argument("--no-cci", dest="cci", action="store_false",
@@ -125,8 +128,10 @@ def main(argv: list[str] | None = None) -> int:
               f"mask-excluded={'on' if args.mask_excluded else 'off'}")
 
         t1 = time.time()
-        preds = P.predict(features, spatial, tecno, arst, mean, std, dev,
-                          args.chunk, args.cci, args.mask_excluded)
+        out = P.predict(features, spatial, tecno, arst, mean, std, dev,
+                        args.chunk, args.cci, args.mask_excluded,
+                        return_probs=args.probs)
+        preds, sprobs = out if args.probs else (out, None)
         print(f"        {len(preds)} seconds in {time.time() - t1:.0f}s")
 
         # per-second, in the challenge's own encoding (background is -1)
@@ -158,6 +163,20 @@ def main(argv: list[str] | None = None) -> int:
             "mask_excluded": args.mask_excluded, "checkpoint": str(args.ckpt),
         }
 
+        if sprobs is not None:
+            np.save(out_dir / "step_probs.npy", sprobs)
+            # held = the seconds where CCI overruled the decoder's own argmax.
+            # Recorded because it is the honest caveat on every confidence
+            # number downstream: there, probs.argmax() != the emitted label.
+            held = int((sprobs.argmax(1) != preds).sum())
+            summary["steps"]["probs"] = {
+                "path": "step_probs.npy", "stage": "pre_cci",
+                "encoding": "encoded_0_14", "held": held,
+                "held_frac": round(held / len(preds), 5),
+            }
+            print(f"        probs {sprobs.shape} — CCI overruled the argmax on "
+                  f"{held} of {len(preds)} s ({100 * held / len(preds):.1f}%)")
+
         if args.labels:
             labels = P.load_labels(args.labels, len(preds))
             m = report([(args.video.stem, labels, preds)],
@@ -182,8 +201,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"        threshold={args.threshold}")
 
             t2 = time.time()
-            inst = P.predict_instruments(features, imodel, imean, istd, dev,
-                                         args.threshold, args.chunk)
+            iout = P.predict_instruments(features, imodel, imean, istd, dev,
+                                         args.threshold, args.chunk,
+                                         return_probs=args.probs)
+            inst, iprobs, ikeep = iout if args.probs else (iout, None, None)
             print(f"        {len(inst)} seconds in {time.time() - t2:.0f}s")
 
             pd.DataFrame({
@@ -206,6 +227,22 @@ def main(argv: list[str] | None = None) -> int:
                 "classes_predicted": len(present),
                 "checkpoint": str(args.instrument_ckpt),
             }
+
+            if iprobs is not None:
+                np.save(out_dir / "instrument_probs.npy", iprobs)
+                # An all-zero row means nothing cleared the threshold. It is
+                # written to instruments.csv as (-1, -2) — byte-identical to
+                # the annotations' out-of-patient sentinel, which SANO has no
+                # class for. Counting it here so consumers can tell them apart.
+                empty = int((ikeep.sum(1) == 0).sum())
+                summary["instruments"]["probs"] = {
+                    "path": "instrument_probs.npy", "threshold": args.threshold,
+                    "below_threshold": empty,
+                    "below_threshold_frac": round(empty / len(inst), 5),
+                }
+                print(f"        probs {iprobs.shape} — nothing above threshold "
+                      f"on {empty} of {len(inst)} s "
+                      f"({100 * empty / len(inst):.1f}%)")
 
             if args.labels:
                 truth = P.load_instrument_labels(args.labels, len(inst))
