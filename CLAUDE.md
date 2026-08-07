@@ -375,7 +375,7 @@ as one workflow, plus per-stage scripts for when you want a single step:
 
 ```
 uv run pitvis-data              inventory -> extract -> verify
-uv run pitvis-train [model ...] models from the registry (default: all)
+uv run pitvis-train [model ...] registry-driven; bare command trains ALL
 uv run pitvis-predict --video   mp4 -> per-second steps; labels optional
 uv run pitvis-eval              score an existing checkpoint, no retraining
 uv run pitvis-models            shape/param trace (~1 s smoke test)
@@ -405,7 +405,10 @@ Three structural rules:
   without touching `sys.argv`.
 - **Models live in `training/registry.py`, not in `pyproject.toml`.** Adding a model is
   one `Model(...)` entry; `pitvis-train <name>` then works with no CLI or packaging
-  change. Per-model console scripts (`pitvis-train-arst`) are gone — three places to
+  change, and the bare `pitvis-train` picks it up automatically — the default set is
+  *derived* from `REGISTRY`, never hand-listed. `ORDER_HINT` fixes the order of the
+  models it names and nothing else; a model missing from it still runs.
+  `tests/test_registry.py` pins this, because it broke once already. Per-model console scripts (`pitvis-train-arst`) are gone — three places to
   edit meant three chances to forget one.
 - **One path from pixels to features.** `extract_features.embed_video` is used by both
   cache extraction and `pitvis-predict`, so a prediction is always computed in the

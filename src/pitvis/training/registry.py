@@ -69,9 +69,16 @@ REGISTRY: dict[str, Model] = {
     ]
 }
 
-# Default training order when no model is named. Cheapest first, so a broken
-# feature cache fails in seconds rather than after the three-stage run.
-DEFAULT_ORDER = ["baseline", "arst"]
+# A bare `pitvis-train` means TRAIN ALL. This list only fixes the ORDER of the
+# models it names — cheapest first, so a broken feature cache fails in seconds
+# rather than after a three-stage run. Anything registered and not named here
+# still runs, appended afterwards in name order.
+#
+# It is deliberately not the selection list. A hand-maintained "what runs by
+# default" would reintroduce exactly the drift the registry exists to remove:
+# adding a model would mean editing its Model(...) entry AND remembering to add
+# it here. One place to edit, or it will be forgotten.
+ORDER_HINT = ["baseline", "arst"]
 
 
 def get(name: str) -> Model:
@@ -85,15 +92,25 @@ def get(name: str) -> Model:
         ) from None
 
 
+def default_order() -> list[str]:
+    """Every registered model, ORDER_HINT first, then the rest by name.
+
+    Derived from REGISTRY rather than hand-listed, so a newly registered model
+    joins the default run automatically.
+    """
+    named = [n for n in ORDER_HINT if n in REGISTRY]
+    return named + sorted(set(REGISTRY) - set(named))
+
+
 def resolve(names: list[str] | None) -> list[Model]:
-    """Model objects for `names`, or DEFAULT_ORDER when none are given."""
-    return [get(n) for n in (names or DEFAULT_ORDER)]
+    """Model objects for `names`, or every registered model when none given."""
+    return [get(n) for n in (names or default_order())]
 
 
 def describe() -> str:
     width = max(len(n) for n in REGISTRY)
     lines = []
-    for name in DEFAULT_ORDER + sorted(set(REGISTRY) - set(DEFAULT_ORDER)):
+    for name in default_order():
         m = REGISTRY[name]
         lines.append(f"  {m.name:<{width}}  {m.summary}")
         if m.ablations:
