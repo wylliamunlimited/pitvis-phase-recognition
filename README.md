@@ -74,7 +74,7 @@ src/pitvis/
     baseline.py             frame-wise linear probe baseline
     instruments.py          SANO task-2 (instrument recognition) training
   inference/
-    predict.py              mp4 -> per-second steps + segments; no labels needed
+    predict.py              mp4 -> steps + instruments; no labels needed
   evaluation/
     official.py             organisers' STEP scoring code, vendored — do not edit
     official_instruments.py organisers' INSTRUMENT scoring code, vendored
@@ -134,7 +134,7 @@ right?" from "is my data right?" — worth doing before committing to step 4.
 
 ```sh
 uv run pitvis-models      # ~1 s: every tensor shape and parameter count
-uv run pytest             # ~3 s: 44 tests pinning both metrics to the official code
+uv run pytest             # ~3 s: 50 tests pinning both metrics + the registry
 ```
 
 `pitvis-models` falls back to a synthetic tensor when the cache is absent, so it
@@ -201,8 +201,9 @@ uv run pitvis-predict --video 26531686/video_19.mp4
 
 Video 19 is the one to try first: it has **no annotations**, so it exercises the
 real "point this at a new case" path. ~5 s on a cache hit. Writes
-`predictions/video_19/` — `predictions.csv` (the challenge's own
-`int_time,int_step` format), `segments.csv`, and `summary.json`.
+`predictions/video_19/` — `predictions.csv` and `segments.csv` (task 1),
+`instruments.csv` (task 2), and `summary.json`. Both tasks run off one feature
+pass; `--labels annotations_NN.csv` scores both.
 
 To see it scored against ground truth:
 
@@ -230,7 +231,7 @@ Each package under `src/pitvis/` has a `run.py` that runs that directory end to 
 ```sh
 uv run pitvis-data      # inventory -> extract -> verify  (the whole data pipeline)
 uv run pitvis-train     # train every registered model    (~5 min)
-uv run pitvis-predict --video case.mp4   # point a trained model at any video
+uv run pitvis-predict --video case.mp4   # both tasks on any video
 uv run pitvis-eval      # score an existing checkpoint, no retraining
 uv run pitvis-models    # shape + parameter trace through the cascade (~1 s)
 ```

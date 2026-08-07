@@ -338,8 +338,8 @@ src/pitvis/
                                independent ffprobe length check
     dataset.py                 per-video (T, D) features + labels, train/val split
   inference/
-    run.py                     WORKFLOW: mp4 -> per-second steps + segments CSV
-    predict.py                 decode -> embed -> cascade; no labels required
+    run.py                     WORKFLOW: mp4 -> steps + instruments, one pass
+    predict.py                 decode -> embed -> both task heads; no labels needed
   models/
     run.py                     WORKFLOW: shape/param trace through all 3 stages
                                — the executable form of notes/citi-dataflow.md
@@ -376,7 +376,7 @@ as one workflow, plus per-stage scripts for when you want a single step:
 ```
 uv run pitvis-data              inventory -> extract -> verify
 uv run pitvis-train [model ...] registry-driven; bare command trains ALL
-uv run pitvis-predict --video   mp4 -> per-second steps; labels optional
+uv run pitvis-predict --video   mp4 -> steps AND instruments; labels optional
 uv run pitvis-eval              score an existing checkpoint, no retraining
 uv run pitvis-models            shape/param trace (~1 s smoke test)
 

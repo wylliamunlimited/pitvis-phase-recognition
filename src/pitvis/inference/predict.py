@@ -9,7 +9,12 @@ The path:
     video.mp4 --ffmpeg 1 fps--> frames --frozen resnet50--> (T, 2048)
               --standardize--> --spatial--> --TeCNO--> --ARST + CCI--> (T,)
 
-Two output shapes, because they answer different questions:
+Both challenge tasks run off the same features — one decode, two models:
+
+    task 1  spatial -> TeCNO -> ARST + CCI    -> one step per second
+    task 2  causal window -> LSTM -> sigmoid  -> up to two instruments per second
+
+Two output shapes for steps, because they answer different questions:
 
 - **per-second labels** in the challenge's own `int_time,int_step` encoding
   (background is -1, not 0) — directly comparable to `annotations_{n}.csv`
@@ -33,7 +38,7 @@ import torch
 from pitvis.data.dataset import NUM_CLASSES
 from pitvis.evaluation.metric import decode
 from pitvis.models.arst import ARST, SpatialEmbedding, TeCNO
-from pitvis.paths import CKPT, FEATURES, MANIFEST
+from pitvis.paths import CKPT, CKPT_INSTRUMENTS, FEATURES, MANIFEST
 
 
 def require_ffmpeg() -> None:
@@ -131,6 +136,69 @@ def to_segments(preds: np.ndarray) -> pd.DataFrame:
                      "duration_s": n})
         t += n
     return pd.DataFrame(rows)
+
+
+def load_instrument_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int,
+                               device: torch.device):
+    """Rebuild SANO's task-2 model from a checkpoint.
+
+    Returns None rather than raising when the checkpoint is absent — a video
+    should still get step predictions on a machine where only task 1 has been
+    trained. The caller reports the skip.
+    """
+    if not ckpt_path.exists() or not std_path.exists():
+        return None
+
+    from pitvis.models.lstm import SanoLSTM
+
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    a = ckpt["args"]
+    model = SanoLSTM(
+        in_dim=feature_dim, hidden=a["hidden"], layers=a["layers"],
+        window=a["window"], dropout=a["dropout"], aux_step=a["aux_step"],
+    ).to(device)
+    model.load_state_dict(ckpt["model"])
+    model.eval()
+    stats = np.load(std_path)
+    return model, stats["mean"], stats["std"], a
+
+
+@torch.no_grad()
+def predict_instruments(features: np.ndarray, model, mean, std,
+                        device: torch.device, threshold: float,
+                        chunk: int) -> np.ndarray:
+    """Run SANO. Returns (T, 2) instrument pairs in the raw challenge encoding.
+
+    Delegates to the training module's `predict_video` so inference here and at
+    training time cannot diverge — the same rule the workflow runners follow.
+    """
+    from pitvis.training.instruments import predict_video
+    x = torch.from_numpy((features - mean) / std).float()
+    return predict_video(model, x, threshold, chunk, device)
+
+
+def load_instrument_labels(path: Path, expected: int) -> np.ndarray | None:
+    """Instrument ground truth from an annotations CSV, or None if unavailable.
+
+    Returns None for a .npy of step labels — that file simply does not carry
+    instruments, which is not an error worth stopping a prediction over.
+    """
+    if path.suffix == ".npy":
+        arr = np.load(path)
+        return arr.astype(np.int64) if arr.ndim == 2 and arr.shape[1] == 2 else None
+
+    df = pd.read_csv(path)
+    cols = ["int_instrument1", "int_instrument2"]
+    if not all(c in df.columns for c in cols):
+        return None
+    inst = df[cols].to_numpy()
+    if len(inst) == expected + 1:       # the documented trailing row
+        inst = inst[:expected]
+    if len(inst) != expected:
+        raise SystemExit(
+            f"{path}: {len(inst)} instrument rows but {expected} predicted frames"
+        )
+    return inst.astype(np.int64)
 
 
 def load_labels(path: Path, expected: int) -> np.ndarray:
