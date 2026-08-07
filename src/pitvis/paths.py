@@ -20,7 +20,8 @@ RAW = ROOT / "26531686"
 DATA = ROOT / "data"
 FEATURES = DATA / "features"
 MANIFEST = FEATURES / "manifest.json"
-CKPT = DATA / "arst"
+CKPT = DATA / "arst"                 # CITI/ARST — task 1
+CKPT_INSTRUMENTS = DATA / "instruments"   # SANO — task 2
 
 # Generated documentation.
 NOTES = ROOT / "notes"

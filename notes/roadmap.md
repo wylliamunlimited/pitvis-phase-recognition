@@ -164,6 +164,13 @@ before the next one starts, so we always know what an idea actually bought.
       durotomy → excision → closure), which the frame-wise metric ignores but the
       *edit score* rewards directly.
 
+- [x] **3.4 Task 2: instrument recognition.** ✅ SANO's joint-winning model
+      (frozen ResNet-50 -> causal 5-window LSTM -> 19 sigmoid outputs, BCE),
+      `uv run pitvis-train instruments`. The official metric is vendored
+      alongside, including a column-ordering defect that is preserved but
+      surfaced. Results and the val->test caveat in `notes/instruments.md`.
+      Note this is the *standalone* task-2 model; 3.5 below is still open.
+
 - [ ] **3.5 (D) Instruments as an auxiliary task.** Every annotation row carries
       `int_instrument1` / `int_instrument2` and we currently discard both. The
       instrument in view is strongly predictive of the step, and multi-task

@@ -32,3 +32,33 @@ def load_video(vid: int) -> tuple[np.ndarray, np.ndarray]:
 def load_split(videos: list[int]) -> list[tuple[int, np.ndarray, np.ndarray]]:
     """Return [(vid, features, labels), ...] for the given video list."""
     return [(vid, *load_video(vid)) for vid in videos]
+
+
+def load_video_instruments(vid: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return (features (T, D) float32, instruments (T, 2) int64) for one video.
+
+    Deliberately a second function rather than a wider return from `load_video`:
+    the `(vid, features, labels)` triple is destructured positionally in five
+    call sites, so widening it would break every one silently.
+
+    Instrument values are RAW — -1 (out of patient), -2 (no secondary) and 0
+    (nothing visible) are three distinct states. Convert to multi-hot at the
+    point of use, not here.
+    """
+    d = FEATURES / f"video_{vid:02d}"
+    features = np.load(d / "features.npy")
+    path = d / "instruments.npy"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} missing — run `uv run pitvis-extract` to backfill it "
+            f"(features are reused, nothing is re-decoded)"
+        )
+    instruments = np.load(path)
+    assert len(features) == len(instruments), \
+        f"video {vid}: {len(features)} features vs {len(instruments)} instrument rows"
+    return features, instruments
+
+
+def load_split_instruments(videos: list[int]) -> list[tuple[int, np.ndarray, np.ndarray]]:
+    """Return [(vid, features, instruments), ...] for the given video list."""
+    return [(vid, *load_video_instruments(vid)) for vid in videos]

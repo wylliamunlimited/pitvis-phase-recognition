@@ -7,6 +7,9 @@ misbehaviour. This script re-establishes "the cache is good" as a fact.
 
 Per video 01..25:
 - features.npy exists, float32, shape (T, feature_dim), every value finite
+- instruments.npy (24 labeled videos): int64, shape (T, 2), raw sentinels,
+  byte-identical to re-deriving from the CSV; slot ranges and pair ordering
+  checked. Video 19 must NOT have one.
 - labels.npy (24 labeled videos): int64, length T, values in 0..14, and
   byte-identical to re-deriving from annotations_{n}.csv (drop the trailing
   background row, encode -1 -> 0). This re-verifies the off-by-one alignment
@@ -72,6 +75,13 @@ def probe(video: Path) -> tuple[int, int]:
     return int(s["nb_read_packets"]), round(int(num) / int(den))
 
 
+def expected_instruments(vid: int) -> np.ndarray:
+    """Re-derive instrument pairs from the raw CSV, independently of the cache."""
+    df = pd.read_csv(RAW / f"annotations_{vid:02d}.csv")
+    inst = df[["int_instrument1", "int_instrument2"]].to_numpy()[:-1]
+    return inst.astype(np.int64)
+
+
 def expected_labels(vid: int) -> np.ndarray:
     """Re-derive labels from the raw annotation CSV, independently of the cache."""
     steps = pd.read_csv(RAW / f"annotations_{vid:02d}.csv")["int_step"].to_numpy()
@@ -125,6 +135,39 @@ def check_video(vid: int, manifest: dict, do_probe: bool) -> list[str]:
     elif label_path.exists():
         errors.append(f"{key}: has labels.npy but no annotation CSV exists")
 
+    inst_path = d / "instruments.npy"
+    if vid in LABELED:
+        if not inst_path.exists():
+            errors.append(f"{key}: instruments.npy missing — run pitvis-extract to backfill")
+        else:
+            inst = np.load(inst_path)
+            if inst.dtype != np.int64:
+                errors.append(f"{key}: instruments dtype {inst.dtype}, expected int64")
+            if inst.shape != (t, 2):
+                errors.append(f"{key}: instruments shape {inst.shape}, expected ({t}, 2)")
+            else:
+                derived = expected_instruments(vid)
+                if len(derived) != t:
+                    errors.append(
+                        f"{key}: annotations give {len(derived)} instrument rows, "
+                        f"features give {t}"
+                    )
+                elif not np.array_equal(inst, derived):
+                    errors.append(f"{key}: instruments.npy differs from re-derived annotations")
+                # slot 1 is {-1} u {0..18}; slot 2 is {-2} u {0..17}. The pair is
+                # ascending wherever slot 2 holds a real instrument — 0 violations
+                # dataset-wide (notes/data-dictionary.md §3).
+                i1, i2 = inst[:, 0], inst[:, 1]
+                if i1.min() < -1 or i1.max() > 18:
+                    errors.append(f"{key}: instrument slot 1 outside -1..18")
+                if i2.min() < -2 or i2.max() > 18:
+                    errors.append(f"{key}: instrument slot 2 outside -2..18")
+                bad = ((i2 > 0) & (i1 > i2)).sum()
+                if bad:
+                    errors.append(f"{key}: {bad} rows where the instrument pair is not ascending")
+    elif inst_path.exists():
+        errors.append(f"{key}: has instruments.npy but no annotation CSV exists")
+
     entry = manifest["videos"].get(key)
     if entry is None:
         errors.append(f"{key}: no manifest entry")
@@ -133,6 +176,11 @@ def check_video(vid: int, manifest: dict, do_probe: bool) -> list[str]:
             errors.append(f"{key}: manifest frames {entry['frames']} != on-disk {t}")
         if entry["labels"] != label_path.exists():
             errors.append(f"{key}: manifest labels flag {entry['labels']} != on-disk")
+        if entry.get("instruments", False) != inst_path.exists():
+            errors.append(
+                f"{key}: manifest instruments flag {entry.get('instruments', False)} "
+                f"!= on-disk {inst_path.exists()}"
+            )
 
     if do_probe:
         nb_frames, r = probe(RAW / f"{key}.mp4")

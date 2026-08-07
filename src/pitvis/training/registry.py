@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from pitvis.training import arst, baseline
+from pitvis.training import arst, baseline, instruments
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,14 @@ REGISTRY: dict[str, Model] = {
             name="baseline",
             summary="frame-wise linear probe on frozen features — the floor",
             main=baseline.main,
+        ),
+        Model(
+            name="instruments",
+            summary="SANO's PitVis task-2 joint winner: frozen features + causal LSTM",
+            main=instruments.main,
+            ablations={
+                "no-aux-step": ["--no-aux-step"],
+            },
         ),
         Model(
             name="arst",
