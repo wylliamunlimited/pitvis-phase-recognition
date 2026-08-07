@@ -18,6 +18,40 @@ TRAIN = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 20, 22, 23]
 NUM_CLASSES = 15
 BACKGROUND = 0
 
+# The one definition. These strings existed twice — once keyed by the encoded
+# label and once by the raw one — which is two chances for them to drift and no
+# way to tell which copy a caller meant. They live here because both key spaces
+# are defined here, and because `evaluation/metric.py` already imports from this
+# module, so consolidating adds no dependency edge.
+#
+# Keyed ENCODED (0..14). The raw labels the CSVs and `predictions.csv` use are
+# the same integers except that background is -1, not 0 — ask `step_name` for
+# that key space rather than building a second dict.
+#
+# Names are the cleaned forms: `map_steps.csv` has a trailing space on step 1
+# and snake_case on step 9, and it maps -1 to three different strings, so it is
+# not loadable as an int -> str dict at all. See notes/data-dictionary.md.
+STEP_NAMES = {
+    0: "background", 1: "nasal corridor creation", 2: "anterior sphenoidotomy",
+    3: "septum displacement", 4: "sphenoid sinus clearance", 5: "sellotomy",
+    6: "durotomy", 7: "tumour excision", 8: "haemostasis",
+    9: "synthetic graft placement", 10: "fat graft placement",
+    11: "gasket seal construct", 12: "dural sealant", 13: "nasal packing",
+    14: "debris clearance",
+}
+
+
+def step_name(k: int, *, raw: bool = False, default: str = "?") -> str:
+    """Human-readable name for a step label.
+
+    `raw=True` reads `k` in the challenge's own encoding, where background is
+    -1 rather than 0 — the encoding used by `annotations_*.csv`, by
+    `predictions.csv` and by `segments.csv`.
+    """
+    if raw and k == -1:
+        k = BACKGROUND
+    return STEP_NAMES.get(k, default)
+
 
 def load_video(vid: int) -> tuple[np.ndarray, np.ndarray]:
     """Return (features (T, D) float32, labels (T,) int64) for one video."""

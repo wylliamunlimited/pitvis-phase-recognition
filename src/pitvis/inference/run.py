@@ -40,20 +40,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from pitvis.data.dataset import step_name
 from pitvis.evaluation.instruments import INSTRUMENT_NAMES
 from pitvis.evaluation.instruments import report as ireport
 from pitvis.evaluation.metric import decode, report
 from pitvis.inference import predict as P
 from pitvis.paths import CKPT, CKPT_INSTRUMENTS
-
-STEP_NAMES = {
-    -1: "background", 1: "nasal corridor creation", 2: "anterior sphenoidotomy",
-    3: "septum displacement", 4: "sphenoid sinus clearance", 5: "sellotomy",
-    6: "durotomy", 7: "tumour excision", 8: "haemostasis",
-    9: "synthetic graft placement", 10: "fat graft placement",
-    11: "gasket seal construct", 12: "dural sealant", 13: "nasal packing",
-    14: "debris clearance",
-}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -148,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         for r in segments.itertuples():
             if r.duration_s < 5:            # keep the console readable
                 continue
-            name = STEP_NAMES.get(r.int_step, "?")
+            name = step_name(r.int_step, raw=True)
             print(f"  {r.start_s:>7} {r.end_s:>7} {r.duration_s:>6}  "
                   f"{r.int_step:>3}  {name}")
         short = (segments.duration_s < 5).sum()
