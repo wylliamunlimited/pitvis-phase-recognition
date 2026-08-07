@@ -7,11 +7,18 @@ constraint that breaks the moment anything moves.
 
 `ROOT` is resolved from this module's location: `src/pitvis/paths.py` is three
 levels below the repo root.
+
+Two anchors, not one. `ROOT` locates the *repo*; `PACKAGE` locates the
+*installed package*. They coincide under the editable install we develop with
+and diverge completely in a built wheel, where `ROOT` points three levels above
+`site-packages/pitvis/` at something that does not exist. Anything shipped
+inside the package — the app's assets — must hang off `PACKAGE`.
 """
 
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+PACKAGE = Path(__file__).resolve().parent
 
 # Raw PitVis download — read-only input, never tracked.
 RAW = ROOT / "26531686"
@@ -22,6 +29,10 @@ FEATURES = DATA / "features"
 MANIFEST = FEATURES / "manifest.json"
 CKPT = DATA / "arst"                 # CITI/ARST — task 1
 CKPT_INSTRUMENTS = DATA / "instruments"   # SANO — task 2
+PREDICTIONS = ROOT / "predictions"   # pitvis-predict output, one dir per video
 
 # Generated documentation.
 NOTES = ROOT / "notes"
+
+# Shipped inside the package, so anchored on PACKAGE and never on ROOT.
+APP_ASSETS = PACKAGE / "app" / "assets"

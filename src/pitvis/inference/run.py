@@ -45,7 +45,7 @@ from pitvis.evaluation.instruments import INSTRUMENT_NAMES
 from pitvis.evaluation.instruments import report as ireport
 from pitvis.evaluation.metric import decode, report
 from pitvis.inference import predict as P
-from pitvis.paths import CKPT, CKPT_INSTRUMENTS
+from pitvis.paths import CKPT, CKPT_INSTRUMENTS, PREDICTIONS
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,7 +92,10 @@ def main(argv: list[str] | None = None) -> int:
     from pitvis.training.arst import device_of
     dev = torch.device(args.device) if args.device else device_of()
 
-    out_dir = args.out or Path("predictions") / args.video.stem
+    # PREDICTIONS, not Path("predictions") — the old form was CWD-relative, so
+    # running this from a subdirectory quietly wrote somewhere nothing else
+    # looks. Anything reading the output (pitvis-app) resolves it from paths.
+    out_dir = args.out or PREDICTIONS / args.video.stem
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"video   {args.video}")
