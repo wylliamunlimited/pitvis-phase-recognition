@@ -105,6 +105,10 @@ dropping rows from training.
 
 ## Evaluation
 
+This section records the **rules that must not change**. For what each metric
+actually measures, why the challenge picked it and what it catches that the others
+miss, see `notes/metrics.md`.
+
 The challenge metric is `(macro F1 + normalised edit score) / 2`, excluding classes
 `[-1, 11, 13]`. That exclusion is a **rarity** exclusion, not an index offset:
 
@@ -429,6 +433,12 @@ Do not merge them. Each has a different reader in a different moment:
 - **`notes/data-dictionary.md`** — every annotation column and what each integer means,
   with real distributions. The reference layer for the *data*, as `citi-dataflow.md` is
   for the model. `CLAUDE.md` keeps only the decisions; look things up there.
+- **`notes/metrics.md`** — what macro F1, the edit score and weighted F1 each measure,
+  why the challenge picked them, and what each catches that the others miss. The
+  reference layer for *scoring*. `CLAUDE.md` keeps the rules that must not change;
+  the reasoning lives there.
+- **`notes/instruments.md`** — the SANO task-2 reproduction: why not the rank-1 model,
+  the metric's column-ordering defect, results.
 
 `walkthrough.md` §8 and `embeddings.md` deliberately cover the same extraction stage
 at two depths. They are cross-linked, not deduplicated. When adding docs, pick the

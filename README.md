@@ -89,6 +89,7 @@ notes/citi-baseline.md      the CITI reproduction: architecture, faithfulness, r
 notes/citi-dataflow.md      the same cascade traced with real tensor dimensions
 notes/instruments.md        the SANO task-2 reproduction, and a metric defect
 notes/data-dictionary.md    every annotation column and what each integer means
+notes/metrics.md            what each evaluation metric measures, and why
 notes/roadmap.md            phased plan of remaining work
 notes/inventory.md          generated dataset inventory
 data/features/              cached per-video features.npy + labels.npy (gitignored)
