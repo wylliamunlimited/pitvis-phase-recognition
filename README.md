@@ -178,7 +178,7 @@ uv run pitvis-data --dry-run
 ### 5. Train
 
 ```sh
-uv run pitvis-train       # baseline -> arst, ~3 min total
+uv run pitvis-train       # every registered model: baseline -> arst -> instruments
 ```
 
 Runs both models against the same 5 validation videos with the same official
@@ -229,7 +229,7 @@ Each package under `src/pitvis/` has a `run.py` that runs that directory end to 
 
 ```sh
 uv run pitvis-data      # inventory -> extract -> verify  (the whole data pipeline)
-uv run pitvis-train     # train every registered model    (baseline, then arst)
+uv run pitvis-train     # train every registered model    (~5 min)
 uv run pitvis-predict --video case.mp4   # point a trained model at any video
 uv run pitvis-eval      # score an existing checkpoint, no retraining
 uv run pitvis-models    # shape + parameter trace through the cascade (~1 s)

@@ -3,7 +3,7 @@
 Models are named positionally and come from the registry in `registry.py`, so
 adding a model needs no change here and no new console script:
 
-    uv run pitvis-train                 # every registered model, cheapest first
+    uv run pitvis-train                 # ALL registered models (cheapest first)
     uv run pitvis-train arst            # just ARST
     uv run pitvis-train baseline arst   # both, in the order given
     uv run pitvis-train --list          # what can I train?
@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
                + "\n\nUnrecognised flags are forwarded to the model.",
     )
     ap.add_argument("models", nargs="*", metavar="MODEL",
-                    help="models to train (default: all, cheapest first)")
+                    help="models to train (default: every registered model)")
     ap.add_argument("--list", action="store_true",
                     help="print the model registry and exit")
     ap.add_argument("--ablations", action="store_true",
