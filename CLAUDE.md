@@ -321,8 +321,11 @@ uv.lock                        pinned resolution — tracked, commit changes to 
 .python-version                3.13
 
 src/pitvis/
-  paths.py                     ROOT/RAW/DATA/FEATURES/MANIFEST/CKPT/NOTES — the ONLY
-                               place a filesystem location is computed
+  paths.py                     ROOT/RAW/DATA/FEATURES/MANIFEST/CKPT/PREDICTIONS/
+                               NOTES + PACKAGE/APP_ASSETS — the ONLY place a
+                               filesystem location is computed. TWO anchors:
+                               ROOT is the repo, PACKAGE is the installed
+                               package. They diverge inside a wheel.
   pipeline.py                  Stage record + --only/--skip/--dry-run plumbing
                                shared by the four run.py workflow runners
   data/
@@ -336,7 +339,20 @@ src/pitvis/
     verify_cache.py            integrity check of the whole cache — run after any
                                extraction; --probe adds the slow, annotation-
                                independent ffprobe length check
-    dataset.py                 per-video (T, D) features + labels, train/val split
+    dataset.py                 per-video (T, D) features + labels, train/val split;
+                               also STEP_NAMES/step_name — the ONE definition
+  app/
+    run.py                     `uv run pitvis-app` — CLI + serve. NOT a pipeline
+                               runner (a server has one stage and blocks)
+    server.py                  HTTP mechanics ONLY: Range, gzip, SSE, static,
+                               Host validation. Knows nothing about surgery
+    api.py                     route table; handlers are (Request) -> Response
+    catalogue.py               what cases exist + cache/prediction/truth state
+    case.py                    build_case() -> the case document (the data model)
+    jobs.py                    on-demand inference, one worker, stdout -> SSE
+    media.py                   ffprobe metadata, single-frame JPEG (5.4 seam)
+    names.py                   step colour ramp; imports names, defines none
+    assets/                    index.html, app.css, js/ — no build step
   inference/
     run.py                     WORKFLOW: mp4 -> steps + instruments, one pass
     predict.py                 decode -> embed -> both task heads; no labels needed
@@ -363,9 +379,12 @@ src/pitvis/
                                name-aligned one, and macro (see below)
 
 tests/test_eval.py             pins evaluation/metric.py to the official metric
+tests/test_app_range.py        pins HTTP Range parsing (see below)
+tests/test_app_case.py         pins the case document + the probability additions
 notes/                         see the doc-layer section below
 data/features/                 per-video features.npy + labels.npy (gitignored)
 data/arst/                     CITI checkpoints, standardize.npz, result.json
+predictions/<stem>/            pitvis-predict output (gitignored)
 26531686/                      raw PitVis download (gitignored, read-only)
 ```
 
@@ -379,6 +398,7 @@ uv run pitvis-train [model ...] registry-driven; bare command trains ALL
 uv run pitvis-predict --video   mp4 -> steps AND instruments; labels optional
 uv run pitvis-eval              score an existing checkpoint, no retraining
 uv run pitvis-models            shape/param trace (~1 s smoke test)
+uv run pitvis-app               play a case beside the model's output
 
 uv run pitvis-train --list      what models exist
 uv run pitvis-inventory   uv run pitvis-extract   uv run pitvis-verify   uv run pytest
@@ -386,6 +406,52 @@ uv run pitvis-inventory   uv run pitvis-extract   uv run pitvis-verify   uv run 
 
 All four runners share `--dry-run`, `--only`, `--skip` and `--continue-on-error`
 from `pipeline.py`.
+
+## App (`pitvis-app`) — decisions
+
+Reasoning and measured numbers live in `notes/app.md`. These are the rules.
+
+- **No web framework, and no build step.** `http.server` + hand-written Range,
+  native ES modules, no npm. The only thing starlette would have added is a
+  Range-capable file response, and Range is the most load-bearing behaviour
+  here, so it gets written and tested regardless. `pitvis-app` adds **zero**
+  dependencies.
+- **Range is mandatory, not an optimisation.** Every PitVis video has box order
+  `ftyp, free, mdat, moov` — the index is the last ~1.3 MB of a multi-gigabyte
+  file, so a browser cannot start playback without fetching a tail range.
+  `parse_range` is a pure function pinned by `tests/test_app_range.py` against
+  video_25's real offsets. Do not "simplify" it into a whole-file send.
+- **Validate the `Host` header.** Binding to `127.0.0.1` is not enough: without
+  it, any page the user visits reaches the server by DNS rebinding and can
+  stream patient video off loopback.
+- **Assets are anchored on `paths.APP_ASSETS` (= `PACKAGE`), never `ROOT`.**
+  `ROOT` walks out of the package and does not exist in an installed wheel.
+  `src/pitvis/app/assets/` is the first non-`.py` content in the package;
+  `tests/test_app_case.py` resolves it through `importlib.resources` so the
+  failure shows up from inside the install, not only on a clone.
+- **Probabilities are PRE-CCI.** `cci_decode(..., return_probs=True)` records
+  the decoder's distribution at the moment of decision, which the consistency
+  constraint may then override — 3.8% of seconds on video_25. Confidence is
+  therefore defined as `probs[t][emitted]`, **not** `max()`: it reads low
+  exactly where CCI is holding a phase the frame does not support, and that is
+  the signal. Never label it "model confidence" unqualified.
+- **`(-1, -2)` means different things by source.** In annotations it is
+  out-of-patient; in a prediction it can only mean nothing cleared the
+  threshold, because SANO has no out-of-patient class. 26% of video_19. The
+  collision is resolved once in `case._instrument_state` and the wire format
+  carries a `state` string, never the raw pair.
+- **The default view hides the analyst layer.** Confidence, ground truth,
+  agreement, scores and per-class probabilities are behind `[ + DETAIL ]`. The
+  visible layer answers "what is happening now"; the hidden one answers "how
+  well is the model doing". Six stacked timeline lanes reads as a video editor.
+- **Honesty elements are load-bearing.** The research banner, the amber
+  train-split chip, the stated absence of ground truth, and always-numeric
+  confidence exist because the model scores 0.331 and a composed surface makes
+  any number on it read as authority. Do not trim them for cleanliness.
+- **One inference worker, permanently.** `redirect_stdout` swaps a
+  process-global `sys.stdout`.
+- `renderTimeline(ctx, doc, geom, opts)` **is pure**. That is what makes
+  corrections and multi-case comparison cheap rather than a rewrite.
 
 **`.gitignore` patterns must be anchored.** An unanchored `data/` matches
 `src/pitvis/data/` as well as the repo-root cache, which silently kept that
@@ -442,6 +508,9 @@ Do not merge them. Each has a different reader in a different moment:
   the reasoning lives there.
 - **`notes/instruments.md`** — the SANO task-2 reproduction: why not the rank-1 model,
   the metric's column-ordering defect, results.
+- **`notes/app.md`** — the review surface: why Range is load-bearing, the
+  `(-1, -2)` collision, what pre-CCI confidence means, and why the default view
+  hides most of what the repo can measure. Same layer as the two above.
 
 `walkthrough.md` §8 and `embeddings.md` deliberately cover the same extraction stage
 at two depths. They are cross-linked, not deduplicated. When adding docs, pick the

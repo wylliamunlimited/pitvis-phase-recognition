@@ -75,6 +75,11 @@ src/pitvis/
     instruments.py          SANO task-2 (instrument recognition) training
   inference/
     predict.py              mp4 -> steps + instruments; no labels needed
+  app/
+    run.py                  local review surface — play a case beside the model
+    server.py               HTTP mechanics only (Range, SSE, static)
+    case.py                 the case document the frontend consumes
+    assets/                 index.html + css + ES modules; no build step
   evaluation/
     official.py             organisers' STEP scoring code, vendored — do not edit
     official_instruments.py organisers' INSTRUMENT scoring code, vendored
@@ -83,11 +88,14 @@ src/pitvis/
 
 tests/test_eval.py          pins the task-1 metric to the official code
 tests/test_eval_instruments.py  pins the task-2 metric, incl. its upstream defect
+tests/test_app_range.py     pins HTTP Range — whether a case plays at all
+tests/test_app_case.py      pins the case document and the probability outputs
 notes/walkthrough.md        the domain, the data, and the pipeline — start here
 notes/embeddings.md         what the feature cache is and how embeddings are made
 notes/citi-baseline.md      the CITI reproduction: architecture, faithfulness, results
 notes/citi-dataflow.md      the same cascade traced with real tensor dimensions
 notes/instruments.md        the SANO task-2 reproduction, and a metric defect
+notes/app.md                the review surface: Range, confidence, honesty rules
 notes/data-dictionary.md    every annotation column and what each integer means
 notes/metrics.md            what each evaluation metric measures, and why
 notes/roadmap.md            phased plan of remaining work
@@ -212,6 +220,22 @@ uv run pitvis-predict --video 26531686/video_25.mp4 \
                       --labels 26531686/annotations_25.csv
 ```
 
+### 7. Watch a case
+
+```sh
+uv run pitvis-app
+```
+
+Opens a local page that plays the video and shows, second by second, the step
+the model believes the operation is in and the instruments it believes are in
+view. `[ + DETAIL ]` adds confidence, the ground-truth timeline, where the two
+disagree, and the scores.
+
+Videos with cached features but no predictions can be run from the page itself
+(about 45 s); anything uncached prints the command instead rather than starting
+a 20-minute decode from a click. `--case video_25` opens a specific case,
+`--video path/to/case.mp4` one outside the download.
+
 ### Then read, in this order
 
 1. [`notes/walkthrough.md`](notes/walkthrough.md) — the surgery, the data, the pipeline
@@ -234,6 +258,7 @@ uv run pitvis-train     # train every registered model    (~5 min)
 uv run pitvis-predict --video case.mp4   # both tasks on any video
 uv run pitvis-eval      # score an existing checkpoint, no retraining
 uv run pitvis-models    # shape + parameter trace through the cascade (~1 s)
+uv run pitvis-app       # play a case beside the model's output, in a browser
 ```
 
 Every runner takes `--dry-run` to print the plan without executing, and
