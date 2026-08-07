@@ -61,20 +61,38 @@ def gather_windows(feats: list[torch.Tensor], idx: np.ndarray, window: int,
 
 @torch.no_grad()
 def predict_video(model, feats: torch.Tensor, threshold: float,
-                  chunk: int, dev: torch.device) -> np.ndarray:
+                  chunk: int, dev: torch.device, *, return_probs: bool = False):
     """(T, D) -> (T, 2) instrument pairs. Chunked, and exact: each position is
-    decoded from its own window, so chunk boundaries change nothing."""
+    decoded from its own window, so chunk boundaries change nothing.
+
+    `return_probs` also returns `(probs (T, 19) float32, keep (T, 19) int8)`.
+    `keep` is worth carrying because the pairs alone are ambiguous: an all-zero
+    row becomes `(-1, -2)`, which is byte-identical to the annotations' real
+    out-of-patient sentinel. From `keep` the two are distinguishable, and only
+    `keep` reveals when `decide` capped three positives down to two.
+
+    `decide` recomputes the sigmoid internally. That duplication is deliberate:
+    `decide` is a pure decision rule living in `models/`, and widening its
+    return to avoid 19 redundant floats per row would push a display concern
+    into the model layer.
+    """
     x = feats.unsqueeze(0)
     w = causal_windows(x, model.window)              # a view, not a copy
     T = x.shape[1]
-    keep = []
+    keep, probs = [], []
     for s in range(0, T, chunk):
         e = min(T, s + chunk)
         wc = w[:, s:e].reshape((e - s), model.window, x.shape[2]).to(dev)
         out, _ = model.lstm(wc)
         logits = model.instruments(out[:, -1])
+        if return_probs:
+            probs.append(torch.sigmoid(logits).cpu().numpy())
         keep.append(decide(logits, threshold).cpu().numpy())
-    return multihot_to_pairs(np.concatenate(keep))
+    k = np.concatenate(keep)
+    pairs = multihot_to_pairs(k)
+    if return_probs:
+        return pairs, np.concatenate(probs).astype(np.float32), k
+    return pairs
 
 
 def main(argv: list[str] | None = None) -> None:
