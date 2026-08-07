@@ -40,9 +40,10 @@ Two-stage pipeline, standard for surgical phase recognition:
 1. **Frame features** — decode each video at 1 fps and embed every frame with a
    frozen ImageNet-pretrained ResNet-50 (2048-d). Extraction is resumable; done
    once, cached under `data/features/`.
-2. **Step classification** — models over the cached features, starting with a
-   frame-wise linear probe (no temporal context, the floor) and moving to
-   temporal models (e.g. TCN / GRU / transformer over the feature sequence).
+2. **Classification over the cached features** — for **task 1** (steps) a
+   frame-wise linear probe as the floor, then CITI's ARST (the challenge
+   winner); for **task 2** (instruments) SANO's joint-winning causal LSTM.
+   Both read the same cache, so a training run is minutes rather than hours.
 
 Train/val split follows the paper: videos 01, 12, 21, 24, 25 for validation, the
 rest for training (19 train videos in practice, since video 19 has no labels).
@@ -66,26 +67,33 @@ src/pitvis/
     dataset.py              per-video (T, 2048) features + labels, split constants
   models/
     arst.py                 CITI's task-1 architecture (spatial + TeCNO + ARST)
+    lstm.py                 SANO's task-2 architecture (causal windowed LSTM)
   training/
     registry.py             the only list of trainable models — add one here
     arst.py                 three-stage training + auto-regressive inference
     baseline.py             frame-wise linear probe baseline
+    instruments.py          SANO task-2 (instrument recognition) training
   inference/
     predict.py              mp4 -> per-second steps + segments; no labels needed
   evaluation/
-    official.py             organisers' scoring code, vendored verbatim — do not edit
-    metric.py               official metric per video + mean±std, plus diagnostics
+    official.py             organisers' STEP scoring code, vendored — do not edit
+    official_instruments.py organisers' INSTRUMENT scoring code, vendored
+    metric.py               task-1 metric per video + mean±std, plus diagnostics
+    instruments.py          task-2 metric (multi-label, weighted F1)
 
-tests/test_eval.py          pins the metric to the official code
+tests/test_eval.py          pins the task-1 metric to the official code
+tests/test_eval_instruments.py  pins the task-2 metric, incl. its upstream defect
 notes/walkthrough.md        the domain, the data, and the pipeline — start here
 notes/embeddings.md         what the feature cache is and how embeddings are made
 notes/citi-baseline.md      the CITI reproduction: architecture, faithfulness, results
 notes/citi-dataflow.md      the same cascade traced with real tensor dimensions
+notes/instruments.md        the SANO task-2 reproduction, and a metric defect
 notes/data-dictionary.md    every annotation column and what each integer means
 notes/roadmap.md            phased plan of remaining work
 notes/inventory.md          generated dataset inventory
 data/features/              cached per-video features.npy + labels.npy (gitignored)
-data/arst/                  CITI checkpoints + result.json (gitignored)
+data/arst/                  CITI task-1 checkpoints + result.json (gitignored)
+data/instruments/           SANO task-2 checkpoint + result.json (gitignored)
 26531686/                   raw PitVis download (gitignored, read-only)
 ```
 
@@ -125,7 +133,7 @@ right?" from "is my data right?" — worth doing before committing to step 4.
 
 ```sh
 uv run pitvis-models      # ~1 s: every tensor shape and parameter count
-uv run pytest             # ~2 s: 23 tests pinning our metric to the official code
+uv run pytest             # ~3 s: 44 tests pinning both metrics to the official code
 ```
 
 `pitvis-models` falls back to a synthetic tensor when the cache is absent, so it

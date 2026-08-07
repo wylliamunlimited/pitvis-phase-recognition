@@ -159,6 +159,35 @@ last segment of one video with the first of the next and lets opposite per-video
 in the frame-wise F1. `test_pooling_videos_flatters_the_score` demonstrates 0.583 pooled vs
 0.417 honest on a two-video toy case.
 
+### Task 2 (instruments) is scored differently — do not reuse task-1 conventions
+
+`evaluation/official_instruments.py` is `helper_scripts/evaluation_instruments.py`
+vendored verbatim (commit `ebc82dd`, sha256 in the header; note the upstream
+default branch is `trunk`, not `main`). It differs from the steps metric in four
+ways, all deliberate upstream:
+
+- **`average="weighted"`, not macro.** Support-dominated: ids 16/0/8/13 carry
+  ~91% of positives.
+- **Background rows are KEPT.** `remove_background_insts` is defined but its call
+  is commented out, so out-of-patient frames become all-zero rows and are scored.
+- **No edit score** — F1 only. Instruments are multi-label, so a sequence cannot
+  be collapsed by `groupby`.
+- **No rarity exclusions.** All 19 classes (ids 0..18) are scored, and **class 0
+  ("no visible instrument") is a real class**, not a sentinel — 31.5% of frames.
+
+**The vendored function has a real defect, preserved deliberately.**
+`hot_encode_insts` fits a separate `MultiLabelBinarizer` on trues and on preds,
+so when they observe different class sets the column ORDERS diverge and
+`f1_score` compares them positionally. It fires on 5/5 of our val videos, and
+through the official path three different constant strategies all score an
+identical 0.1383. We keep it as the headline (the number is the challenge's by
+construction) but `evaluate_video` sets `column_order_diverged` and `report()`
+warns. The name-aligned score is printed alongside.
+
+**The paper contradicts its own code**: §3.4.3 and Table 6's header say *macro*,
+the script computes *weighted*. Unlike the Eq-3 case, nothing rules either out —
+so all three numbers are printed and **no leaderboard comparability is claimed**.
+
 ### Three official behaviours that look like bugs and must be preserved
 
 A "cleaner" reimplementation would silently diverge from the challenge on all three:
@@ -312,16 +341,22 @@ src/pitvis/
                                — the executable form of notes/citi-dataflow.md
     arst.py                    CITI's task-1 architecture: spatial embedding +
                                TeCNO + ARST (banded causal mask)
+    lstm.py                    SANO's task-2 architecture: causal windowed LSTM,
+                               19 sigmoid outputs (multi-label)
   training/
     run.py                     WORKFLOW: `pitvis-train <model ...>`, registry-driven
     registry.py                the ONLY list of trainable models — add one here
     arst.py                    three-stage training + CCI auto-regressive inference
     baseline.py                frame-wise linear probe baseline
+    instruments.py             SANO task-2 training (BCE, windowed minibatches)
   evaluation/
     run.py                     WORKFLOW: score an existing checkpoint, no retrain
-    official.py                VENDORED official challenge metric — do not edit
-    metric.py                  official metric per video + mean±std, plus pooled
+    official.py                VENDORED official STEPS metric — do not edit
+    official_instruments.py    VENDORED official INSTRUMENT metric — do not edit
+    metric.py                  task-1 metric per video + mean±std, plus pooled
                                diagnostics
+    instruments.py             task-2 metric; reports the official number, the
+                               name-aligned one, and macro (see below)
 
 tests/test_eval.py             pins evaluation/metric.py to the official metric
 notes/                         see the doc-layer section below

@@ -106,17 +106,50 @@ def load_manifest(space: dict) -> dict:
 
 
 def record_video(manifest: dict, vid: int, frames: int, fps_rounded: int,
-                 has_labels: bool, source: Path) -> None:
+                 has_labels: bool, source: Path, has_instruments: bool = False) -> None:
     manifest["videos"][f"video_{vid:02d}"] = {
         "extracted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "fps_rounded": fps_rounded,
         "frames": frames,
         "labels": has_labels,
+        "instruments": has_instruments,
         "source": str(source),
     }
     tmp = MANIFEST.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     tmp.replace(MANIFEST)
+
+
+def write_annotations(vid: int, out_dir: Path, expected: int) -> bool:
+    """Write labels.npy and instruments.npy from the raw CSV. Returns has-labels.
+
+    Split out of `extract_video` so it can also run on the resumable path: the
+    feature cache predates instrument support, and extraction returns early when
+    features already exist, so a caller with a warm cache needs a way to backfill
+    labels without re-decoding 40 GB of video.
+
+    Steps use the 15-way encoding (-1 -> 0). Instruments keep their RAW
+    sentinels: -1 (out of patient), -2 (no secondary) and 0 (nothing visible)
+    are three different things, and collapsing them corrupts the target. See
+    notes/data-dictionary.md §4.
+    """
+    ann_path = RAW / f"annotations_{vid:02d}.csv"
+    if not ann_path.exists():
+        return False
+
+    df = pd.read_csv(ann_path)
+    steps = df["int_step"].to_numpy()
+    assert len(steps) == expected + 1, \
+        f"video {vid:02d}: {len(steps)} ann rows, expected {expected + 1}"
+    assert steps[-1] == -1, f"video {vid:02d}: dropped row is not background"
+
+    labels = steps[:expected].copy()
+    labels[labels == -1] = 0
+    np.save(out_dir / "labels.npy", labels.astype(np.int64))
+
+    inst = df[["int_instrument1", "int_instrument2"]].to_numpy()[:expected]
+    np.save(out_dir / "instruments.npy", inst.astype(np.int64))
+    return True
 
 
 @torch.no_grad()
@@ -185,12 +218,24 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
     if feat_path.exists():
         existing = np.load(feat_path, mmap_mode="r")
         if len(existing) == expected:
+            # Features are the expensive part and they are already here. Still
+            # backfill any annotation artifact that is missing — instruments.npy
+            # postdates this cache, and re-decoding 40 GB to add a column read
+            # from a CSV would defeat the resumability rule in CLAUDE.md.
+            missing = not (out_dir / "instruments.npy").exists()
+            has_labels = (out_dir / "labels.npy").exists()
+            if missing and (RAW / f"annotations_{vid:02d}.csv").exists():
+                has_labels = write_annotations(vid, out_dir, expected)
+                print(f"video {vid:02d}: exists ({expected} frames), "
+                      f"backfilled instruments.npy")
             entry = manifest["videos"].get(f"video_{vid:02d}")
-            if entry is None or entry["frames"] != expected:
-                record_video(manifest, vid, expected, r,
-                             (out_dir / "labels.npy").exists(), video)
-                print(f"video {vid:02d}: exists ({expected} frames), manifest entry added")
-            else:
+            if entry is None or entry["frames"] != expected or missing \
+                    or "instruments" not in entry:
+                record_video(manifest, vid, expected, r, has_labels, video,
+                             (out_dir / "instruments.npy").exists())
+                if not missing:
+                    print(f"video {vid:02d}: exists ({expected} frames), manifest updated")
+            elif not missing:
                 print(f"video {vid:02d}: exists ({expected} frames), skipping")
             return
         print(f"video {vid:02d}: found {len(existing)} != {expected} frames, redoing")
@@ -201,17 +246,10 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
     out_dir.mkdir(parents=True, exist_ok=True)
     np.save(feat_path, features)
 
-    ann_path = RAW / f"annotations_{vid:02d}.csv"
-    if ann_path.exists():
-        steps = pd.read_csv(ann_path)["int_step"].to_numpy()
-        assert len(steps) == expected + 1, \
-            f"video {vid:02d}: {len(steps)} ann rows, expected {expected + 1}"
-        assert steps[-1] == -1, f"video {vid:02d}: dropped row is not background"
-        labels = steps[:expected].copy()
-        labels[labels == -1] = 0
-        np.save(out_dir / "labels.npy", labels.astype(np.int64))
+    has_labels = write_annotations(vid, out_dir, expected)
 
-    record_video(manifest, vid, expected, r, ann_path.exists(), video)
+    record_video(manifest, vid, expected, r, has_labels, video,
+                 (out_dir / "instruments.npy").exists())
     print(f"video {vid:02d}: done, {expected} frames in {time.time() - t0:.0f}s")
 
 
