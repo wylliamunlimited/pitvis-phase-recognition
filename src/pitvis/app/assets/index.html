@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PitVis — case review</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<!-- data-detail toggles the analyst layer. Default OFF: the interface answers
+     "what is happening now" and nothing else. Everything that answers "how did
+     the model do" is hidden until asked for. -->
+<div id="app" data-state="loading">
+
+  <header class="bar">
+    <span class="mark">PITVIS</span>
+    <label class="picker brk">
+      <select id="case-select"></select>
+    </label>
+    <span class="split" id="split"></span>
+    <span class="grow"></span>
+    <span class="clock" id="clock">--:--:-- / --:--:--</span>
+    <button id="detail-toggle" class="ghost" aria-pressed="false">[ + DETAIL ]</button>
+    <span class="chip warn" title="This renders research model output on recorded video. It is not a medical device and must not inform clinical decisions.">RESEARCH — NOT FOR CLINICAL USE</span>
+  </header>
+
+  <main>
+    <section class="stage">
+      <div class="frame brk" id="frame">
+        <video id="video" preload="metadata" playsinline></video>
+        <!-- Seam (a): the agentic explanation layer draws here. Sized to the
+             video's displayed rect, empty until something registers a layer. -->
+        <canvas id="overlay"></canvas>
+        <div class="veil" id="veil"><span></span></div>
+      </div>
+
+      <div class="transport">
+        <button id="play" class="wide">[ PLAY ]</button>
+        <button id="back10" title="back 10s (shift+left)">&laquo;</button>
+        <button id="fwd10" title="forward 10s (shift+right)">&raquo;</button>
+        <span class="tsep"></span>
+        <button id="prevseg" title="previous step ([)">&lsaquo; STEP</button>
+        <button id="nextseg" title="next step (])">STEP &rsaquo;</button>
+        <span class="grow"></span>
+        <button id="rerun" class="ghost">[ RE-RUN ]</button>
+      </div>
+    </section>
+
+    <aside class="rail">
+
+      <section class="card brk" id="step-card">
+        <div class="cap">CURRENT STEP</div>
+        <div class="step-body">
+          <div class="tint" id="step-tint"></div>
+          <div class="num" id="step-num">--</div>
+          <div class="meta">
+            <div class="name" id="step-name">no prediction</div>
+            <div class="sub">
+              <span id="step-elapsed">--:--</span>
+              <span class="sep">of</span>
+              <span id="step-total">--:--</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="more">
+          <div class="conf" id="conf-row">
+            <span class="cap">CONFIDENCE</span>
+            <span class="bar"><i id="conf-fill"></i></span>
+            <span class="val" id="conf-val">--</span>
+          </div>
+          <div class="alt" id="step-alt" hidden></div>
+        </div>
+      </section>
+
+      <section class="card brk" id="inst-card">
+        <div class="cap">INSTRUMENTS</div>
+        <div class="slots">
+          <div class="slot"><span class="cap">PRIMARY</span>
+            <span class="v" id="inst1">--</span></div>
+          <div class="slot"><span class="cap">SECONDARY</span>
+            <span class="v" id="inst2">--</span></div>
+        </div>
+        <ul class="probs more" id="inst-probs"></ul>
+      </section>
+
+      <section class="card brk more" id="ref-card">
+        <div class="cap">GROUND TRUTH</div>
+        <div id="ref-body"></div>
+      </section>
+
+    </aside>
+  </main>
+
+  <footer class="timeline" id="timeline">
+    <div class="lane-labels" id="lane-labels"></div>
+    <div class="track" id="track">
+      <canvas id="tl-canvas"></canvas>
+      <div class="playhead" id="playhead"></div>
+      <div class="hover" id="tl-hover" hidden></div>
+    </div>
+  </footer>
+
+  <div class="console brk" id="console" hidden>
+    <div class="cap">INFERENCE<button id="console-close" class="ghost">[ CLOSE ]</button></div>
+    <pre id="console-log"></pre>
+  </div>
+
+  <div class="boot" id="boot"><span>LOADING</span></div>
+</div>
+
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
