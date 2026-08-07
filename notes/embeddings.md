@@ -248,6 +248,6 @@ about tissue and instruments it has never seen. Which is why:
   frames get written to disk (~4 GB at 256 px, ~25 GB at native 720p) or a
   `Dataset` decodes them on the fly.
 
-The cross-cutting risk in `roadmap.md` states it plainly: everything through 3.4
+The cross-cutting risk in `roadmap.md` states it plainly: everything except 3.6
 builds on a backbone that has never seen an endoscope. If temporal modeling
 plateaus well below the paper, this is the reason.

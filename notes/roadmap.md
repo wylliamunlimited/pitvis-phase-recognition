@@ -160,11 +160,6 @@ before the next one starts, so we always know what an idea actually bought.
 - [ ] **3.3 Alternatives.** Bi-GRU/LSTM and a windowed transformer over the same
       features, for comparison against 3.2 under an identical harness.
 
-- [ ] **3.4 Post-processing.** Segment smoothing and order priors. Surgical steps
-      follow a largely monotonic sequence (corridor → sphenoidotomy → sellotomy →
-      durotomy → excision → closure), which the frame-wise metric ignores but the
-      *edit score* rewards directly.
-
 - [x] **3.4 Task 2: instrument recognition.** ✅ SANO's joint-winning model
       (frozen ResNet-50 -> causal 5-window LSTM -> 19 sigmoid outputs, BCE),
       `uv run pitvis-train instruments`. The official metric is vendored
@@ -182,6 +177,11 @@ before the next one starts, so we always know what an idea actually bought.
       gain, highest cost.
 
 ---
+
+- [ ] **3.7 Post-processing.** Segment smoothing and order priors. Surgical steps
+      follow a largely monotonic sequence (corridor → sphenoidotomy → sellotomy →
+      durotomy → excision → closure), which the frame-wise metric ignores but the
+      *edit score* rewards directly.
 
 ## Phase 4 — Evaluation and analysis
 
@@ -260,7 +260,7 @@ the *where*.
 
 ## Cross-cutting risks
 
-- **Frozen ImageNet features are probably the ceiling.** Everything through 3.4
+- **Frozen ImageNet features are probably the ceiling.** Everything except 3.6
   builds on a backbone that has never seen an endoscope. If temporal modeling
   plateaus well below the paper, 3.6 is the reason.
 - **The val split is 5 videos.** Small improvements will not be distinguishable
