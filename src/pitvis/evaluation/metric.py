@@ -36,7 +36,7 @@ k = step k). `decode` maps back to the raw space the official code expects.
 import numpy as np
 from sklearn.metrics import confusion_matrix, f1_score
 
-from pitvis.data.dataset import BACKGROUND, NUM_CLASSES
+from pitvis.data.dataset import BACKGROUND, NUM_CLASSES, STEP_NAMES
 from pitvis.evaluation.official import (
     calculate_edit_score,
     calculate_steps_evaluation_metric,
@@ -46,15 +46,6 @@ from pitvis.evaluation.official import (
 EXCLUDED = [0, 11, 13]      # encoded; raw [-1, 11, 13]
 EXCLUDED_RAW = [-1, 11, 13]
 SCORED = [k for k in range(NUM_CLASSES) if k not in EXCLUDED]
-
-STEP_NAMES = {
-    0: "background", 1: "nasal corridor creation", 2: "anterior sphenoidotomy",
-    3: "septum displacement", 4: "sphenoid sinus clearance", 5: "sellotomy",
-    6: "durotomy", 7: "tumour excision", 8: "haemostasis",
-    9: "synthetic graft placement", 10: "fat graft placement",
-    11: "gasket seal construct", 12: "dural sealant", 13: "nasal packing",
-    14: "debris clearance",
-}
 
 METRICS = ("macro_f1", "edit_score", "metric")
 
