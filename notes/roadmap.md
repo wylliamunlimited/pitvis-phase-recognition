@@ -212,16 +212,19 @@ output of the ML model* (predicted step, segment boundaries, confidence).
 The phase model supplies the *when*; the agent supplies the narration and
 the *where*.
 
-- [ ] **5.1 (D) Surface.** The agentic overlay effectively decides this: it
-      needs a video player with a drawable overlay (canvas), which points at a
-      local web UI rather than a CLI report or bare API. Confirm before
-      building, since it determines everything below.
-- [ ] **5.2 Inference service.** Wraps 2.5. Model loaded once, videos processed
-      on request, progress reported (a full case is 45–140 min of video, so this
-      is not a sub-second request).
-- [ ] **5.3 Timeline visualisation.** Predicted step timeline against ground
-      truth where available, with per-segment confidence. Doubles as the
-      agent's input: the segment list is what it plans its explanations over.
+- [x] **5.1 (D) Surface — DECIDED: a local web UI.** `uv run pitvis-app`,
+      stdlib HTTP server, no build step, zero new dependencies. A `<canvas>`
+      sits over the video with a `Layer` registry, sized in video pixels, so
+      5.4 is a layer rather than a refactor. See `notes/app.md`.
+- [~] **5.2 Inference service.** The cheap half is done: a case with cached
+      features can be predicted from the page (~45 s), one worker, stdout
+      streamed to the browser as SSE. Still missing: videos OUTSIDE the feature
+      cache, which need a full 1 fps decode (10–25 min) and a warm long-lived
+      process rather than an in-process call. The app refuses those and prints
+      the command.
+- [x] **5.3 Timeline visualisation.** Predicted steps against ground truth,
+      per-segment confidence, and a lane marking where the two disagree. Note
+      confidence required 5.6 first — nothing persisted a probability before.
 - [ ] **5.4 (D) Agentic explanation layer.** The agent consumes 2.5's output
       (per-second steps, merged segments, confidences) plus sampled frames, and
       decides what to point at and what to say, per segment — e.g. circle the
@@ -234,6 +237,24 @@ the *where*.
       becomes more valuable if its predictions feed the agent.
 - [ ] **5.5 Packaging.** Reproducible run instructions, model artifact
       distribution.
+- [x] **5.6 Confidence as an artifact.** `cci_decode` and `predict_video` take
+      a keyword-only `return_probs`; `pitvis-predict --probs` writes
+      `step_probs.npy` (T, 15) and `instrument_probs.npy` (T, 19). Additive by
+      construction — `predictions.csv` is byte-identical before and after.
+      **The step distribution is PRE-CCI**: it is the decoder's belief at the
+      moment of decision, which the consistency constraint may then override
+      (3.8% of seconds on video_25). Confidence is therefore `p(emitted step)`,
+      not `max`, so it reads low exactly where CCI is holding a phase.
+- [ ] **5.7 Human-in-the-loop correction.** Confirm or override a predicted
+      step, persist to `predictions/<id>/corrections.json`, export as an
+      `annotations_NN.csv`. Seam exists: `doc.corrections` ships empty,
+      `segments[].source` is `"model"`, `/corrections` is routed and 501s.
+- [ ] **5.8 Live / streaming input.** Seam exists: the clock is a `TimeSource`
+      interface and `VideoTimeSource` is one implementation, so no renderer
+      knows a file is involved.
+- [ ] **5.9 Multi-case comparison.** Seam exists: case documents are
+      self-contained (comparison is N fetches) and `renderTimeline` is a pure
+      function of its arguments.
 
 ---
 
