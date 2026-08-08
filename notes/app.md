@@ -24,7 +24,7 @@ The default view carries four things: the video, the current step, the
 instruments in view, and one strip saying where you are in the operation.
 
 Nothing else. Not confidence, not ground truth, not the score, not the
-per-class probabilities. All of that is behind `[ + DETAIL ]`.
+per-class probabilities. All of that is behind `+ DETAIL`.
 
 That split is the main design decision and it is worth stating plainly. The two
 layers answer different questions:
@@ -32,7 +32,7 @@ layers answer different questions:
 | question | who asks it | where it lives |
 |---|---|---|
 | what is happening right now? | anyone watching | always visible |
-| how well is the model doing? | whoever is evaluating it | `[ + DETAIL ]` |
+| how well is the model doing? | whoever is evaluating it | `+ DETAIL` |
 
 An interface that answers both at once answers neither well, and the first gate
 is not comprehension — it is whether someone opens it twice. Six stacked
@@ -257,11 +257,22 @@ colour animates — which is how a step change announces itself.
 the video, a card, the case picker, `[ VAL SPLIT ]`. Controls originally echoed
 it typographically (`[ PLAY ]`, `[ + DETAIL ]`, `[ RE-RUN ]`), which was the
 mistake: if the same mark means both "look at this" and "click this", it means
-neither. Buttons now carry no literal brackets and get their own affordance —
-a hairline that draws in from the left on hover and stays drawn while a toggle
-is pressed, on `button::after`, so it costs no DOM and no layout. A pressed
-toggle is the accent colour with the rule fully drawn, which is the only place
-in the app where a control looks *on*.
+neither. Buttons now carry no literal brackets and are **filled boxes** instead. A
+readout is a region you look at; a control is a surface you press. The first
+attempt at separating them used a hairline underline, which read as a
+hyperlink — technically distinct from the bracket, but still not something that
+looks pressable. Area is what makes a control legible as one.
+
+State is carried entirely by colour, on one property, with no movement and no
+shadow: `--raised` at rest, a 12% accent tint under the pointer, 22% while
+held, and **solid accent with white text while a toggle is on** — the only
+place in the app a control reads as filled. 2px of radius and no more: enough
+to separate a control from the square-cornered readouts around it, not enough
+to break the orthogonal language.
+
+The case picker follows the same rule. It *is* a control, so it lost its
+bracket and became a box too — leaving it framed while the buttons beside it
+were filled would have been the same confusion in reverse.
 
 **Reveal is animated, because `display` is not.** `.more` elements go
 `display: none` → `revert`, and no transition can span that. So the analyst
