@@ -10,6 +10,20 @@
  * and no extra DOM — and the colour animates, which is how a step change
  * announces itself.
  *
+ * THE BRACKET MARKS INFORMATION, NEVER A CONTROL. It frames the things you
+ * read — the video, a card, the case picker, the split chip. Buttons get their
+ * own affordance (a rule that draws in from the left) because a control and a
+ * readout must not look alike; if everything is bracketed the motif stops
+ * meaning anything. Buttons therefore carry no literal `[ ... ]` in their
+ * labels either.
+ *
+ * TYPE IS LIGHT SANS, NOT MONO. Monospace plus uppercase plus wide tracking
+ * reads as tactical, which is the wrong register for a clinical research tool.
+ * Mono survives in exactly two places — the inference console and the copyable
+ * command in the veil — where column alignment is the point. Everything else
+ * is a light sans with tabular figures, so numbers still align in a column
+ * without the whole surface looking like a terminal.
+ *
  * DENSITY IS THE DESIGN. The default view answers one question — what is
  * happening now — and hides everything that answers "how did the model do".
  * That second layer lives behind [ + DETAIL ] and is revealed by `.more`
@@ -31,6 +45,13 @@
   --alarm:   #B42318;
 
   --ease: cubic-bezier(.4, 0, .2, 1);
+  /* Two durations, as before: --d1 is state feedback the pointer causes,
+     --d2 is structural change the layout causes. Nothing gets a third. */
+  --d1: .18s;
+  --d2: .36s;
+
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "Helvetica Neue", Inter, system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo,
           Consolas, monospace;
 
@@ -45,25 +66,44 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font: 400 13px/1.45 var(--mono);
+  /* 300, and a shade larger than the old mono — a light sans sets smaller on
+     the same px, so 13 would have read as a downgrade rather than a change. */
+  font: 300 13.5px/1.5 var(--sans);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 
 button, select {
   font: inherit; color: inherit; background: none; border: 0;
-  cursor: pointer; letter-spacing: .06em;
+  cursor: pointer; letter-spacing: .04em;
 }
-button { color: var(--dim); transition: color .2s var(--ease); white-space: nowrap; }
+
+/* The control affordance, and deliberately NOT a bracket: a hairline that
+   draws in from the left on hover and stays drawn while a toggle is pressed.
+   Positioned on a pseudo-element so it costs no DOM and no layout. */
+button {
+  position: relative; color: var(--dim); white-space: nowrap;
+  transition: color var(--d1) var(--ease);
+}
+button::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -5px; height: 1px;
+  background: currentColor; transform: scaleX(0); transform-origin: left center;
+  transition: transform var(--d1) var(--ease);
+}
 button:hover:not(:disabled) { color: var(--accent); }
+button:hover:not(:disabled)::after,
+button[aria-pressed="true"]::after { transform: scaleX(1); }
+button[aria-pressed="true"] { color: var(--accent); }
 button:disabled { color: var(--faint); cursor: default; }
-button.ghost { font-size: 10px; letter-spacing: .12em; }
+button:disabled::after { transform: scaleX(0); }
+button.ghost { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
 :focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
 
 .cap {
-  font-size: 9px; letter-spacing: .18em; color: var(--faint);
-  text-transform: uppercase; white-space: nowrap;
+  font-size: 9.5px; letter-spacing: .14em; color: var(--faint);
+  text-transform: uppercase; white-space: nowrap; font-weight: 400;
 }
 .grow { flex: 1; }
 
@@ -74,6 +114,32 @@ button.ghost { font-size: 10px; letter-spacing: .12em; }
 #app[data-detail] .card.more { display: block; }
 #app[data-detail] ul.probs.more { display: flex; }
 #app[data-detail] #detail-toggle { color: var(--accent); }
+
+/* `display` cannot be transitioned, so the reveal is an animation instead —
+   it runs once, on the frame the element starts being displayed. Each piece
+   is offset slightly so the analyst layer assembles top-down rather than
+   appearing as one block, which is what made the old toggle feel abrupt. */
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: none; }
+}
+#app[data-detail] .more { animation: reveal var(--d2) var(--ease) both; }
+#app[data-detail] #step-card .more { animation-delay: .03s; }
+#app[data-detail] #inst-probs     { animation-delay: .08s; }
+#app[data-detail] #ref-card       { animation-delay: .13s; }
+
+/* The footer grows to fit the extra lanes; --tl is set from JS. Without this
+   the timeline snapped to its new height while the cards were still fading. */
+#app { transition: grid-template-rows var(--d2) var(--ease); }
+
+/* Motion here is affordance, not decoration, so it all reduces to nothing on
+   request rather than being merely shortened. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important; animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+}
 
 /* -- the bracket ---------------------------------------------------------- */
 
@@ -94,7 +160,7 @@ button.ghost { font-size: 10px; letter-spacing: .12em; }
   background-position:
     left top, left top,  right top, right top,
     left bottom, left bottom,  right bottom, right bottom;
-  transition: --brk .4s var(--ease);
+  transition: --brk var(--d2) var(--ease);
 }
 @property --brk { syntax: '<color>'; inherits: false; initial-value: #E3E3DE; }
 
@@ -106,14 +172,14 @@ button.ghost { font-size: 10px; letter-spacing: .12em; }
   display: flex; align-items: center; gap: 18px; padding: 0 20px;
   border-bottom: 1px solid var(--rule); background: var(--surface);
 }
-.mark { font-size: 11px; letter-spacing: .3em; color: var(--faint); }
+.mark { font-size: 11.5px; letter-spacing: .24em; font-weight: 400; color: var(--faint); }
 .picker { padding: 6px 11px; }
 .picker select { color: var(--text); letter-spacing: .1em; font-size: 12px; }
-.split { font-size: 9px; letter-spacing: .16em; color: var(--faint); }
+.split { font-size: 9.5px; letter-spacing: .12em; color: var(--faint); }
 .split.trained { color: var(--warn); }
 .clock { font-size: 12px; color: var(--dim); letter-spacing: .04em; }
 .chip {
-  font-size: 9px; letter-spacing: .14em; color: var(--warn);
+  font-size: 9.5px; letter-spacing: .1em; color: var(--warn);
   white-space: nowrap; padding-left: 4px;
 }
 
@@ -148,6 +214,7 @@ main {
 .veil[data-on] { display: flex; }
 .veil span { max-width: 62ch; line-height: 2; white-space: pre-line; }
 .veil code {
+  font-family: var(--mono);
   display: block; margin-top: 14px; padding: 11px 13px; background: var(--raised);
   color: var(--text); letter-spacing: 0; white-space: pre-wrap; font-size: 11px;
   line-height: 1.6; user-select: all;
@@ -170,15 +237,15 @@ main {
 .step-body { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
 .tint {
   width: 3px; align-self: stretch; min-height: 58px; background: var(--faint);
-  transition: background .3s var(--ease);
+  transition: background var(--d2) var(--ease);
 }
 .num {
-  font-size: 62px; font-weight: 200; line-height: .82; letter-spacing: -.03em;
+  font-size: 64px; font-weight: 150; line-height: .82; letter-spacing: -.03em;
   color: var(--text);
 }
 .meta { min-width: 0; }
 .name {
-  font-size: 17px; letter-spacing: .04em; text-transform: uppercase;
+  font-size: 17px; font-weight: 300; letter-spacing: .02em; text-transform: uppercase;
   line-height: 1.3; color: var(--text);
 }
 .sub { margin-top: 8px; font-size: 11px; color: var(--dim); }
@@ -188,7 +255,7 @@ main {
 .conf .bar { flex: 1; height: 2px; background: var(--raised); position: relative; }
 .conf .bar i {
   position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent);
-  transition: width .2s var(--ease), background .2s var(--ease);
+  transition: width var(--d1) var(--ease), background var(--d1) var(--ease);
 }
 .conf .val { font-size: 12px; color: var(--text); min-width: 4ch; text-align: right; }
 .alt {
@@ -200,7 +267,7 @@ main {
 .slots { display: flex; flex-direction: column; gap: 11px; margin-top: 16px; }
 .slot { display: grid; grid-template-columns: 66px 1fr; align-items: baseline; gap: 10px; }
 .slot .v {
-  font-size: 14px; letter-spacing: .03em; text-transform: uppercase;
+  font-size: 14px; font-weight: 300; letter-spacing: .01em; text-transform: uppercase;
   color: var(--text); min-width: 0; overflow-wrap: anywhere; line-height: 1.35;
 }
 .slot .v.empty {
@@ -228,7 +295,7 @@ main {
 #ref-body { margin-top: 14px; font-size: 11px; line-height: 1.75; color: var(--dim); }
 #ref-body .row { display: flex; align-items: baseline; gap: 9px; }
 #ref-body .tstep { color: var(--text); text-transform: uppercase; letter-spacing: .03em; }
-#ref-body .verdict { margin-left: auto; font-size: 9px; letter-spacing: .12em; }
+#ref-body .verdict { margin-left: auto; font-size: 9px; letter-spacing: .09em; }
 #ref-body .ok  { color: var(--accent); }
 #ref-body .bad { color: var(--alarm); }
 #ref-body .absent { color: var(--faint); line-height: 1.8; }
@@ -241,7 +308,7 @@ main {
 .timeline { display: grid; grid-template-columns: 92px 1fr; background: var(--surface); }
 .lane-labels { position: relative; padding: 14px 0 14px 20px; }
 .lane-labels span {
-  position: absolute; left: 20px; font-size: 8px; letter-spacing: .16em;
+  position: absolute; left: 20px; font-size: 8.5px; letter-spacing: .12em;
   color: var(--faint); text-transform: uppercase;
 }
 .track { position: relative; padding: 14px 20px 14px 0; cursor: crosshair; }
@@ -286,7 +353,7 @@ main {
 .boot {
   position: fixed; inset: 0; display: flex; align-items: center;
   justify-content: center; background: var(--bg); z-index: 40;
-  font-size: 9px; letter-spacing: .3em; color: var(--faint);
+  font-size: 9.5px; letter-spacing: .24em; color: var(--faint);
 }
 #app:not([data-state="loading"]) .boot { display: none; }
 

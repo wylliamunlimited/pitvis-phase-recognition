@@ -224,9 +224,22 @@ showing one unlabelled would mislead.
 
 ## 6. Design
 
-Light ground, nine colours, one accent (`#0F7B6C`), a single mono family with
-tabular numerals, corner brackets instead of filled borders, one easing and two
+Light ground, nine colours, one accent (`#0F7B6C`), a light sans with tabular
+numerals, corner brackets instead of filled borders, one easing and two
 durations.
+
+**Type is light sans, not mono.** The first pass set everything in a monospace
+family. Mono plus uppercase plus wide tracking is the house style of a tactical
+briefing, and it made a clinical research tool read as one — the surface
+signalled *operator* when it needed to signal *instrument*. Body is now 300
+weight, and the big step numeral is 150.
+
+Mono survives in exactly two places: the inference console and the copyable
+command in the veil, where column alignment is the whole point. Everything else
+carries `font-variant-numeric: tabular-nums`, so timecodes and probabilities
+still hold their columns without the surface looking like a terminal. Tracking
+was retuned throughout — values chosen against mono metrics are too loose for
+a sans at the same size.
 
 **Phases are one hue, not fifteen.** Every step gets the same slate at a rising
 darkness (`hsl(200 20% L)`, L from 79% down to 42%), so a case reads
@@ -238,8 +251,29 @@ of sixteen, and it means nothing depends on hue discrimination.
 
 The **bracket** is the motif: `.brk` draws four corners from eight background
 gradients, so anything can be framed with one class and no extra DOM, and the
-colour animates — which is how a step change announces itself, the only
-animation in the product.
+colour animates — which is how a step change announces itself.
+
+**The bracket marks information, never a control.** It frames what you *read* —
+the video, a card, the case picker, `[ VAL SPLIT ]`. Controls originally echoed
+it typographically (`[ PLAY ]`, `[ + DETAIL ]`, `[ RE-RUN ]`), which was the
+mistake: if the same mark means both "look at this" and "click this", it means
+neither. Buttons now carry no literal brackets and get their own affordance —
+a hairline that draws in from the left on hover and stays drawn while a toggle
+is pressed, on `button::after`, so it costs no DOM and no layout. A pressed
+toggle is the accent colour with the rule fully drawn, which is the only place
+in the app where a control looks *on*.
+
+**Reveal is animated, because `display` is not.** `.more` elements go
+`display: none` → `revert`, and no transition can span that. So the analyst
+layer runs a `reveal` keyframe instead — a 5px rise and a fade over `--d2` —
+staggered 30/80/130 ms down the rail so it assembles top-down rather than
+snapping in as one block. The footer grows at the same time: `--tl` is set from
+JS, and `#app` transitions `grid-template-rows`, so lanes and cards arrive
+together instead of the timeline jumping ahead of them.
+
+All of it collapses under `prefers-reduced-motion: reduce`. Motion here is
+affordance rather than decoration, so it reduces to nothing rather than merely
+being shortened.
 
 That motif is also the seam. Roadmap 5.4 is an agent that circles a region of
 the frame and captions it, and "circle a region" is the same bracket, moved and
