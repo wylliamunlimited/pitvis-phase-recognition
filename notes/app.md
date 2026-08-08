@@ -325,6 +325,25 @@ rewriting for either.
 - **`report()` prints and `evaluate()` returns numpy.** The app calls
   `evaluate_video` per case: `mean` at n=1 is not a mean, and `pooled` holds
   ndarrays that `json.dumps` raises on.
+- **A hidden tab pauses CSS animations, and `animation-fill-mode: both` turns
+  that into a blank card.** The step card's swap opens at `opacity: 0`. With
+  `both`, the fill also pins the *finished* state, so any animation that never
+  completes leaves the value invisible — and backgrounding the tab stops them
+  outright. Measured while hidden: `currentTime` frozen at 19 ms, opacity
+  0.006, numeral and both instrument slots blank while `00:12 of 10:24` (the
+  one value not routed through `setText`) rendered fine. Two guards, because
+  either alone is insufficient: the keyframe fills `backwards` so the resting
+  style is the visible one, and `setText` skips the class entirely while
+  `document.hidden`. **The readable state must never depend on an animation
+  having run.**
+- **`setText` is change-guarded for correctness, not for performance.**
+  `renderStatus` runs every tick; without `if (el.textContent === value)
+  return` the swap would re-trigger once a second on a value that never moved.
+  Elapsed, total and confidence are deliberately *not* routed through it — a
+  step card that pulses once a second is worse than one that snaps. The reflow
+  read between removing and re-adding the class is also not removable: without
+  it the browser coalesces the two into no change, and the animation fires on
+  the first boundary and never again.
 - **MPS is not bit-deterministic**, so a re-run may not reproduce a stored
   prediction. Every case carries `computed_at` and its checkpoint.
 - **One inference worker, permanently.** `redirect_stdout` swaps a

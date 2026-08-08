@@ -10,6 +10,34 @@ import { hms, prob, upper } from './format.js';
 const $ = (id) => document.getElementById(id);
 const TOP_N = 5;
 
+/** Write text, and animate the write when the value actually changed.
+ *
+ * `renderStatus` runs on every tick, so the equality check is doing two jobs:
+ * it stops the swap animation from re-triggering once a second on a value that
+ * has not moved, and it stops the DOM being written at all when nothing did.
+ *
+ * The reflow read is not removable. Dropping and re-adding a class inside one
+ * task is coalesced by the browser into no change at all, so the animation
+ * would restart on the first boundary and never again — which looks exactly
+ * like a bug that only appears after the first step change.
+ *
+ * Values that move every second (elapsed, confidence) must NOT come through
+ * here: a step card that pulses once a second is worse than one that snaps.
+ */
+function setText(el, value) {
+  if (el.textContent === value) return;
+  el.textContent = value;
+  // A hidden tab PAUSES css animations. The swap opens at opacity 0, so a
+  // value written while backgrounded would sit invisible until the tab came
+  // back — a blank step card on the one surface whose whole job is to say
+  // what is happening. Measured: currentTime frozen at 19ms, opacity 0.006.
+  // The readable state must never depend on an animation having run.
+  if (document.hidden) return;
+  el.classList.remove('swap');
+  void el.offsetWidth;
+  el.classList.add('swap');
+}
+
 export function renderStatus(doc, t, extra = {}) {
   renderStep(doc, t);
   renderInstruments(doc, t, extra.iprobs);
@@ -27,8 +55,8 @@ function renderStep(doc, t) {
   // Background is -1 in the challenge encoding, which is not a number worth
   // setting in 68px type. "BG" is the abbreviation of the name already shown
   // beside it, not a new label.
-  $('step-num').textContent = step === -1 ? 'BG' : String(step).padStart(2, '0');
-  $('step-name').textContent = upper(doc.names.steps[String(step)] || 'unknown');
+  setText($('step-num'), step === -1 ? 'BG' : String(step).padStart(2, '0'));
+  setText($('step-name'), upper(doc.names.steps[String(step)] || 'unknown'));
   $('step-tint').style.background = doc.names.ramp[String(step)] || 'var(--faint)';
   $('step-elapsed').textContent = hms(t - seg.start_s);
   $('step-total').textContent = hms(seg.duration_s);
@@ -76,9 +104,9 @@ function renderInstruments(doc, t, iprobs) {
   const one = $('inst1'), two = $('inst2'), list = $('inst-probs');
 
   if (!inst.available) {
-    one.textContent = 'task 2 not run';
+    setText(one, 'task 2 not run');
     one.className = 'v empty';
-    two.textContent = '--';
+    setText(two, '--');
     two.className = 'v empty';
     list.innerHTML = '';
     return;
@@ -92,18 +120,18 @@ function renderInstruments(doc, t, iprobs) {
     const best = inst.maxClass ? doc.names.instruments[String(inst.maxClass[t])] : null;
     const p = inst.maxProb ? inst.maxProb[t] : null;
     one.className = 'v empty';
-    one.textContent = `nothing above ${prob(inst.threshold)}`;
+    setText(one, `nothing above ${prob(inst.threshold)}`);
     two.className = 'v empty';
     // Three decimals here specifically: the runner-up sits just under the
     // threshold by definition, and at two decimals a 0.498 prints as "0.50"
     // directly beside "nothing above 0.50", which reads as a contradiction.
-    two.textContent = best ? `closest: ${best} ${p.toFixed(3)}` : '--';
+    setText(two, best ? `closest: ${best} ${p.toFixed(3)}` : '--');
   } else {
     one.className = 'v';
-    one.textContent = upper(doc.names.instruments[String(inst.slot1[t])] || '--');
+    setText(one, upper(doc.names.instruments[String(inst.slot1[t])] || '--'));
     const s2 = inst.slot2[t];
     two.className = s2 == null ? 'v empty' : 'v';
-    two.textContent = s2 == null ? 'none' : upper(doc.names.instruments[String(s2)]);
+    setText(two, s2 == null ? 'none' : upper(doc.names.instruments[String(s2)]));
   }
 
   list.innerHTML = '';
