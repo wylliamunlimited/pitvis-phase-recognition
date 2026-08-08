@@ -142,6 +142,33 @@ button.ghost {
    the timeline snapped to its new height while the cards were still fading. */
 #app { transition: grid-template-rows var(--d2) var(--ease); }
 
+/* -- a rail value replacing another --------------------------------------- */
+
+/* A step boundary changes the numeral and the name at the same instant, and
+   swapping both in place reads as a glitch rather than as an event. The rise
+   gives it a direction, and the numeral leading the name by a beat makes it
+   one event instead of two things blinking together.
+   Applied by `setText` in status.js, which fires it on the value changing and
+   never on the tick — elapsed and confidence deliberately do not come through
+   it, because a card that pulses once a second is worse than one that snaps. */
+@keyframes swap {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: none; }
+}
+/* `backwards`, NOT `both`. `both` also pins the finished state, so anything
+   that stops the animation completing — a backgrounded tab pauses them
+   outright — leaves the value stuck at opacity 0 and the card reads blank.
+   With `backwards` the element falls back to its normal, fully visible style
+   the moment the animation is not running, so the text is legible whether or
+   not the motion ever happens. status.js additionally skips the class while
+   `document.hidden`. */
+.swap { animation: swap var(--d2) var(--ease) backwards; }
+.name.swap { animation-delay: .05s; }
+
+/* Instruments can change any second, not only at a step boundary, so theirs
+   runs at the short duration — the same gesture, too brief to nag. */
+.slot .v.swap { animation-duration: var(--d1); animation-delay: 0s; }
+
 /* Motion here is affordance, not decoration, so it all reduces to nothing on
    request rather than being merely shortened. */
 @media (prefers-reduced-motion: reduce) {
