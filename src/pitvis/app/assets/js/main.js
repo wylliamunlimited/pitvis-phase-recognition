@@ -185,9 +185,17 @@ function onFrame(time) {
   const frac = Math.min(1, time / doc.video.seconds);
   // transform only — no layout, no canvas work, thirty times a second
   $('playhead').style.transform = `translateX(${frac * w}px)`;
-  $('clock').textContent =
-    `${hmsFixed(time)} / ${hmsFixed(doc.video.duration)}`;
-  $('play').textContent = clock?.playing ? 'PAUSE' : 'PLAY';
+  // This runs per rAF, but the clock changes at most once a second and the
+  // play label only on toggle. Assigning textContent replaces the child text
+  // node and invalidates layout whether or not the string differs, so both
+  // are guarded — the one place in the app where the write really is hot.
+  write($('clock'), `${hmsFixed(time)} / ${hmsFixed(doc.video.duration)}`);
+  write($('play'), clock?.playing ? 'PAUSE' : 'PLAY');
+}
+
+/** textContent, but only when it would actually change. */
+function write(el, value) {
+  if (el.textContent !== value) el.textContent = value;
 }
 
 function onSecond(t) {
@@ -204,13 +212,19 @@ function onSecond(t) {
   }
 }
 
-/** The one animation in the product: brackets pull to accent, then release. */
+/** A step boundary: the card's brackets pull to accent, then release.
+ *
+ * The timing lives in CSS (`@keyframes brk-flash`) with the rest of the motion
+ * system, so it is one token rather than a JS `setTimeout` racing a CSS
+ * transition — and `prefers-reduced-motion` reaches it, which a timer never
+ * could. Removing and re-adding the class needs the reflow read between them,
+ * or the browser coalesces the pair into no change and the flash fires once.
+ */
 function flashStepCard() {
   const card = $('step-card');
-  card.style.setProperty('--brk', state.colors.accent);
-  clearTimeout(flashStepCard._t);
-  flashStepCard._t = setTimeout(
-    () => card.style.setProperty('--brk', state.colors.rule), 420);
+  card.classList.remove('flash');
+  void card.offsetWidth;
+  card.classList.add('flash');
 }
 
 // -- rendering --------------------------------------------------------------

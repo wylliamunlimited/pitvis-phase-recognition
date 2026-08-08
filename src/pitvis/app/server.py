@@ -44,6 +44,15 @@ from pathlib import Path
 from typing import Callable, Iterator
 from urllib.parse import parse_qs, unquote, urlsplit
 
+# A browser tearing down a connection is routine, not an error. One definition,
+# used by every guard in this file: the per-write `except`s below and
+# Server.handle_error, which catches the same teardowns arriving on the read
+# side. Stays narrow and explicit -- all four subclass OSError, so the tempting
+# `except OSError` would also swallow a missing video and every permission
+# fault in the one component with no framework beneath it.
+TEARDOWN = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError,
+            TimeoutError)
+
 CHUNK = 256 * 1024
 MAX_RANGE = 8 * 1024 * 1024      # cap on an open-ended `bytes=N-`
 GZIP_MIN = 1024
@@ -231,7 +240,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.wfile.write(data)
             return True
-        except (BrokenPipeError, ConnectionResetError):
+        except TEARDOWN:
             self.close_connection = True
             return False
 
@@ -296,7 +305,7 @@ class Handler(BaseHTTPRequestHandler):
             with resp.path.open("rb") as f:
                 f.seek(start)
                 _copy_span(f, self.wfile, span)
-        except (BrokenPipeError, ConnectionResetError):
+        except TEARDOWN:
             self.close_connection = True
 
     def _send_stream(self, resp: StreamResponse) -> None:
@@ -314,7 +323,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
+            except TEARDOWN:
                 return
 
 
@@ -337,12 +346,6 @@ def _error(code: str, message: str, hint: str | None = None) -> bytes:
 
 
 # --------------------------------------------------------------------------
-
-
-# A browser tearing down a connection is routine, not an error. Anything else
-# must still surface, so this list stays narrow and explicit.
-TEARDOWN = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError,
-            TimeoutError)
 
 
 class Server(ThreadingHTTPServer):

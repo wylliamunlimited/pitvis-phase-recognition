@@ -10,29 +10,38 @@ import { hms, prob, upper } from './format.js';
 const $ = (id) => document.getElementById(id);
 const TOP_N = 5;
 
+const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)');
+
 /** Write text, and animate the write when the value actually changed.
  *
- * `renderStatus` runs on every tick, so the equality check is doing two jobs:
- * it stops the swap animation from re-triggering once a second on a value that
- * has not moved, and it stops the DOM being written at all when nothing did.
+ * `renderStatus` runs once a second, so the equality check is doing two jobs:
+ * it stops the swap re-triggering on a value that has not moved, and it stops
+ * the DOM being written at all when nothing did. Values that DO move every
+ * second — elapsed, total, confidence — must not come through here; a step
+ * card that pulses once a second is worse than one that snaps.
  *
- * The reflow read is not removable. Dropping and re-adding a class inside one
- * task is coalesced by the browser into no change at all, so the animation
- * would restart on the first boundary and never again — which looks exactly
- * like a bug that only appears after the first step change.
+ * `cls` is applied before the text so it cannot clobber the `swap` class the
+ * write is about to add. Ordering that the other way is silent: the animation
+ * simply never plays on that branch.
  *
- * Values that move every second (elapsed, confidence) must NOT come through
- * here: a step card that pulses once a second is worse than one that snaps.
+ * The remove/reflow/add dance restarts the animation. The reflow read is
+ * required *for this approach* — dropping and re-adding a class inside one
+ * task is coalesced into no change, so the flash would fire once and never
+ * again. It is not the only approach: `Element.animate()` restarts
+ * unconditionally with no forced layout, at the cost of moving duration and
+ * easing out of CSS. Worth switching if the scrub path ever profiles hot.
  */
-function setText(el, value) {
+function setText(el, value, cls) {
+  if (cls !== undefined && el.className !== cls) el.className = cls;
   if (el.textContent === value) return;
   el.textContent = value;
-  // A hidden tab PAUSES css animations. The swap opens at opacity 0, so a
-  // value written while backgrounded would sit invisible until the tab came
-  // back — a blank step card on the one surface whose whole job is to say
-  // what is happening. Measured: currentTime frozen at 19ms, opacity 0.006.
-  // The readable state must never depend on an animation having run.
-  if (document.hidden) return;
+  // A hidden tab PAUSES animations mid-flight, so a value written while
+  // backgrounded would sit at whatever opacity it froze at until the tab came
+  // back — measured at 0.006, i.e. a blank step card on the one surface whose
+  // whole job is to say what is happening. Under reduced motion there is
+  // nothing to play in the first place. Either way, skip the class: the
+  // readable state must never depend on an animation having run.
+  if (document.hidden || REDUCED_MOTION.matches) return;
   el.classList.remove('swap');
   void el.offsetWidth;
   el.classList.add('swap');
@@ -104,10 +113,8 @@ function renderInstruments(doc, t, iprobs) {
   const one = $('inst1'), two = $('inst2'), list = $('inst-probs');
 
   if (!inst.available) {
-    setText(one, 'task 2 not run');
-    one.className = 'v empty';
-    setText(two, '--');
-    two.className = 'v empty';
+    setText(one, 'task 2 not run', 'v empty');
+    setText(two, '--', 'v empty');
     list.innerHTML = '';
     return;
   }
@@ -119,19 +126,16 @@ function renderInstruments(doc, t, iprobs) {
     // the difference between "nothing there" and "nearly something" visible.
     const best = inst.maxClass ? doc.names.instruments[String(inst.maxClass[t])] : null;
     const p = inst.maxProb ? inst.maxProb[t] : null;
-    one.className = 'v empty';
-    setText(one, `nothing above ${prob(inst.threshold)}`);
-    two.className = 'v empty';
+    setText(one, `nothing above ${prob(inst.threshold)}`, 'v empty');
     // Three decimals here specifically: the runner-up sits just under the
     // threshold by definition, and at two decimals a 0.498 prints as "0.50"
     // directly beside "nothing above 0.50", which reads as a contradiction.
-    setText(two, best ? `closest: ${best} ${p.toFixed(3)}` : '--');
+    setText(two, best ? `closest: ${best} ${p.toFixed(3)}` : '--', 'v empty');
   } else {
-    one.className = 'v';
-    setText(one, upper(doc.names.instruments[String(inst.slot1[t])] || '--'));
+    setText(one, upper(doc.names.instruments[String(inst.slot1[t])] || '--'), 'v');
     const s2 = inst.slot2[t];
-    two.className = s2 == null ? 'v empty' : 'v';
-    setText(two, s2 == null ? 'none' : upper(doc.names.instruments[String(s2)]));
+    setText(two, s2 == null ? 'none' : upper(doc.names.instruments[String(s2)]),
+            s2 == null ? 'v empty' : 'v');
   }
 
   list.innerHTML = '';

@@ -251,7 +251,12 @@ of sixteen, and it means nothing depends on hue discrimination.
 
 The **bracket** is the motif: `.brk` draws four corners from eight background
 gradients, so anything can be framed with one class and no extra DOM, and the
-colour animates — which is how a step change announces itself.
+colour animates — which is how a step change announces itself. That flash is
+`@keyframes brk-flash`, not a JS timer: it used to be `setProperty` plus a bare
+`setTimeout(…, 420)` racing a CSS transition, which meant two numbers in two
+languages to keep in step and a duration `prefers-reduced-motion` could not
+reach — so reduced-motion users got a hard blink instead of the fade. Motion
+timing lives in CSS for exactly that reason.
 
 **The bracket marks information, never a control.** It frames what you *read* —
 the video, a card, the case picker, `[ VAL SPLIT ]`. Controls originally echoed
@@ -325,17 +330,24 @@ rewriting for either.
 - **`report()` prints and `evaluate()` returns numpy.** The app calls
   `evaluate_video` per case: `mean` at n=1 is not a mean, and `pooled` holds
   ndarrays that `json.dumps` raises on.
-- **A hidden tab pauses CSS animations, and `animation-fill-mode: both` turns
-  that into a blank card.** The step card's swap opens at `opacity: 0`. With
-  `both`, the fill also pins the *finished* state, so any animation that never
-  completes leaves the value invisible — and backgrounding the tab stops them
-  outright. Measured while hidden: `currentTime` frozen at 19 ms, opacity
-  0.006, numeral and both instrument slots blank while `00:12 of 10:24` (the
-  one value not routed through `setText`) rendered fine. Two guards, because
-  either alone is insufficient: the keyframe fills `backwards` so the resting
-  style is the visible one, and `setText` skips the class entirely while
-  `document.hidden`. **The readable state must never depend on an animation
-  having run.**
+- **A hidden tab pauses CSS animations, and a paused fade is an invisible
+  element.** The step card's swap opens at `opacity: 0`; backgrounding the tab
+  freezes it there. Measured while hidden: `currentTime` stuck at 19 ms,
+  opacity 0.006, numeral and both instrument slots blank while `00:12 of 10:24`
+  — the one value not routed through `setText` — rendered fine.
+
+  The fix is the `document.hidden` guard in `setText`, and *only* that. The
+  first attempt blamed `animation-fill-mode: both` and switched to `backwards`,
+  which was wrong twice over: fill mode is not consulted during the active
+  phase at all, so it cannot rescue a paused animation; and `both`'s forwards
+  half pins `opacity: 1`, which is already the resting style, so it could never
+  have stranded anything either. `backwards` is still correct here, but for an
+  unrelated reason — `.name.swap` has a 50 ms delay, and without it the new
+  text renders, blinks out, then rises. **The readable state must never depend
+  on an animation having run**; that principle survived, the diagnosis did not.
+
+  `prefers-reduced-motion` gets the same early return, for the same reason in
+  reverse: there is no animation to drive, so paying for one is pure waste.
 - **`setText` is change-guarded for correctness, not for performance.**
   `renderStatus` runs every tick; without `if (el.textContent === value)
   return` the swap would re-trigger once a second on a value that never moved.
