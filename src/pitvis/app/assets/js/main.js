@@ -65,7 +65,7 @@ function readColors() {
 function applyDetail() {
   const app = $('app');
   if (state.detail) app.dataset.detail = '1'; else delete app.dataset.detail;
-  $('detail-toggle').textContent = state.detail ? '[ – DETAIL ]' : '[ + DETAIL ]';
+  $('detail-toggle').textContent = state.detail ? '– DETAIL' : '+ DETAIL';
   $('detail-toggle').setAttribute('aria-pressed', String(state.detail));
 
   const { lanes, height } = laneSet(state.detail);
@@ -187,7 +187,7 @@ function onFrame(time) {
   $('playhead').style.transform = `translateX(${frac * w}px)`;
   $('clock').textContent =
     `${hmsFixed(time)} / ${hmsFixed(doc.video.duration)}`;
-  $('play').textContent = clock?.playing ? '[ PAUSE ]' : '[ PLAY ]';
+  $('play').textContent = clock?.playing ? 'PAUSE' : 'PLAY';
 }
 
 function onSecond(t) {
