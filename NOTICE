@@ -1,0 +1,50 @@
+# NOTICE
+
+PitVis Surgical Phase Recognition
+Copyright (C) 2026 Wylliam Cheng
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See `LICENSE` for the full text.
+
+---
+
+## What the licence does NOT cover
+
+Two files in this repository are **third-party code, vendored verbatim** and
+are not mine to license:
+
+    src/pitvis/evaluation/official.py
+    src/pitvis/evaluation/official_instruments.py
+
+They are the PitVis-2023 challenge organisers' own scoring scripts, copied
+byte-for-byte from `helper_scripts/` in <https://github.com/dreets/pitvis> at
+the commits and sha256 digests recorded in each file's header. Only a docstring
+was prepended; no line of the original body was changed.
+
+They are reproduced here for a specific and narrow reason: this project's
+headline numbers are computed by calling those functions directly, so the
+scores it reports are the challenge's scores **by construction** rather than by
+reimplementation. A reader can verify that claim without trusting it.
+
+**The upstream repository publishes no licence**, so no rights in those two
+files are granted by this repository, and the AGPL grant above does not extend
+to them. If you intend to reuse them, obtain permission from their authors.
+
+## Dataset
+
+No dataset files are contained in or distributed by this repository. The raw
+PitVis download (`26531686/`), the derived feature cache (`data/`) and all
+model output (`predictions/`) are gitignored and must be obtained separately.
+
+The dataset itself is released under **CC BY-NC-ND 4.0**
+(<https://creativecommons.org/licenses/by-nc-nd/4.0/>) — attribution required,
+non-commercial use only, no derivative works. Anyone obtaining it is bound by
+those terms independently of this repository's licence.
+
+If you use the dataset, the authors ask that you cite:
+
+> A. Das et al., "PitVis-2023 Challenge: Workflow Recognition in Videos of
+> Endoscopic Pituitary Surgery", *Medical Image Analysis*, 2025.
+> https://doi.org/10.1016/j.media.2025.103716

@@ -1,14 +1,44 @@
 # PitVis Surgical Phase Recognition
 
-Automatic recognition of surgical steps (phases) in endoscopic pituitary surgery,
-using the [PitVis Challenge](https://arxiv.org/abs/2409.01184) dataset
-(EndoVis / MICCAI 2023, Das et al. 2024).
+Automatic recognition of surgical steps (phases) and instruments in endoscopic
+pituitary surgery, reproducing two winning models from the
+[PitVis-2023 Challenge](https://doi.org/10.1016/j.media.2025.103716)
+(EndoVis / MICCAI), and a review surface for watching them work.
 
-**New to this repo?** [**Getting started**](#getting-started) is the run-it-yourself
-sequence, from a fresh clone to a prediction on a video.
-[`notes/walkthrough.md`](notes/walkthrough.md) is the guided tour of the *ideas*: what
-the surgery is, what every annotation column means, how the data flows through the
-pipeline, and which line of which file to read next.
+![pitvis-app — the default view](docs/app-default.png)
+
+> `uv run pitvis-app` — a case plays while the model names the step it believes
+> the operation is in and the instruments it sees. The surgical frame is blurred
+> in these images; the dataset is CC BY-NC-ND. See [Licence](#licence).
+
+<details>
+<summary><b>With <code>[ + DETAIL ]</code> — the analyst layer</b></summary>
+
+![pitvis-app — detail view](docs/app-detail.png)
+
+Confidence, the ground-truth timeline, where the two disagree, and the official
+scores. Hidden by default: the visible layer answers *what is happening now*,
+this one answers *how well is the model doing*.
+</details>
+
+### What you can run without the 40 GB download
+
+The dataset, the feature cache and all model output are gitignored, so a fresh
+clone gets code and documentation only. Two things still work immediately:
+
+```sh
+uv sync && uv run pytest        # 89 tests — metrics, Range parsing, case model
+uv run pitvis-models            # ~1 s shape + parameter trace through the cascade
+```
+
+Everything else needs the dataset — see [Getting started](#getting-started).
+
+**New here?** [`notes/walkthrough.md`](notes/walkthrough.md) is the guided tour of
+the *ideas*: what the surgery is, what every annotation column means, how the data
+flows, and which line of which file to read next.
+[`notes/app.md`](notes/app.md) covers the review surface — why HTTP Range is
+load-bearing, what pre-CCI confidence means, and why the default view hides most
+of what the repo can measure.
 
 **What's next?** [`notes/roadmap.md`](notes/roadmap.md) tracks everything left to build,
 phased: data engineering → end-to-end pipelining → models → app.
@@ -301,3 +331,34 @@ by hand, and commit the updated `uv.lock`.
 
 Torch resolves to the default PyPI wheels, which give CPU + MPS on macOS. For a CUDA
 box, add a `[[tool.uv.index]]` entry pointing at the appropriate PyTorch index.
+
+## Licence
+
+This project is licensed **AGPL-3.0-or-later** — see [`LICENSE`](LICENSE).
+
+Two exceptions and one dependency are worth knowing about before you reuse
+anything; [`NOTICE`](NOTICE) is the authoritative version.
+
+- **`src/pitvis/evaluation/official.py` and `official_instruments.py` are not
+  mine.** They are the challenge organisers' scoring scripts, vendored verbatim
+  from [`dreets/pitvis`](https://github.com/dreets/pitvis) with the commit and
+  sha256 recorded in each file header. They are here so that the scores this
+  project reports are the challenge's scores *by construction* rather than by
+  reimplementation — a claim you can check instead of taking on trust. The
+  upstream repository publishes no licence, so the AGPL grant does not extend
+  to them.
+- **No dataset files are in this repository.** `26531686/`, `data/` and
+  `predictions/` are gitignored and must be obtained separately.
+- **The dataset is CC BY-NC-ND 4.0** — attribution, non-commercial, no
+  derivatives. Screenshots in this README have the surgical frame blurred (see
+  [`scripts/blur_frame.py`](scripts/blur_frame.py)) so that no adapted copy of
+  the video is redistributed here.
+
+If you use the dataset, its authors ask that you cite:
+
+> A. Das et al., "PitVis-2023 Challenge: Workflow Recognition in Videos of
+> Endoscopic Pituitary Surgery", *Medical Image Analysis*, 2025.
+> [doi:10.1016/j.media.2025.103716](https://doi.org/10.1016/j.media.2025.103716)
+
+**Not a medical device.** This is a research reproduction. Nothing here is
+validated for clinical use and it must not inform patient care.
