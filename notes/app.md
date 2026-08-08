@@ -93,6 +93,21 @@ symptoms are so misleading:
 - A `<video>` aborts its outstanding range request on every seek, which arrives
   as `BrokenPipeError` mid-write. Unhandled, the console fills with tracebacks
   and a perfectly healthy app looks like it is crashing.
+- **The same teardown arrives on the read side, and a `try/except` around the
+  writes cannot catch it.** Keep-alive means the thread finishes a response and
+  parks in `handle_one_request` → `rfile.readline()` waiting for the next
+  request on that socket. When the video resets the connection instead, the
+  exception surfaces *above* every `except` in the module, so socketserver
+  catches it and its default `handle_error` prints a full traceback — one per
+  reset, and a single seek can produce several. Measured: 8 forced resets give
+  8 `ConnectionResetError` tracebacks before the fix and 0 after, with the
+  server still answering 200.
+
+  `Server.handle_error` filters `TEARDOWN` and delegates everything else to the
+  default. The list is deliberately narrow: all four are `OSError` subclasses,
+  so the tempting `except OSError` would also swallow a missing video file and
+  every permission fault in the component that has no framework beneath it.
+  `tests/test_app_server.py` pins both directions.
 
 And one that is a genuine vulnerability rather than an annoyance: binding to
 `127.0.0.1` is **not** sufficient. Without validating the `Host` header, any web
