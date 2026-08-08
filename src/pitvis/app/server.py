@@ -24,6 +24,11 @@ produce mystifying symptoms if missed:
 - A `<video>` element aborts its outstanding range request on every seek, which
   surfaces as `BrokenPipeError` mid-write. Unhandled, the console fills with
   tracebacks and a perfectly healthy app looks like it is crashing.
+- The same teardown also arrives on the **read** side, and that one cannot be
+  caught where the writes are. Keep-alive leaves the thread parked in
+  `handle_one_request` -> `rfile.readline()`, above every try/except here, so
+  socketserver's default `handle_error` prints the traceback. `Server.
+  handle_error` filters exactly the teardown errors and nothing else.
 - Without `Host` validation, any web page the user visits can reach this server
   by DNS rebinding and stream patient video off loopback. Binding to 127.0.0.1
   is not sufficient protection on its own.
@@ -32,6 +37,7 @@ produce mystifying symptoms if missed:
 from __future__ import annotations
 
 import gzip
+import sys
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -333,9 +339,38 @@ def _error(code: str, message: str, hint: str | None = None) -> bytes:
 # --------------------------------------------------------------------------
 
 
+# A browser tearing down a connection is routine, not an error. Anything else
+# must still surface, so this list stays narrow and explicit.
+TEARDOWN = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError,
+            TimeoutError)
+
+
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+    def handle_error(self, request, client_address) -> None:
+        """Swallow the normal ways a browser drops a connection.
+
+        The `except TEARDOWN` guards further up cover writes — the response
+        being aborted mid-body. They cannot cover the *read* side: with
+        keep-alive on (`protocol_version = "HTTP/1.1"`) a <video> holds several
+        connections open and resets them on seek, on buffer-full, and on
+        navigate-away. The serving thread is then parked in
+        `handle_one_request` -> `rfile.readline()`, which is above every
+        try/except in this module, so socketserver catches it and its default
+        `handle_error` prints a full traceback per reset.
+
+        The symptom is alarming and the cause is nothing: scrolling
+        `ConnectionResetError` tracebacks from an app that is working
+        perfectly. One seek can produce several.
+
+        Everything that is not a teardown still gets the default traceback —
+        this must not become a blanket suppressor.
+        """
+        if isinstance(sys.exception(), TEARDOWN):
+            return
+        super().handle_error(request, client_address)
 
 
 def serve(dispatch, host: str, port: int, quiet: bool = True) -> Server:
