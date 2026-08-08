@@ -11,11 +11,12 @@
  * announces itself.
  *
  * THE BRACKET MARKS INFORMATION, NEVER A CONTROL. It frames the things you
- * read — the video, a card, the case picker, the split chip. Buttons get their
- * own affordance (a rule that draws in from the left) because a control and a
- * readout must not look alike; if everything is bracketed the motif stops
- * meaning anything. Buttons therefore carry no literal `[ ... ]` in their
- * labels either.
+ * read — the video, a card, the split chip. Controls are filled boxes instead:
+ * a readout is a region you look at, a control is a surface you press, and if
+ * one mark serves both it means neither. That applies to the case picker too,
+ * which is a control and therefore a box, not a bracket. Buttons carry no
+ * literal `[ ... ]` in their labels either — `[ VAL SPLIT ]` is a readout and
+ * keeps them.
  *
  * TYPE IS LIGHT SANS, NOT MONO. Monospace plus uppercase plus wide tracking
  * reads as tactical, which is the wrong register for a clinical research tool.
@@ -26,7 +27,7 @@
  *
  * DENSITY IS THE DESIGN. The default view answers one question — what is
  * happening now — and hides everything that answers "how did the model do".
- * That second layer lives behind [ + DETAIL ] and is revealed by `.more`
+ * That second layer lives behind the + DETAIL toggle, revealed by `.more`
  * elements, which are display:none until #app[data-detail]. A surgeon's first
  * decision is whether to look at all; winning that is worth more than showing
  * them everything at once.
@@ -80,26 +81,36 @@ button, select {
   cursor: pointer; letter-spacing: .04em;
 }
 
-/* The control affordance, and deliberately NOT a bracket: a hairline that
-   draws in from the left on hover and stays drawn while a toggle is pressed.
-   Positioned on a pseudo-element so it costs no DOM and no layout. */
+/* The control affordance is a filled box, deliberately NOT a bracket. The
+   bracket frames something you read; a control is a surface you press, so it
+   gets area and a background rather than a rule. Colour carries the state:
+   resting grey, accent tint under the pointer, solid accent while a toggle is
+   held on — one property animating, no movement, no shadow.
+   2px of radius and nothing more: enough to separate a control from the
+   square-cornered readouts, not enough to break the orthogonal language. */
 button {
-  position: relative; color: var(--dim); white-space: nowrap;
-  transition: color var(--d1) var(--ease);
+  padding: 6px 12px; border-radius: 2px;
+  background: var(--raised); color: var(--dim); white-space: nowrap;
+  transition: background var(--d1) var(--ease), color var(--d1) var(--ease);
 }
-button::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: -5px; height: 1px;
-  background: currentColor; transform: scaleX(0); transform-origin: left center;
-  transition: transform var(--d1) var(--ease);
+button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
 }
-button:hover:not(:disabled) { color: var(--accent); }
-button:hover:not(:disabled)::after,
-button[aria-pressed="true"]::after { transform: scaleX(1); }
-button[aria-pressed="true"] { color: var(--accent); }
-button:disabled { color: var(--faint); cursor: default; }
-button:disabled::after { transform: scaleX(0); }
-button.ghost { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
-:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+/* A pressed toggle is the one place a control reads as filled-on. */
+button[aria-pressed="true"] { background: var(--accent); color: #FFF; }
+button[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--accent) 86%, #000); color: #FFF;
+}
+button:disabled { background: transparent; color: var(--faint); cursor: default; }
+button.ghost {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  padding: 5px 10px;
+}
+:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
 .cap {
   font-size: 9.5px; letter-spacing: .14em; color: var(--faint);
@@ -113,7 +124,6 @@ button.ghost { font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
 #app[data-detail] .more { display: revert; }
 #app[data-detail] .card.more { display: block; }
 #app[data-detail] ul.probs.more { display: flex; }
-#app[data-detail] #detail-toggle { color: var(--accent); }
 
 /* `display` cannot be transitioned, so the reveal is an animation instead —
    it runs once, on the frame the element starts being displayed. Each piece
@@ -173,7 +183,12 @@ button.ghost { font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
   border-bottom: 1px solid var(--rule); background: var(--surface);
 }
 .mark { font-size: 11.5px; letter-spacing: .24em; font-weight: 400; color: var(--faint); }
-.picker { padding: 6px 11px; }
+.picker {
+  padding: 6px 11px; border-radius: 2px; background: var(--raised);
+  transition: background var(--d1) var(--ease);
+}
+.picker:hover { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.picker:focus-within { outline: 1px solid var(--accent); outline-offset: 2px; }
 .picker select { color: var(--text); letter-spacing: .1em; font-size: 12px; }
 .split { font-size: 9.5px; letter-spacing: .12em; color: var(--faint); }
 .split.trained { color: var(--warn); }
@@ -221,10 +236,10 @@ main {
 }
 
 .transport {
-  display: flex; align-items: center; gap: 16px; padding-top: 18px; font-size: 11px;
+  display: flex; align-items: center; gap: 8px; padding-top: 18px; font-size: 11px;
 }
 .transport .wide { min-width: 68px; color: var(--text); }
-.tsep { width: 1px; height: 12px; background: var(--rule); }
+.tsep { width: 1px; height: 12px; background: var(--rule); margin: 0 8px; }
 
 /* -- rail ----------------------------------------------------------------- */
 
