@@ -235,8 +235,37 @@ the *where*.
       a VLM that can point/box on frames at explanation time, or the instrument
       annotations (3.5) as a supervised hook. Related: the 3.5 auxiliary task
       becomes more valuable if its predictions feed the agent.
-- [ ] **5.5 Packaging.** Reproducible run instructions, model artifact
-      distribution.
+- [~] **5.5 Packaging — and the "public repo" gap.** Run instructions and
+      licensing are done: AGPL-3.0 with `NOTICE` scoping the vendored
+      organiser scripts out of the grant, and a README that says up front what
+      a fresh clone can run without the 40 GB download (`pytest` and
+      `pitvis-models`, and nothing else).
+
+      **Still open, in the order that matters for anyone arriving cold:**
+
+      - [ ] **Screenshots.** `docs/app-default.png` and `docs/app-detail.png`
+            are referenced by the README and do not exist yet, so the images
+            render broken. Capture from a running `pitvis-app`, then blur the
+            surgical frame — the dataset is CC BY-NC-ND 4.0 and a screenshot
+            with the interface composited around dataset video is arguably a
+            derivative work, which ND forbids:
+
+                uv run python scripts/blur_frame.py raw.png --preview
+                uv run python scripts/blur_frame.py raw.png --out docs/app-default.png
+
+            Almost nothing is lost by blurring: the point of those images is
+            the step card, the confidence readout and the timeline, not the
+            anatomy. Instructions also live in `docs/README.md`.
+      - [ ] **Checkpoint distribution.** `data/arst/citi.pt` and
+            `data/instruments/sano.pt` are small and gitignored. Publishing
+            them as a release asset would let someone run `pitvis-predict` on
+            their own video without a training run — though they would still
+            need a video, so this is a weaker win than it first looks.
+      - [ ] **The app is unreachable on a clone.** Everything it needs —
+            dataset, feature cache, checkpoints, predictions — is gitignored,
+            so `pitvis-app` prints "no cases found". The screenshots are the
+            cheap mitigation; a genuinely runnable demo would need a
+            redistributable sample case, which CC BY-NC-ND rules out.
 - [x] **5.6 Confidence as an artifact.** `cci_decode` and `predict_video` take
       a keyword-only `return_probs`; `pitvis-predict --probs` writes
       `step_probs.npy` (T, 15) and `instrument_probs.npy` (T, 19). Additive by
