@@ -321,9 +321,29 @@ Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
       are predicted 1, 25, 19 and 7 times against supports of 184–492, so
       "0 never predicted" flatters. They cleared the bar of being emitted
       without becoming useful, and that is the next honest target.
-- [ ] **6.6 The same treatment for task 1.** Steps still train on unweighted
-      cross-entropy with a global argmax; 1.5 and the masking win recorded in
-      `CLAUDE.md` are both unclaimed there.
+- [x] **6.6 The same treatment for task 1.** `training/arst_v2.py`, same
+      protocol and the same folds. Winner is argmax masking + class weights on
+      DINOv2: **challenge metric 0.3425 → 0.4610 on val**, macro 0.3083 →
+      0.4420, edit 0.3767 → 0.4801. Masking alone was the largest single lever
+      (+0.062 macro out of fold) and had been sitting unclaimed as an ablation
+      flag. See [`notes/step-variants.md`](step-variants.md).
+- [x] **6.7 The CV harness is task-agnostic.** `crossval.Task` holds the
+      loader, scorer and ranking metric, so both tasks share the fold logic and
+      the leaderboard instead of a second copy.
+- [ ] **6.8 Per-class thresholds for steps.** Task 2's second-largest win has
+      no direct analogue: steps are multi-class with one argmax rather than 15
+      independent sigmoids. The equivalent is a prior-corrected argmax —
+      untried.
+
+### The finding worth carrying forward
+
+**A frozen-backbone swap must not be tested first.** On BOTH tasks, DINOv2
+alone landed inside the fold spread — +0.021 macro on instruments, +0.029 on
+steps — and on both it became the best variant once the loss and decision rule
+were fixed (+0.055 and +0.014 respectively, winning on every metric). The
+representation gain is real and it is masked by the imbalance defect. Testing
+the backbone first and stopping at the null would have retired a true
+hypothesis, twice.
 
 ---
 
