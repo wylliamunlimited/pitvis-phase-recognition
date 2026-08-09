@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from pitvis.training import arst, baseline, instruments
+from pitvis.training import arst, baseline, instruments, instruments_v2
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,16 @@ REGISTRY: dict[str, Model] = {
             main=instruments.main,
             ablations={
                 "no-aux-step": ["--no-aux-step"],
+            },
+        ),
+        Model(
+            name="instruments-v2",
+            summary="instrument variants — weighted loss, per-class thresholds, DINOv2",
+            main=instruments_v2.main,
+            ablations={
+                "weighted": ["--variant", "weighted"],
+                "thresholds": ["--variant", "thresholds"],
+                "dinov2": ["--variant", "dinov2"],
             },
         ),
         Model(

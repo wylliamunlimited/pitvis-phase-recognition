@@ -122,3 +122,31 @@ def decide(logits: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
         capped.scatter_(-1, top2, True)
         keep = torch.where(over.unsqueeze(-1), capped & keep, keep)
     return keep.to(torch.int8)
+
+
+def decide_per_class(logits: torch.Tensor, thresholds: torch.Tensor) -> torch.Tensor:
+    """As `decide`, but with one threshold per class — and capped by MARGIN.
+
+    A sibling rather than a change to `decide`: that one is pinned by the SANO
+    reproduction and must keep returning what it returns today.
+
+    Why the cap changes. `decide` breaks a 3-way tie by raw probability, which
+    is the right ordering only while every class shares a threshold. Once
+    class 17 clears at 0.15 and class 16 at 0.60, raw probability is no longer
+    comparable across classes — the frequent class wins every tie by
+    construction and the rare one can never survive the cap, which is exactly
+    the failure per-class thresholds exist to fix. Ranking by `prob - tau`
+    (how far past its own bar each class cleared) restores the comparison.
+
+    `thresholds` is (19,) and broadcasts over any leading dimensions.
+    """
+    prob = torch.sigmoid(logits)
+    keep = prob >= thresholds
+    over = keep.sum(-1) > 2
+    if over.any():
+        margin = prob - thresholds
+        top2 = margin.topk(2, dim=-1).indices
+        capped = torch.zeros_like(keep)
+        capped.scatter_(-1, top2, True)
+        keep = torch.where(over.unsqueeze(-1), capped & keep, keep)
+    return keep.to(torch.int8)
