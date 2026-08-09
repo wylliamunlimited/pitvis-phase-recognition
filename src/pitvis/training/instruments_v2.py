@@ -84,8 +84,11 @@ VARIANTS: dict[str, Variant] = {
                 per_class=True),
         Variant("dinov2", "same model on DINOv2 ViT-B/14 features",
                 space="dinov2_vitb14"),
-        Variant("best", "composed from whatever cleared the bar",
-                pos_weight=True, per_class=True),
+        # The winner. pos_weight + per-class thresholds on DINOv2 features:
+        # macro 0.4554, official 0.5281, aligned-weighted 0.7404 out of fold,
+        # 0/19 classes never predicted against control's 7/19.
+        Variant("best", "WINNER — pos_weight + per-class tau on DINOv2 features",
+                space="dinov2_vitb14", pos_weight=True, per_class=True),
     ]
 }
 

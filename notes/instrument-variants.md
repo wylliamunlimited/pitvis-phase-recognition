@@ -173,6 +173,10 @@ both sit near 50% of Table 8 (instruments 0.2556 vs 81; steps 34.3 vs 70).
 *Falsified if:* macro and the official metric are both within the fold spread
 of control — which would also refute the shared explanation for the ARST gap.
 
+*Outcome: falsified in isolation, vindicated in composition.* Alone it gains
++0.021 macro, inside the ±0.048 fold spread. Composed with the training fixes
+it is the best variant on all three metrics. See §4.
+
 Identical model, identical loss, identical decision rule. Only the input
 changes: DINOv2 ViT-B/14 at 224 px, 768-d, self-supervised on LVD-142M.
 Measured at 160.6 img/s — *faster* than ConvNeXtV2 at the same resolution —
@@ -198,7 +202,81 @@ flowchart TD
 
 ## 4. Results
 
-*(filled in from `data/instruments/cv/*.json` — see §5 for the single VAL scoring)*
+### The leaderboard — 19 out-of-fold training videos
+
+| variant | space | macro_f1 | official metric | aligned-w | dead | never predicted |
+|---|---|---|---|---|---|---|
+| **best @ dinov2** | dinov2_vitb14 | **0.4554**±0.048 | **0.5281**±0.217 | **0.7404**±0.040 | **0** | **0** |
+| weighted | resnet50 | 0.4009±0.073 | 0.2986±0.137 | 0.6419±0.066 | 1 | 0 |
+| best | resnet50 | 0.4001±0.069 | 0.4507±0.185 | 0.6608±0.048 | 0 | 0 |
+| thresholds | resnet50 | 0.3836±0.068 | 0.3075±0.114 | 0.6624±0.052 | 2 | 1 |
+| dinov2 | dinov2_vitb14 | 0.3176±0.048 | 0.2783±0.058 | 0.6724±0.044 | 7 | 6 |
+| control (SANO) | resnet50 | 0.2963±0.055 | 0.2401±0.054 | 0.5982±0.069 | 7 | 7 |
+
+Every variant passed the guard — none traded the official metric for macro.
+That was not guaranteed and is worth noting: rebalancing *could* have bought
+rare-class recall with dominant-class precision, and it did not.
+
+### The result that would have been missed
+
+**DINOv2 alone is worth +0.021 macro — inside the fold spread of ±0.048.**
+Taken by itself, that reads as "the backbone is not the problem", and it would
+have retired the whole frozen-backbone hypothesis.
+
+But the same backbone *composed with the training fixes* scores 0.4554 against
+0.4001 for the identical configuration on ResNet-50 — **+0.055, and the best
+result on every one of the three metrics**.
+
+The representation gain was **masked by the imbalance defect**. While 7 of 19
+classes are never emitted at all, a better encoder has nothing to express: the
+loss discards the signal before the features get a chance to matter. Fix the
+loss and the encoder starts paying. Had we run the variants one at a time and
+stopped at the first disappointing result — which is exactly what the cheapest
+plan would have done — we would have drawn the opposite conclusion.
+
+It also runs *faster*: 86 s against control's 163 s, because 768 informative
+dimensions beat 2048 of which 342 are dead on this data.
+
+### Where the macro gain comes from (control -> weighted, out of fold)
+
+| id | name | support | ctrl pred | ctrl F1 | wtd pred | wtd F1 |
+|---|---|---|---|---|---|---|
+| 6 | haemostatic foam | 343 | **0** | 0.000 | 269 | **0.402** |
+| 18 | tissue glue | 282 | 37 | 0.207 | 310 | **0.551** |
+| 9 | micro doppler | 679 | 137 | 0.311 | 476 | **0.608** |
+| 2 | cottle | 662 | 16 | 0.047 | 184 | 0.239 |
+| 13 | ring curette | 7,753 | 2,198 | 0.396 | 3,686 | 0.540 |
+| 1 | bipolar forceps | 184 | 0 | 0.000 | **1** | 0.000 |
+| 17 | surgical drill | 404 | 0 | 0.000 | **7** | 0.024 |
+
+**"0 never predicted" flatters, and should be read with the column beside it.**
+Four classes (1, 4, 12, 17) are emitted so rarely — 1, 25, 19 and 7 times
+against supports of 184-492 — that their F1 is still ~0. They cleared the bar
+of being *emitted* without becoming *usable*. The genuine recoveries are the
+first three rows.
+
+### The single VAL scoring
+
+Run once, after the leaderboard was frozen: `best` on `dinov2_vitb14`.
+
+| | SANO (control) | winner | delta |
+|---|---|---|---|
+| official `metric` | 0.2321 | **0.5572**±0.225 | **+0.325** |
+| aligned weighted | 0.6234 | **0.7383**±0.041 | +0.115 |
+| macro F1 | 0.2556 | **0.3792**±0.044 | +0.124 |
+| classes never predicted | 9 / 19 | **0 / 19** | — |
+
+For scale, Table 8 benchmarks SANO at **81** on these same five videos. If that
+figure is the weighted reading, our 73.8 is ~91% of it; if it is macro, 37.9
+against 81 is a much larger remaining gap. The paper labels the column macro
+and its shipped code computes weighted, and nothing in either source settles
+which produced the published number — so both readings stay on the table.
+
+**The official metric's variance is the thing to distrust.** ±0.225 across five
+videos, with video 24 scoring 0.2044 official against 0.8037 name-aligned. That
+is the vendored column-ordering defect biting hard — it fired on 3 of 5 videos.
+The aligned reading (±0.041) is five times more stable and is the better guide
+to whether the model actually improved.
 
 ---
 
