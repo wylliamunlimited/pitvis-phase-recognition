@@ -313,6 +313,44 @@ not. Python is pinned to **3.13** via `.python-version`.
   `dropna`, `iterrows`, `pd.isna`, `.to_numpy()` — all pass.
 - Torch comes from default PyPI (CPU + MPS). A CUDA host needs a `[[tool.uv.index]]` entry.
 
+## Feature cache is multi-space
+
+`data/features/<space>/video_NN/` — one directory per feature space, named in
+`src/pitvis/data/spaces.py`. `resnet50` (2048-d, the original) and
+`dinov2_vitb14` (768-d, ViT-B/14 @224) coexist; `--space` selects.
+
+- **The hashed payload is frozen.** `space_id` hashes
+  `{backbone, feature_dim, target_fps, transform}` and nothing else. Adding a
+  key moves `resnet50` off id `67912d3efc6852e7` and invalidates 940 MB of
+  correct features. `Space.name` and `model_kwargs` stay outside it —
+  `model_kwargs` only ever changes things that already surface in `transform`.
+- A pre-space `data/features/video_NN/` layout is detected and refused with a
+  pointer to `pitvis-extract --migrate`, which renames rather than re-decoding.
+- `resolve_data_config` reports the CHECKPOINT's native input size, not the
+  model's. DINOv2 ships at 518, so a model built at 224 needs an explicit
+  `input_size` override or the transform feeds it 518 and it raises.
+
+## Model selection: cross-validate, score val once
+
+Variants are ranked by **5-fold cross-validation over the 19 training videos**
+(`src/pitvis/data/folds.py`, frozen literals), and **VAL is scored exactly once
+for the winner**. Five videos with a per-video std near 0.05 cannot rank four
+variants, and Das et al. measure a −47-point val→test collapse for instruments
+against −7 for steps — ranking on VAL ranks noise and turns VAL into a
+selection set.
+
+- **Primary `macro_f1`**, because it is what the paper names for task 2 and the
+  only metric that moves when a dead class comes alive.
+- **Guard on the official `metric`**: no regression beyond one std of the
+  19-video spread. It is weighted and support-dominated, so a variant can raise
+  macro while lowering the headline.
+- Folds are frozen so every variant sees the identical partition. `zero_division=1`
+  inflates folds missing a class — a constant offset across variants, recorded
+  rather than fixed.
+- **`data/instruments/sano.pt` is never overwritten.** Variants write to
+  `data/instruments/v2/<variant>/`, so `pitvis-predict` and the app keep
+  working against the reproduction.
+
 ## Layout
 
 ```
