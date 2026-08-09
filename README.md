@@ -250,6 +250,17 @@ uv run pitvis-predict --video 26531686/video_25.mp4 \
                       --labels 26531686/annotations_25.csv
 ```
 
+Any trained model can be named rather than pointed at:
+
+```sh
+uv run pitvis-predict --list-models                       # what is trained here
+uv run pitvis-predict --video V --steps-model arst        # the reproduction
+uv run pitvis-predict --video V --instruments-model instruments-v2:weighted
+```
+
+With no `--*-model` flag it uses the best checkpoint trained on this machine —
+the leaderboard winner if the iteration has run, the reproduction otherwise.
+
 ### 7. Watch a case
 
 ```sh

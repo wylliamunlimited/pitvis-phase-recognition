@@ -351,6 +351,27 @@ selection set.
   `data/instruments/v2/<variant>/`, so `pitvis-predict` and the app keep
   working against the reproduction.
 
+## Two registries, deliberately separate
+
+- **`training/registry.py`** — the ONLY list of trainable models. Adding one is
+  one `Model(...)` entry; `pitvis-train <name>` then works with no CLI or
+  packaging change.
+- **`inference/checkpoints.py`** — where each model's weights land.
+  `pitvis-predict --steps-model arst-v2:best`, `--list-models`.
+
+They stay apart because `main()` is a training entry point while a checkpoint
+is an artifact that may not exist yet: `pitvis-train --list` answers *what can
+I train*, `--list-models` answers *what have I trained*, and on any given
+machine those differ.
+
+Checkpoints carry their own tags — `space`, `variant`, and `mask_excluded`
+(steps) or `arch`/`thresholds` (instruments) — each defaulting to what the
+original reproductions, which predate all of them, were trained with.
+**Inference must honour those tags**: the step winner masks 0/11/13 out of the
+argmax, and ignoring the tag would discard most of its advantage while still
+reporting its name. Standardisation stats are never resolved separately from
+the weights.
+
 ## Layout
 
 ```
