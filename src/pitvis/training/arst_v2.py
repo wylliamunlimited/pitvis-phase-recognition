@@ -80,8 +80,11 @@ VARIANTS: dict[str, Variant] = {
         Variant("masked", "0/11/13 removed from the argmax", mask=True),
         Variant("weighted", "class-weighted CE at all three stages", weighted=True),
         Variant("dinov2", "same cascade on DINOv2 features", space="dinov2_vitb14"),
-        Variant("best", "composed from whatever cleared the bar",
-                mask=True, weighted=True),
+        # The winner. Masking + class weights on DINOv2 features: macro 0.5044,
+        # edit 0.5789, metric 0.5417 out of fold, against control's
+        # 0.4047 / 0.4282 / 0.4164.
+        Variant("best", "WINNER — argmax masking + class weights on DINOv2",
+                space="dinov2_vitb14", mask=True, weighted=True),
     ]
 }
 
