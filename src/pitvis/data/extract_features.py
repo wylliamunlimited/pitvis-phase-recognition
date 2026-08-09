@@ -1,25 +1,32 @@
-"""Extract 1 fps frozen ResNet-50 features for every PitVis video.
+"""Extract 1 fps frozen backbone features for every PitVis video.
 
 For each video: decode every round(fps)-th frame (frames 0, r, 2r, ...) via an
-ffmpeg rawvideo pipe, run them through a frozen ImageNet-pretrained timm
-resnet50 (num_classes=0 -> 2048-d pooled features), and save
+ffmpeg rawvideo pipe, run them through a frozen timm backbone
+(num_classes=0 -> pooled features), and save
 
-    data/features/video_{n}/features.npy   (T, 2048) float32
-    data/features/video_{n}/labels.npy     (T,)      int64   (labeled videos only)
+    data/features/{space}/video_{n}/features.npy   (T, D) float32
+    data/features/{space}/video_{n}/labels.npy     (T,)   int64  (labeled only)
 
 where T = ceil(nb_frames / round(fps)). Labels are the annotation rows
 truncated to T (the dropped trailing row is verified background) with the
 15-way encoding: -1 -> 0, k -> k.
 
+ONE DIRECTORY PER FEATURE SPACE. `D` and the preprocessing depend on the
+backbone, so two spaces are not interchangeable — 2048 for resnet50, 768 for
+dinov2_vitb14. Each owns a directory and a manifest, which is what lets a
+second backbone be extracted without destroying the first. The spaces
+themselves are named in `pitvis.data.spaces`.
+
+Each manifest records its space (backbone, transform, target fps, content-hash
+id) plus per-video provenance, and extraction still refuses to write into a
+manifest describing a different space — but the remedy is now `--space`
+rather than deleting the cache.
+
 Resumable: videos whose features.npy already exists with the expected length
 are skipped. Video 19 gets features but no labels (annotations missing).
 
-data/features/manifest.json records the feature space (backbone, transform,
-target fps, content-hash id) plus per-video provenance. Extraction refuses to
-write into a cache whose manifest describes a different feature space — that
-would silently mix incompatible features in one training run.
-
-Usage: uv run pitvis-extract [video_numbers...]
+Usage: uv run pitvis-extract [video_numbers...] [--space NAME]
+       uv run pitvis-extract --migrate      # pre-space cache -> data/features/resnet50/
 """
 
 import argparse
@@ -36,11 +43,9 @@ import pandas as pd
 import torch
 from PIL import Image
 
-from pitvis.paths import FEATURES as OUT
-from pitvis.paths import MANIFEST, RAW
+from pitvis.data import spaces
+from pitvis.paths import FEATURES, RAW, features_dir, manifest_path, video_dir
 
-BACKBONE = "resnet50"
-TARGET_FPS = 1
 BATCH = 64
 
 
@@ -69,43 +74,59 @@ def space_id(space: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
-def build_model(device: torch.device):
+def build_model(device: torch.device, space: spaces.Space):
+    """Instantiate a space's backbone and return (model, transform, space_dict).
+
+    THE RETURNED DICT IS THE HASHED PAYLOAD and its keys are frozen at
+    {backbone, feature_dim, target_fps, transform}. `space.name` and
+    `space.model_kwargs` are deliberately absent: adding either would move the
+    existing cache's id off 67912d3efc6852e7 and the guard below would reject
+    940 MB of correct features. `model_kwargs` needs no separate entry anyway —
+    everything it changes (DINOv2's img_size) surfaces in `transform`.
+    """
     import timm
     from timm.data import create_transform, resolve_data_config
 
-    model = timm.create_model(BACKBONE, pretrained=True, num_classes=0)
+    model = timm.create_model(space.backbone, pretrained=True, num_classes=0,
+                              **space.model_kwargs)
     model.eval().to(device)
     cfg = resolve_data_config({}, model=model)
     transform = create_transform(**cfg)
-    space = {
-        "backbone": BACKBONE,
+    payload = {
+        "backbone": space.backbone,
         "feature_dim": model.num_features,
-        "target_fps": TARGET_FPS,
+        "target_fps": space.target_fps,
         "transform": {
             k: cfg[k]
             for k in ("crop_mode", "crop_pct", "input_size", "interpolation", "mean", "std")
         },
     }
-    space["id"] = space_id(space)
-    return model, transform, space
+    payload["id"] = space_id(payload)
+    return model, transform, payload
 
 
-def load_manifest(space: dict) -> dict:
-    """Load the manifest, or start one. Refuses a different feature space."""
-    if not MANIFEST.exists():
-        return {"space": space, "videos": {}}
-    manifest = json.loads(MANIFEST.read_text())
-    canonical = json.loads(json.dumps(space))  # tuples -> lists, as stored
+def load_manifest(payload: dict, path: Path) -> dict:
+    """Load one space's manifest, or start it. Refuses a different space.
+
+    Still full-dict equality, unchanged — but the remedy is no longer "delete
+    the cache". Each space owns a directory, so a second backbone is a second
+    manifest rather than a collision.
+    """
+    if not path.exists():
+        return {"space": payload, "videos": {}}
+    manifest = json.loads(path.read_text())
+    canonical = json.loads(json.dumps(payload))  # tuples -> lists, as stored
     if manifest["space"] != canonical:
         raise SystemExit(
             f"manifest feature space {manifest['space']['id']} != current "
-            f"{space['id']} — the cache holds features from a different "
-            f"backbone/transform. Delete data/features/ and re-extract."
+            f"{payload['id']} — {path.parent} holds features from a different "
+            f"backbone/transform. Extract to a different --space, or delete "
+            f"that directory and re-extract."
         )
     return manifest
 
 
-def record_video(manifest: dict, vid: int, frames: int, fps_rounded: int,
+def record_video(manifest: dict, path: Path, vid: int, frames: int, fps_rounded: int,
                  has_labels: bool, source: Path, has_instruments: bool = False) -> None:
     manifest["videos"][f"video_{vid:02d}"] = {
         "extracted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -115,9 +136,56 @@ def record_video(manifest: dict, vid: int, frames: int, fps_rounded: int,
         "instruments": has_instruments,
         "source": str(source),
     }
-    tmp = MANIFEST.with_suffix(".json.tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    tmp.replace(MANIFEST)
+    tmp.replace(path)
+
+
+def legacy_layout() -> list[Path]:
+    """Video directories sitting directly under data/features/ — pre-space.
+
+    The cache used to be `data/features/video_NN/`. Finding one now means the
+    migration has not run, and the right response is to say so rather than
+    silently re-decode 40 GB into the new layout.
+    """
+    if not FEATURES.exists():
+        return []
+    return sorted(p for p in FEATURES.iterdir()
+                  if p.is_dir() and p.name.startswith("video_"))
+
+
+def require_migration() -> None:
+    stray = legacy_layout()
+    if stray:
+        raise SystemExit(
+            f"found {len(stray)} video directories directly under {FEATURES} "
+            f"(pre-space layout). Run `uv run pitvis-extract --migrate` to move "
+            f"them into data/features/{spaces.DEFAULT}/ — it is a rename, "
+            f"nothing is re-decoded."
+        )
+
+
+def migrate() -> None:
+    """Move a pre-space cache into data/features/<DEFAULT>/.
+
+    A same-filesystem rename of ~940 MB: instant, and it re-decodes nothing.
+    Opt-in rather than automatic — moving a user's cache is not something to
+    do as a side effect of an unrelated command.
+    """
+    stray = legacy_layout()
+    old_manifest = FEATURES / "manifest.json"
+    if not stray and not old_manifest.exists():
+        print(f"nothing to migrate — no pre-space layout under {FEATURES}")
+        return
+
+    dest = features_dir(spaces.DEFAULT)
+    dest.mkdir(parents=True, exist_ok=True)
+    for d in stray:
+        d.rename(dest / d.name)
+    if old_manifest.exists():
+        old_manifest.rename(manifest_path(spaces.DEFAULT))
+    print(f"migrated {len(stray)} video directories + manifest -> {dest}")
 
 
 def write_annotations(vid: int, out_dir: Path, expected: int) -> bool:
@@ -208,9 +276,11 @@ def embed_video(video: Path, model, transform, device: torch.device,
 
 
 @torch.no_grad()
-def extract_video(vid: int, model, transform, device: torch.device, manifest: dict) -> None:
+def extract_video(vid: int, model, transform, device: torch.device, manifest: dict,
+                  space: str = spaces.DEFAULT) -> None:
     video = RAW / f"video_{vid:02d}.mp4"
-    out_dir = OUT / f"video_{vid:02d}"
+    out_dir = video_dir(space, vid)
+    mpath = manifest_path(space)
     nb_frames, r, _, _ = probe(video)
     expected = math.ceil(nb_frames / r)
 
@@ -231,7 +301,7 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
             entry = manifest["videos"].get(f"video_{vid:02d}")
             if entry is None or entry["frames"] != expected or missing \
                     or "instruments" not in entry:
-                record_video(manifest, vid, expected, r, has_labels, video,
+                record_video(manifest, mpath, vid, expected, r, has_labels, video,
                              (out_dir / "instruments.npy").exists())
                 if not missing:
                     print(f"video {vid:02d}: exists ({expected} frames), manifest updated")
@@ -248,7 +318,7 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
 
     has_labels = write_annotations(vid, out_dir, expected)
 
-    record_video(manifest, vid, expected, r, has_labels, video,
+    record_video(manifest, mpath, vid, expected, r, has_labels, video,
                  (out_dir / "instruments.npy").exists())
     print(f"video {vid:02d}: done, {expected} frames in {time.time() - t0:.0f}s")
 
@@ -259,7 +329,17 @@ def main(argv: list[str] | None = None) -> None:
                     help="video numbers to extract (default: all 25)")
     ap.add_argument("--device", choices=("mps", "cuda", "cpu"),
                     help="override device autodetection")
+    ap.add_argument("--space", default=spaces.DEFAULT, choices=spaces.names(),
+                    help=f"feature space to extract into (default: {spaces.DEFAULT})")
+    ap.add_argument("--migrate", action="store_true",
+                    help="move a pre-space data/features/video_NN cache into "
+                         "data/features/<default>/ and exit (a rename, no decode)")
     args = ap.parse_args(argv)
+
+    if args.migrate:
+        migrate()
+        return
+    require_migration()
 
     vids = args.videos or list(range(1, 26))
     bad = [v for v in vids if not 1 <= v <= 25]
@@ -270,11 +350,13 @@ def main(argv: list[str] | None = None) -> None:
         "mps" if torch.backends.mps.is_available()
         else "cuda" if torch.cuda.is_available() else "cpu"
     )
-    print(f"device: {device}, videos: {vids}")
-    model, transform, space = build_model(device)
-    manifest = load_manifest(space)
+    space = spaces.get(args.space)
+    print(f"device: {device}, space: {space.name} ({space.backbone}), videos: {vids}")
+    model, transform, payload = build_model(device, space)
+    manifest = load_manifest(payload, manifest_path(space.name))
+    print(f"feature space id: {payload['id']}  dim: {payload['feature_dim']}")
     for vid in vids:
-        extract_video(vid, model, transform, device, manifest)
+        extract_video(vid, model, transform, device, manifest, space.name)
 
 
 if __name__ == "__main__":

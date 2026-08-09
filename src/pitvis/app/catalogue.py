@@ -24,7 +24,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from pitvis.data.dataset import TRAIN, VAL
-from pitvis.paths import CKPT, CKPT_INSTRUMENTS, MANIFEST, PREDICTIONS, RAW
+from pitvis.data import spaces
+from pitvis.paths import CKPT, CKPT_INSTRUMENTS, PREDICTIONS, RAW, manifest_path
 
 CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
@@ -75,10 +76,11 @@ def _video_number(case_id: str) -> int | None:
 
 
 def _manifest() -> dict:
-    if not MANIFEST.exists():
+    mpath = manifest_path(spaces.DEFAULT)
+    if not mpath.exists():
         return {}
     try:
-        return json.loads(MANIFEST.read_text()).get("videos", {})
+        return json.loads(mpath.read_text()).get("videos", {})
     except (OSError, json.JSONDecodeError):
         return {}
 

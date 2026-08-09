@@ -36,7 +36,8 @@ from pitvis.models.arst import (
     TeCNO,
     banded_causal_mask,
 )
-from pitvis.paths import FEATURES
+from pitvis.data import spaces
+from pitvis.paths import manifest_path, video_dir
 
 NUM_CLASSES = 15
 
@@ -49,14 +50,24 @@ def params(m) -> int:
     return sum(p.numel() for p in m.parameters())
 
 
-def load(video: int, fallback_len: int) -> tuple[np.ndarray, np.ndarray | None, str]:
-    d = FEATURES / f"video_{video:02d}"
+def manifest_dim(space: str, default: int = 2048) -> int:
+    """Feature width for a space, read from its manifest when one exists."""
+    import json
+    mpath = manifest_path(space)
+    if mpath.exists():
+        return json.loads(mpath.read_text())["space"]["feature_dim"]
+    return default
+
+
+def load(video: int, fallback_len: int, space: str = spaces.DEFAULT,
+         dim: int = 2048) -> tuple[np.ndarray, np.ndarray | None, str]:
+    d = video_dir(space, video)
     if (d / "features.npy").exists():
         f = np.load(d / "features.npy")
         lp = d / "labels.npy"
         return f, (np.load(lp) if lp.exists() else None), f"cache: {d}"
     rng = np.random.default_rng(0)
-    f = rng.standard_normal((fallback_len, 2048), dtype=np.float32)
+    f = rng.standard_normal((fallback_len, dim), dtype=np.float32)
     lab = rng.integers(0, NUM_CLASSES, fallback_len)
     return f, lab, f"SYNTHETIC — no cache at {d}"
 
@@ -67,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("--video", type=int, default=1, help="video to trace (default: 1)")
+    ap.add_argument("--space", default=spaces.DEFAULT, choices=spaces.names(),
+                    help=f"feature space to trace (default: {spaces.DEFAULT})")
     ap.add_argument("--width", type=int, default=BAND_WIDTH,
                     help=f"ARST banded-mask width (default: {BAND_WIDTH})")
     ap.add_argument("--chunk", type=int, default=1024,
@@ -78,7 +91,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     torch.manual_seed(0)
-    feats, labels, source = load(args.video, args.synthetic_len)
+    # The synthetic fallback must match the space's width, or the trace
+    # would report 2048 for a 768-d space and quietly mislead.
+    dim = manifest_dim(args.space)
+    feats, labels, source = load(args.video, args.synthetic_len, args.space, dim)
     T, D = feats.shape
     if labels is None:                       # video 19 has features but no labels
         labels = np.zeros(T, dtype=np.int64)
