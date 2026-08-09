@@ -43,16 +43,51 @@ from typing import Callable
 import numpy as np
 import torch
 
-from pitvis.data.dataset import TRAIN, load_split_instruments
-from pitvis.data.folds import folds as fold_ids
-from pitvis.evaluation.instruments import METRICS, evaluate
-from pitvis.paths import CKPT_INSTRUMENTS
+from dataclasses import dataclass
+from pathlib import Path
 
-# fit(train_videos, args, device) -> predict(features (T, D)) -> pairs (T, 2)
+from pitvis.data.dataset import TRAIN, load_split, load_split_instruments
+from pitvis.data.folds import folds as fold_ids
+from pitvis.evaluation import instruments as inst_eval
+from pitvis.evaluation import metric as step_eval
+from pitvis.paths import CKPT, CKPT_INSTRUMENTS
+
+# fit(train_videos, args, device) -> predict(features (T, D)) -> targets (T, ...)
 PredictFn = Callable[[np.ndarray], np.ndarray]
 FitFn = Callable[[list[tuple[int, np.ndarray, np.ndarray]], object, torch.device], PredictFn]
 
-CV_DIR = CKPT_INSTRUMENTS / "cv"
+
+@dataclass(frozen=True)
+class Task:
+    """What differs between the two challenge tasks, gathered in one place.
+
+    The harness itself is task-agnostic: hold out a fold, fit, predict, and
+    aggregate per-video-then-mean. Only the loader, the scorer and which metric
+    ranks change, so they are data rather than a second copy of the harness.
+    """
+
+    name: str
+    loader: Callable          # (videos, space) -> [(vid, features, target)]
+    evaluate: Callable        # per_video -> {videos, mean, std, pooled}
+    metrics: tuple[str, ...]
+    primary: str              # what ranks
+    guard: str                # what must not regress
+    cv_dir: Path
+
+
+INSTRUMENTS = Task(
+    name="instruments", loader=load_split_instruments,
+    evaluate=inst_eval.evaluate, metrics=inst_eval.METRICS,
+    primary="macro_f1", guard="metric",
+    cv_dir=CKPT_INSTRUMENTS / "cv",
+)
+
+STEPS = Task(
+    name="steps", loader=load_split,
+    evaluate=step_eval.evaluate, metrics=step_eval.METRICS,
+    primary="macro_f1", guard="metric",
+    cv_dir=CKPT / "cv",
+)
 
 
 def git_rev() -> str:
@@ -64,12 +99,13 @@ def git_rev() -> str:
 
 
 def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
-                   space: str, k: int = 5, quiet: bool = False) -> dict:
+                   space: str, task: Task = INSTRUMENTS, k: int = 5,
+                   quiet: bool = False) -> dict:
     """Fit `k` models, score every training video out of fold, aggregate once."""
     t0 = time.time()
     # Loaded once and sliced. 19 videos at 2048-d is ~693 MB; reloading it per
     # fold would turn a 5-minute sweep into a disk-bound one.
-    split = load_split_instruments(TRAIN, space)
+    split = task.loader(TRAIN, space)
     by_vid = {vid: (f, inst) for vid, f, inst in split}
 
     per_fold, out_of_fold = [], []
@@ -83,14 +119,14 @@ def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
             fold_preds.append((v, truth, predict(feats)))
         out_of_fold.extend(fold_preds)
 
-        m = evaluate(fold_preds)["mean"]
+        m = task.evaluate(fold_preds)["mean"]
         per_fold.append({"fold": i, "held_out": list(held), **m})
         if not quiet:
             print(f"  fold {i} ({len(held)} held out): "
-                  + "  ".join(f"{k_}={m[k_]:.4f}" for k_ in METRICS))
+                  + "  ".join(f"{k_}={m[k_]:.4f}" for k_ in task.metrics))
 
     # The headline: one scorer call over all 19, never pooled frame-wise.
-    result = evaluate(out_of_fold)
+    result = task.evaluate(out_of_fold)
     pooled = result["pooled"]
     # Two different failures, both worth counting. `dead` is F1 exactly 0 —
     # the class is never got right. `never_predicted` is the stricter one: the
@@ -98,11 +134,18 @@ def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
     # (9 of 19). Every class has non-zero pooled support across 19 videos, so
     # neither count is an artifact of an absent class.
     dead = int((np.asarray(pooled["per_class_f1"]) == 0).sum())
-    never = int((np.asarray(pooled["predicted"]) == 0).sum())
+    # The steps scorer reports a confusion matrix rather than a predicted
+    # count; its column sums are the same thing.
+    if "predicted" in pooled:
+        predicted = np.asarray(pooled["predicted"])
+    else:
+        predicted = np.asarray(pooled["confusion_matrix"]).sum(axis=0)
+    never = int((predicted == 0).sum())
 
     entry = {
         "variant": variant,
         "space": space,
+        "task": task.name,
         "k": k,
         "videos": {str(v): result["videos"][v] for v in result["videos"]},
         "mean": result["mean"],
@@ -111,7 +154,7 @@ def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
         "pooled": {
             "per_class_f1": [float(x) for x in pooled["per_class_f1"]],
             "support": [int(x) for x in pooled["support"]],
-            "predicted": [int(x) for x in pooled["predicted"]],
+            "predicted": [int(x) for x in predicted],
         },
         "dead_classes": dead,
         "never_predicted": never,
@@ -120,59 +163,62 @@ def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
         "args": {k_: v for k_, v in vars(args).items()} if hasattr(args, "__dict__") else {},
     }
 
-    CV_DIR.mkdir(parents=True, exist_ok=True)
-    (CV_DIR / f"{variant}.json").write_text(json.dumps(entry, indent=2) + "\n")
+    task.cv_dir.mkdir(parents=True, exist_ok=True)
+    (task.cv_dir / f"{variant}.json").write_text(json.dumps(entry, indent=2) + "\n")
 
     if not quiet:
         print(f"\n  {variant}: " + "  ".join(
-            f"{k_} {entry['mean'][k_]:.4f}±{entry['std'][k_]:.4f}" for k_ in METRICS))
-        print(f"  dead classes (F1 exactly 0): {dead}/19   "
-              f"never predicted at all: {never}/19   [{entry['seconds']:.0f}s]")
+            f"{k_} {entry['mean'][k_]:.4f}±{entry['std'][k_]:.4f}" for k_ in task.metrics))
+        # Counts are over each task's own class set: 19 instruments, but 12
+        # SCORED steps for F1 and 15 for the confusion matrix. Hardcoding 19
+        # here reported "7/19 never predicted" for a 15-class task.
+        n_f1 = len(pooled["per_class_f1"])
+        n_pred = len(predicted)
+        print(f"  dead classes (F1 exactly 0): {dead}/{n_f1}   "
+              f"never predicted at all: {never}/{n_pred}   "
+              f"[{entry['seconds']:.0f}s]")
     return entry
 
 
-def load_entries() -> list[dict]:
-    """Every CV result written so far, oldest variant name first."""
-    if not CV_DIR.exists():
+def load_entries(task: Task = INSTRUMENTS) -> list[dict]:
+    """Every CV result written so far for one task, by variant name."""
+    if not task.cv_dir.exists():
         return []
-    return [json.loads(p.read_text()) for p in sorted(CV_DIR.glob("*.json"))]
+    return [json.loads(p.read_text()) for p in sorted(task.cv_dir.glob("*.json"))]
 
 
-def summarise(entries: list[dict]) -> str:
-    """The leaderboard. Ranked by macro_f1, with the official metric guarded."""
+def summarise(entries: list[dict], task: Task = INSTRUMENTS) -> str:
+    """The leaderboard. Ranked by the task's primary metric, guard reported."""
     if not entries:
         return "no cross-validation results yet — run with --cv"
 
-    ranked = sorted(entries, key=lambda e: -e["mean"]["macro_f1"])
+    ranked = sorted(entries, key=lambda e: -e["mean"][task.primary])
     control = next((e for e in entries if e["variant"] == "control"), None)
 
-    rows = [
-        f"{'variant':<14}{'space':<16}{'macro_f1':>18}{'metric':>18}"
-        f"{'weighted':>18}{'dead':>6}{'never':>7}{'sec':>7}"
-    ]
-    rows.append("-" * 104)
+    cols = list(task.metrics)
+    head = f"{'variant':<20}{'space':<16}" + "".join(f"{c:>18}" for c in cols)
+    rows = [head + f"{'dead':>6}{'never':>7}{'sec':>7}", "-" * len(head + " " * 20)]
     for e in ranked:
-        m, s = e["mean"], e["std"]
+        m, sd = e["mean"], e["std"]
         rows.append(
-            f"{e['variant']:<14}{e['space']:<16}"
-            f"{m['macro_f1']:>11.4f}±{s['macro_f1']:.4f}"
-            f"{m['metric']:>11.4f}±{s['metric']:.4f}"
-            f"{m['weighted']:>11.4f}±{s['weighted']:.4f}"
-            f"{e['dead_classes']:>6}{e.get('never_predicted', -1):>7}"
-            f"{e['seconds']:>7.0f}"
+            f"{e['variant']:<20}{e['space']:<16}"
+            + "".join(f"{m[c]:>11.4f}\u00b1{sd[c]:.4f}" for c in cols)
+            + f"{e['dead_classes']:>6}{e.get('never_predicted', -1):>7}"
+              f"{e['seconds']:>7.0f}"
         )
 
     if control:
         rows.append("")
-        rows.append("deltas vs control, and the guard:")
-        tol = control["std"]["metric"]
+        rows.append(f"deltas vs control — ranked on {task.primary}, "
+                    f"guarded on {task.guard}:")
+        tol = control["std"][task.guard]
         for e in ranked:
             if e["variant"] == "control":
                 continue
-            dm = e["mean"]["macro_f1"] - control["mean"]["macro_f1"]
-            dg = e["mean"]["metric"] - control["mean"]["metric"]
+            dp = e["mean"][task.primary] - control["mean"][task.primary]
+            dg = e["mean"][task.guard] - control["mean"][task.guard]
             ok = "PASS" if dg >= -tol else f"FAIL (>{tol:.4f} regression)"
-            rows.append(f"  {e['variant']:<14} macro {dm:+.4f}   "
-                        f"metric {dg:+.4f}   guard {ok}")
-        rows.append(f"\n  guard tolerance = control's metric std = {tol:.4f}")
+            rows.append(f"  {e['variant']:<20} {task.primary} {dp:+.4f}   "
+                        f"{task.guard} {dg:+.4f}   guard {ok}")
+        rows.append(f"\n  guard tolerance = control's {task.guard} std = {tol:.4f}")
     return "\n".join(rows)
