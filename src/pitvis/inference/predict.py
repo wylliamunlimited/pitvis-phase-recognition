@@ -100,6 +100,13 @@ def load_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int,
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     trained = ckpt["args"]
     w = width if width is not None else trained["width"]
+    # Tags recorded at training time, each defaulting to what citi.pt -- which
+    # predates all of them -- was trained with. `mask_excluded` matters: the
+    # step winner masks 0/11/13 out of the argmax, and ignoring that here would
+    # quietly discard most of its advantage.
+    meta = {"space": ckpt.get("space", spaces.DEFAULT),
+            "variant": ckpt.get("variant", "reproduction"),
+            "mask_excluded": bool(ckpt.get("mask_excluded", False))}
 
     spatial = SpatialEmbedding(feature_dim, num_classes=NUM_CLASSES).to(device)
     tecno = TeCNO(num_classes=NUM_CLASSES).to(device)
@@ -110,7 +117,7 @@ def load_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int,
     spatial.eval(), tecno.eval(), arst.eval()
 
     stats = np.load(std_path)
-    return spatial, tecno, arst, stats["mean"], stats["std"], trained, w
+    return spatial, tecno, arst, stats["mean"], stats["std"], trained, w, meta
 
 
 @torch.no_grad()
@@ -143,6 +150,18 @@ def to_segments(preds: np.ndarray) -> pd.DataFrame:
                      "duration_s": n})
         t += n
     return pd.DataFrame(rows)
+
+
+def step_space(ckpt_path: Path) -> str:
+    """Which feature space a task-1 checkpoint expects.
+
+    Read before any features are computed, because it decides which backbone
+    has to run. citi.pt predates the multi-space cache and carries no `space`.
+    """
+    if not ckpt_path.exists():
+        return spaces.DEFAULT
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    return ckpt.get("space", spaces.DEFAULT)
 
 
 def instrument_space(ckpt_path: Path) -> str:

@@ -45,6 +45,7 @@ from pitvis.data.dataset import step_name
 from pitvis.evaluation.instruments import INSTRUMENT_NAMES
 from pitvis.evaluation.instruments import report as ireport
 from pitvis.evaluation.metric import decode, report
+from pitvis.inference import checkpoints as C
 from pitvis.inference import predict as P
 from pitvis.paths import CKPT, CKPT_INSTRUMENTS, PREDICTIONS
 
@@ -59,8 +60,19 @@ def main(argv: list[str] | None = None) -> int:
                     help="output directory (default: predictions/<video stem>/)")
     ap.add_argument("--labels", type=Path,
                     help="ground truth (.npy or annotations CSV) — enables scoring")
-    ap.add_argument("--ckpt", type=Path, default=CKPT / "citi.pt")
-    ap.add_argument("--standardize", type=Path, default=CKPT / "standardize.npz")
+    ap.add_argument("--steps-model", default=None, metavar="SPEC",
+                    help="task-1 model by name, e.g. arst or arst-v2:best "
+                         "(default: the best trained one)")
+    ap.add_argument("--instruments-model", default=None, metavar="SPEC",
+                    help="task-2 model by name, e.g. instruments or "
+                         "instruments-v2:best (default: the best trained one)")
+    ap.add_argument("--list-models", action="store_true",
+                    help="list the checkpoints trained on this machine and exit")
+    # Raw-path escape hatches. Named models resolve to these; passing a path
+    # directly still works and wins, which is what makes an unregistered
+    # checkpoint usable without editing the registry.
+    ap.add_argument("--ckpt", type=Path, default=None)
+    ap.add_argument("--standardize", type=Path, default=None)
     ap.add_argument("--instrument-ckpt", type=Path, default=None,
                     help="task-2 checkpoint (default: the best variant if "
                          "trained, else the SANO reproduction)")
@@ -89,14 +101,33 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --labels, also print the 15-way confusion matrix")
     args = ap.parse_args(argv)
 
-    # The winner ships as the default when it exists; sano.pt is the fallback
-    # so a machine that only ran the reproduction still works unchanged.
-    best = CKPT_INSTRUMENTS / "v2" / "best"
-    if args.instrument_ckpt is None:
-        args.instrument_ckpt = (best / "model.pt" if (best / "model.pt").exists()
-                                else CKPT_INSTRUMENTS / "sano.pt")
-    if args.instrument_standardize is None:
-        args.instrument_standardize = args.instrument_ckpt.parent / "standardize.npz"
+    if args.list_models:
+        print(C.describe())
+        return 0
+
+    # A named model resolves to paths; an explicit path always wins. The
+    # default is whatever the leaderboard selected on this machine, falling
+    # back to the reproduction when only that has been trained.
+    def pick(task, name, ckpt, stats):
+        if ckpt is not None:
+            return ckpt, (stats or ckpt.parent / "standardize.npz"), name or "(path)"
+        c = C.resolve(name) if name else C.default(task)
+        if c is None:
+            return None, None, None
+        if not c.exists:
+            raise SystemExit(
+                f"{name or task}: no checkpoint at {c.path}\n"
+                f"    train it first, or `pitvis-predict --list-models`"
+            )
+        return c.path, c.stats, c.name
+
+    args.ckpt, args.standardize, step_name_ = pick(
+        C.STEPS, args.steps_model, args.ckpt, args.standardize)
+    args.instrument_ckpt, args.instrument_standardize, inst_name = pick(
+        C.INSTRUMENTS, args.instruments_model, args.instrument_ckpt,
+        args.instrument_standardize)
+    if args.steps and args.ckpt is None:
+        raise SystemExit("no task-1 checkpoint trained — run `uv run pitvis-train arst`")
 
     if not args.video.exists():
         raise SystemExit(f"video not found: {args.video}")
@@ -139,9 +170,9 @@ def main(argv: list[str] | None = None) -> int:
         _feats[space] = f
         return f
 
-    step_space = spaces.DEFAULT
+    step_space = (P.step_space(args.ckpt) if args.steps else spaces.DEFAULT)
     inst_space = (P.instrument_space(args.instrument_ckpt)
-                  if args.instruments else step_space)
+                  if args.instruments and args.instrument_ckpt else step_space)
     if args.instruments and inst_space != step_space and args.steps:
         print(f"note    the two tasks use different feature spaces "
               f"({step_space} for steps, {inst_space} for instruments), "
@@ -153,17 +184,24 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- task 1: steps -----------------------------------------------------
     if args.steps:
-        spatial, tecno, arst, mean, std, trained, width = P.load_checkpoint(
+        spatial, tecno, arst, mean, std, trained, width, smeta = P.load_checkpoint(
             args.ckpt, args.standardize, features.shape[1], dev, args.width
         )
-        print(f"\ntask 1  {args.ckpt.name}  (trained W={trained['width']}, "
-              f"seed={trained['seed']})")
+        # A checkpoint trained with masking is scored with masking; the flag
+        # only ever turns it ON, never off, so an explicit --mask-excluded
+        # still works on a model that did not train with it.
+        mask = args.mask_excluded or smeta["mask_excluded"]
+        print(f"\ntask 1  {step_name_}  ({args.ckpt.name}, "
+              f"variant={smeta['variant']}, space={smeta['space']}, "
+              f"trained W={trained['width']}, seed={trained['seed']})")
         print(f"        W={width}, CCI={'on' if args.cci else 'off'}, "
-              f"mask-excluded={'on' if args.mask_excluded else 'off'}")
+              f"mask-excluded={'on' if mask else 'off'}"
+              + ("  (from the checkpoint)" if smeta["mask_excluded"]
+                 and not args.mask_excluded else ""))
 
         t1 = time.time()
         out = P.predict(features, spatial, tecno, arst, mean, std, dev,
-                        args.chunk, args.cci, args.mask_excluded,
+                        args.chunk, args.cci, mask,
                         return_probs=args.probs)
         preds, sprobs = out if args.probs else (out, None)
         print(f"        {len(preds)} seconds in {time.time() - t1:.0f}s")
@@ -194,7 +232,9 @@ def main(argv: list[str] | None = None) -> int:
         summary["steps"] = {
             "frames": int(len(preds)), "segments": int(len(segments)),
             "width": width, "cci": args.cci,
-            "mask_excluded": args.mask_excluded, "checkpoint": str(args.ckpt),
+            "mask_excluded": mask, "checkpoint": str(args.ckpt),
+            "model": step_name_, "variant": smeta["variant"],
+            "space": smeta["space"],
         }
 
         if sprobs is not None:
@@ -232,8 +272,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             imodel, imean, istd, iargs, imeta = loaded
             n_frames = len(ifeatures)
-            print(f"\ntask 2  {args.instrument_ckpt.name}  "
-                  f"(variant={imeta['variant']}, space={imeta['space']}, "
+            print(f"\ntask 2  {inst_name}  ({args.instrument_ckpt.name}, "
+                  f"variant={imeta['variant']}, space={imeta['space']}, "
                   f"window={iargs['window']}, seed={iargs['seed']})")
             if imeta["thresholds"] is not None:
                 lo, hi = imeta["thresholds"].min(), imeta["thresholds"].max()
