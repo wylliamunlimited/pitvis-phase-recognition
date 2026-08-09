@@ -10,7 +10,8 @@ Labels use the 15-way encoding: 0 = background (-1 raw), k = step k (1..14).
 
 import numpy as np
 
-from pitvis.paths import FEATURES
+from pitvis.data import spaces
+from pitvis.paths import video_dir
 
 VAL = [1, 12, 21, 24, 25]
 TRAIN = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 20, 22, 23]
@@ -53,9 +54,14 @@ def step_name(k: int, *, raw: bool = False, default: str = "?") -> str:
     return STEP_NAMES.get(k, default)
 
 
-def load_video(vid: int) -> tuple[np.ndarray, np.ndarray]:
-    """Return (features (T, D) float32, labels (T,) int64) for one video."""
-    d = FEATURES / f"video_{vid:02d}"
+def load_video(vid: int, space: str = spaces.DEFAULT) -> tuple[np.ndarray, np.ndarray]:
+    """Return (features (T, D) float32, labels (T,) int64) for one video.
+
+    `space` selects which backbone's cache to read. D varies by space — 2048
+    for resnet50, 768 for dinov2_vitb14 — so a model trained on one is not
+    loadable against the other, which is the point of keeping them separate.
+    """
+    d = video_dir(space, vid)
     features = np.load(d / "features.npy")
     labels = np.load(d / "labels.npy")
     assert len(features) == len(labels), \
@@ -63,12 +69,14 @@ def load_video(vid: int) -> tuple[np.ndarray, np.ndarray]:
     return features, labels
 
 
-def load_split(videos: list[int]) -> list[tuple[int, np.ndarray, np.ndarray]]:
+def load_split(videos: list[int],
+               space: str = spaces.DEFAULT) -> list[tuple[int, np.ndarray, np.ndarray]]:
     """Return [(vid, features, labels), ...] for the given video list."""
-    return [(vid, *load_video(vid)) for vid in videos]
+    return [(vid, *load_video(vid, space)) for vid in videos]
 
 
-def load_video_instruments(vid: int) -> tuple[np.ndarray, np.ndarray]:
+def load_video_instruments(vid: int,
+                           space: str = spaces.DEFAULT) -> tuple[np.ndarray, np.ndarray]:
     """Return (features (T, D) float32, instruments (T, 2) int64) for one video.
 
     Deliberately a second function rather than a wider return from `load_video`:
@@ -79,7 +87,7 @@ def load_video_instruments(vid: int) -> tuple[np.ndarray, np.ndarray]:
     (nothing visible) are three distinct states. Convert to multi-hot at the
     point of use, not here.
     """
-    d = FEATURES / f"video_{vid:02d}"
+    d = video_dir(space, vid)
     features = np.load(d / "features.npy")
     path = d / "instruments.npy"
     if not path.exists():
@@ -93,6 +101,8 @@ def load_video_instruments(vid: int) -> tuple[np.ndarray, np.ndarray]:
     return features, instruments
 
 
-def load_split_instruments(videos: list[int]) -> list[tuple[int, np.ndarray, np.ndarray]]:
+def load_split_instruments(
+    videos: list[int], space: str = spaces.DEFAULT
+) -> list[tuple[int, np.ndarray, np.ndarray]]:
     """Return [(vid, features, instruments), ...] for the given video list."""
-    return [(vid, *load_video_instruments(vid)) for vid in videos]
+    return [(vid, *load_video_instruments(vid, space)) for vid in videos]

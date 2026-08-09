@@ -38,7 +38,8 @@ import torch
 from pitvis.data.dataset import NUM_CLASSES
 from pitvis.evaluation.metric import decode
 from pitvis.models.arst import ARST, SpatialEmbedding, TeCNO
-from pitvis.paths import CKPT, CKPT_INSTRUMENTS, FEATURES, MANIFEST
+from pitvis.data import spaces
+from pitvis.paths import CKPT, CKPT_INSTRUMENTS, manifest_path, video_dir
 
 
 def require_ffmpeg() -> None:
@@ -52,7 +53,7 @@ def require_ffmpeg() -> None:
         )
 
 
-def cached_features(video: Path) -> np.ndarray | None:
+def cached_features(video: Path, space: str = spaces.DEFAULT) -> np.ndarray | None:
     """Return cached features for `video` if the cache holds this exact file.
 
     Only reuses the cache when the manifest records this video at this path in
@@ -60,13 +61,14 @@ def cached_features(video: Path) -> np.ndarray | None:
     silently produce predictions the checkpoint was never trained for.
     """
     import json
-    if not MANIFEST.exists():
+    mpath = manifest_path(space)
+    if not mpath.exists():
         return None
-    manifest = json.loads(MANIFEST.read_text())
+    manifest = json.loads(mpath.read_text())
     for key, entry in manifest.get("videos", {}).items():
         if Path(entry["source"]).resolve() != video.resolve():
             continue
-        path = FEATURES / key / "features.npy"
+        path = video_dir(space, int(key.removeprefix("video_"))) / "features.npy"
         if not path.exists():
             return None
         feats = np.load(path)

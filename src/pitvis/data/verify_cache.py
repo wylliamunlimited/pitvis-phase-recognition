@@ -44,7 +44,8 @@ import numpy as np
 import pandas as pd
 
 from pitvis.data.dataset import TRAIN, VAL
-from pitvis.paths import FEATURES, MANIFEST, RAW
+from pitvis.data import spaces
+from pitvis.paths import RAW, manifest_path, video_dir
 
 ALL_VIDEOS = list(range(1, 26))
 LABELED = set(TRAIN) | set(VAL)  # 24 videos; 19 has no annotations
@@ -91,10 +92,11 @@ def expected_labels(vid: int) -> np.ndarray:
     return labels.astype(np.int64)
 
 
-def check_video(vid: int, manifest: dict, do_probe: bool) -> list[str]:
+def check_video(vid: int, manifest: dict, do_probe: bool,
+                space: str = spaces.DEFAULT) -> list[str]:
     errors = []
     key = f"video_{vid:02d}"
-    d = FEATURES / key
+    d = video_dir(space, vid)
     feat_path = d / "features.npy"
     label_path = d / "labels.npy"
 
@@ -197,11 +199,14 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--probe", action="store_true",
                         help="also re-probe every video with ffprobe (slow)")
+    parser.add_argument("--space", default=spaces.DEFAULT, choices=spaces.names(),
+                        help=f"feature space to verify (default: {spaces.DEFAULT})")
     args = parser.parse_args(argv)
 
-    if not MANIFEST.exists():
+    mpath = manifest_path(args.space)
+    if not mpath.exists():
         sys.exit("manifest.json missing — cache has no provenance; re-run extraction")
-    manifest = json.loads(MANIFEST.read_text())
+    manifest = json.loads(mpath.read_text())
 
     errors = []
     if manifest["space"]["id"] != space_id(manifest["space"]):
@@ -215,11 +220,12 @@ def main(argv: list[str] | None = None) -> None:
 
     total_frames = 0
     for vid in ALL_VIDEOS:
-        errs = check_video(vid, manifest, args.probe)
+        errs = check_video(vid, manifest, args.probe, args.space)
         errors.extend(errs)
         key = f"video_{vid:02d}"
         if not errs:
-            t = len(np.load(FEATURES / key / "features.npy", mmap_mode="r"))
+            t = len(np.load(video_dir(args.space, vid) / "features.npy",
+                            mmap_mode="r"))
             total_frames += t
             print(f"{key}: OK ({t} frames{', labeled' if vid in LABELED else ''})")
         else:

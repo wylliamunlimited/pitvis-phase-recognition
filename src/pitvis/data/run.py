@@ -43,12 +43,16 @@ def main(argv: list[str] | None = None) -> int:
                     help="restrict extraction to these video numbers (default: all 25)")
     ap.add_argument("--device", choices=("mps", "cuda", "cpu"),
                     help="override device autodetection for extraction")
+    ap.add_argument("--space", default=None,
+                    help="feature space to extract into and verify")
     ap.add_argument("--probe", action="store_true",
                     help="verify: also re-run ffprobe per video (slow, but the only "
                          "length check independent of the annotations)")
     args = ap.parse_args(argv)
 
     extract_argv = [str(v) for v in (args.videos or [])]
+    if args.space:
+        extract_argv += ["--space", args.space]
     if args.device:
         extract_argv += ["--device", args.device]
 

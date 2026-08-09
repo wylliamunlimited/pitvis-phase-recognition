@@ -26,10 +26,6 @@ RAW = ROOT / "26531686"
 # Derived artifacts — all gitignored.
 DATA = ROOT / "data"
 FEATURES = DATA / "features"         # one subdirectory per feature space
-# Legacy single-space manifest. Superseded by `manifest_path(space)` below and
-# removed once every reader takes a space; still exported so this commit
-# changes no behaviour.
-MANIFEST = FEATURES / "manifest.json"
 CKPT = DATA / "arst"                 # CITI/ARST — task 1
 CKPT_INSTRUMENTS = DATA / "instruments"   # SANO — task 2
 PREDICTIONS = ROOT / "predictions"   # pitvis-predict output, one dir per video
