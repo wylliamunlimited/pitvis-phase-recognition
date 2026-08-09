@@ -1,0 +1,91 @@
+"""The feature spaces the cache can hold — one entry per backbone.
+
+A *feature space* is the whole image->numbers function: which backbone, at what
+resolution, with which preprocessing, sampled at what rate. Two caches built by
+different spaces are not interchangeable, and mixing them in one training run
+produces a model that is silently wrong rather than loudly broken.
+
+`extract_features.py` already computes a content hash of that definition
+(`space_id`) and refuses to write into a cache whose hash disagrees. What it
+could not do was hold two spaces at once: the guard's remedy was "delete
+data/features/ and re-extract", so trying a second backbone meant destroying
+the first. This module names the spaces, and `paths.features_dir` gives each
+one its own directory, so they coexist.
+
+Same shape as `training/registry.py`, for the same reason: one list is the
+source of truth, `--space` choices derive from it, and adding a backbone is one
+entry rather than an edit in six modules.
+
+THE HASHED PAYLOAD IS FROZEN. `space_id` hashes
+`{backbone, feature_dim, target_fps, transform}` and nothing else. `name` is
+deliberately absent from it — adding a key would move the existing cache's id
+off `67912d3efc6852e7`, and the guard would then reject 940 MB of correct
+features and demand a 25-minute re-extract for no reason. The human-readable
+name lives in the directory and in this registry; never in the hash.
+"""
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class Space:
+    """One backbone's feature space.
+
+    `model_kwargs` reaches `timm.create_model` untouched. DINOv2 needs it:
+    its checkpoint ships at 518x518, which costs 6.4x the compute of 224 for a
+    37x37 patch grid that we then average-pool down to the same 768 numbers.
+    At 224 the grid is 16x16 — still 5x ResNet-50's 7x7, and measured *faster*
+    than ConvNeXtV2 at the same resolution.
+    """
+
+    name: str
+    backbone: str
+    summary: str
+    target_fps: int = 1
+    model_kwargs: dict = field(default_factory=dict)
+
+
+SPACES: dict[str, Space] = {
+    s.name: s
+    for s in [
+        Space(
+            name="resnet50",
+            backbone="resnet50",
+            summary="ImageNet ResNet-50, 2048-d, 224px — the original cache",
+        ),
+        Space(
+            name="dinov2_vitb14",
+            backbone="vit_base_patch14_dinov2.lvd142m",
+            summary="DINOv2 ViT-B/14, 768-d, 224px — self-supervised, 16x16 grid",
+            model_kwargs={"img_size": 224},
+        ),
+    ]
+}
+
+# What every reader gets when it is not told otherwise. Changing this changes
+# which cache the whole project trains on, so it is a one-line decision rather
+# than a default scattered across call sites.
+DEFAULT = "resnet50"
+
+
+def get(name: str) -> Space:
+    """Look up a space, naming the registered ones when it is missing."""
+    try:
+        return SPACES[name]
+    except KeyError:
+        raise SystemExit(
+            f"unknown feature space {name!r}. Registered: {', '.join(names())}"
+        ) from None
+
+
+def names() -> list[str]:
+    """Registered space names, default first — suitable for argparse choices."""
+    rest = sorted(n for n in SPACES if n != DEFAULT)
+    return [DEFAULT, *rest]
+
+
+def describe() -> str:
+    """One line per space, for `--list`-style output."""
+    w = max(len(n) for n in SPACES)
+    return "\n".join(f"  {s.name:<{w}}  {s.summary}" for s in
+                     (SPACES[n] for n in names()))
