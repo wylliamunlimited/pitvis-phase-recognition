@@ -90,7 +90,18 @@ def build_model(device: torch.device, space: spaces.Space):
     model = timm.create_model(space.backbone, pretrained=True, num_classes=0,
                               **space.model_kwargs)
     model.eval().to(device)
-    cfg = resolve_data_config({}, model=model)
+
+    # `resolve_data_config` reports the CHECKPOINT's native config, not the
+    # model we just built. DINOv2's weights ship at 518, so without this
+    # override the transform resizes to 518 and the 224 model rejects it:
+    # "Input height (518) doesn't match model (224)". Overriding input_size is
+    # the documented way to reconcile the two, and it is what makes the hashed
+    # transform describe the tensor the backbone actually sees.
+    overrides: dict = {}
+    if "img_size" in space.model_kwargs:
+        s = space.model_kwargs["img_size"]
+        overrides["input_size"] = (3, s, s)
+    cfg = resolve_data_config(overrides, model=model)
     transform = create_transform(**cfg)
     payload = {
         "backbone": space.backbone,
