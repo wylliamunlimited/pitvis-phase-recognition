@@ -396,7 +396,9 @@ src/pitvis/
     predict.py                 decode -> embed -> both task heads; no labels needed
   models/
     run.py                     WORKFLOW: shape/param trace through all 3 stages
-                               — the executable form of notes/citi-dataflow.md
+                               — the executable form of notes/instrument-variants.md — the task-2 iteration: variants tested,
+                               the CV protocol, and the winning configuration
+  notes/citi-dataflow.md
     arst.py                    CITI's task-1 architecture: spatial embedding +
                                TeCNO + ARST (banded causal mask)
     lstm.py                    SANO's task-2 architecture: causal windowed LSTM,

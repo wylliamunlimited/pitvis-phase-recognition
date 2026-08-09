@@ -267,6 +267,13 @@ direction, not a target.
 
 ## 6. The open thread
 
+> **Superseded in part.** [`instrument-variants.md`](instrument-variants.md)
+> takes items 1 and 3 below and tests them: class rebalancing plus per-class
+> thresholds on DINOv2 features lifts macro F1 from 0.256 to 0.379 on val and
+> takes never-predicted classes from 9/19 to 0/19. Item 2 (longer window) is
+> still untested. This section stays as written — it is what we believed
+> before measuring.
+
 The frozen backbone is the same ceiling as task 1, and instruments should be
 *more* sensitive to it than steps: distinguishing eighteen surgical tools is a
 fine-grained visual problem, and the paper says two of them (micro doppler and
