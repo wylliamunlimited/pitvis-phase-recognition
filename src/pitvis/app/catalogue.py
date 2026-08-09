@@ -86,11 +86,17 @@ def _manifest() -> dict:
 
 
 def _checkpoint_mtime() -> float:
-    """Newest mtime across both task checkpoints, or 0 if neither exists."""
-    times = [p.stat().st_mtime
-             for p in (CKPT / "citi.pt", CKPT_INSTRUMENTS / "sano.pt")
-             if p.exists()]
-    return max(times, default=0.0)
+    """Newest mtime across every task checkpoint, or 0 if none exists.
+
+    Includes the task-2 variants under v2/. A prediction made before a better
+    instrument model was trained is stale in exactly the same way it is stale
+    after retraining SANO, and the staleness chip exists to say so.
+    """
+    candidates = [CKPT / "citi.pt", CKPT_INSTRUMENTS / "sano.pt"]
+    v2 = CKPT_INSTRUMENTS / "v2"
+    if v2.exists():
+        candidates += sorted(v2.glob("*/model.pt"))
+    return max((p.stat().st_mtime for p in candidates if p.exists()), default=0.0)
 
 
 def _prediction_state(case_id: str) -> dict:

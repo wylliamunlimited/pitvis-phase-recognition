@@ -126,7 +126,12 @@ function renderInstruments(doc, t, iprobs) {
     // the difference between "nothing there" and "nearly something" visible.
     const best = inst.maxClass ? doc.names.instruments[String(inst.maxClass[t])] : null;
     const p = inst.maxProb ? inst.maxProb[t] : null;
-    setText(one, `nothing above ${prob(inst.threshold)}`, 'v empty');
+    // With per-class thresholds there is no single bar to quote, and printing
+    // 0.50 beside a class whose actual bar is 0.05 would simply be false.
+    const bar = inst.perClassThresholds
+      ? 'its per-class threshold'
+      : prob(inst.threshold);
+    setText(one, `nothing above ${bar}`, 'v empty');
     // Three decimals here specifically: the runner-up sits just under the
     // threshold by definition, and at two decimals a 0.498 prints as "0.50"
     // directly beside "nothing above 0.50", which reads as a contradiction.

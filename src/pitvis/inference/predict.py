@@ -78,11 +78,12 @@ def cached_features(video: Path, space: str = spaces.DEFAULT) -> np.ndarray | No
     return None
 
 
-def embed(video: Path, device: torch.device) -> np.ndarray:
+def embed(video: Path, device: torch.device,
+          space: str = spaces.DEFAULT) -> np.ndarray:
     """Decode and embed `video` — the same code path extraction uses."""
     from pitvis.data.extract_features import build_model, embed_video
     require_ffmpeg()
-    model, transform, _ = build_model(device)
+    model, transform, _ = build_model(device, spaces.get(space))
     features, _ = embed_video(video, model, transform, device, tag=video.name)
     return features
 
@@ -144,13 +145,32 @@ def to_segments(preds: np.ndarray) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def instrument_space(ckpt_path: Path) -> str:
+    """Which feature space a task-2 checkpoint expects.
+
+    Read BEFORE the features are computed, because it decides which backbone
+    has to run. SANO's original sano.pt predates the multi-space cache and
+    carries no `space` key at all — absent means resnet50, which is what it
+    was trained on.
+    """
+    if not ckpt_path.exists():
+        return spaces.DEFAULT
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    return ckpt.get("space", spaces.DEFAULT)
+
+
 def load_instrument_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int,
                                device: torch.device):
-    """Rebuild SANO's task-2 model from a checkpoint.
+    """Rebuild a task-2 model from a checkpoint, dispatching on its tags.
 
     Returns None rather than raising when the checkpoint is absent — a video
     should still get step predictions on a machine where only task 1 has been
     trained. The caller reports the skip.
+
+    Three tags decide how the checkpoint is used, and all three are absent from
+    SANO's original sano.pt, which is why each has a default that reproduces
+    it: `arch` (sano-lstm), `space` (resnet50) and `thresholds` (None, meaning
+    the caller's global threshold).
     """
     if not ckpt_path.exists() or not std_path.exists():
         return None
@@ -159,6 +179,12 @@ def load_instrument_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int
 
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     a = ckpt["args"]
+    arch = ckpt.get("arch", "sano-lstm")
+    if arch != "sano-lstm":
+        raise SystemExit(
+            f"{ckpt_path} declares arch {arch!r}, which this inference path "
+            f"does not know how to build. Add it here rather than guessing."
+        )
     model = SanoLSTM(
         in_dim=feature_dim, hidden=a["hidden"], layers=a["layers"],
         window=a["window"], dropout=a["dropout"], aux_step=a["aux_step"],
@@ -166,13 +192,18 @@ def load_instrument_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int
     model.load_state_dict(ckpt["model"])
     model.eval()
     stats = np.load(std_path)
-    return model, stats["mean"], stats["std"], a
+    taus = ckpt.get("thresholds")
+    meta = {"arch": arch, "space": ckpt.get("space", spaces.DEFAULT),
+            "thresholds": np.asarray(taus, dtype=np.float32) if taus else None,
+            "variant": ckpt.get("variant", "sano")}
+    return model, stats["mean"], stats["std"], a, meta
 
 
 @torch.no_grad()
 def predict_instruments(features: np.ndarray, model, mean, std,
                         device: torch.device, threshold: float,
-                        chunk: int, *, return_probs: bool = False):
+                        chunk: int, *, return_probs: bool = False,
+                        thresholds: np.ndarray | None = None):
     """Run SANO. Returns (T, 2) instrument pairs in the raw challenge encoding.
 
     Delegates to the training module's `predict_video` so inference here and at
@@ -181,8 +212,33 @@ def predict_instruments(features: np.ndarray, model, mean, std,
     """
     from pitvis.training.instruments import predict_video
     x = torch.from_numpy((features - mean) / std).float()
-    return predict_video(model, x, threshold, chunk, device,
-                         return_probs=return_probs)
+    if thresholds is None:
+        return predict_video(model, x, threshold, chunk, device,
+                             return_probs=return_probs)
+
+    # Per-class thresholds need the margin-based cap, so this cannot delegate
+    # to predict_video — that one is pinned to the SANO reproduction's global
+    # rule. Same windows, same chunking; only the decision differs.
+    from pitvis.evaluation.instruments import multihot_to_pairs
+    from pitvis.models.lstm import causal_windows, decide_per_class
+    tt = torch.from_numpy(thresholds).to(device)
+    xs = x.unsqueeze(0)
+    w = causal_windows(xs, model.window)
+    keeps, probs = [], []
+    with torch.no_grad():
+        for s in range(0, xs.shape[1], chunk):
+            e = min(s + chunk, xs.shape[1])
+            wc = w[:, s:e].reshape((e - s), model.window, xs.shape[2]).to(device)
+            h = model.drop(model.lstm(wc)[0][:, -1])
+            logits = model.instruments(h)
+            keeps.append(decide_per_class(logits, tt).cpu().numpy())
+            if return_probs:
+                probs.append(torch.sigmoid(logits).cpu().numpy())
+    keep = np.concatenate(keeps)
+    pairs = multihot_to_pairs(keep)
+    if return_probs:
+        return pairs, np.concatenate(probs), keep.astype(np.int8)
+    return pairs
 
 
 def load_instrument_labels(path: Path, expected: int) -> np.ndarray | None:
