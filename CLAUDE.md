@@ -396,7 +396,9 @@ src/pitvis/
     predict.py                 decode -> embed -> both task heads; no labels needed
   models/
     run.py                     WORKFLOW: shape/param trace through all 3 stages
-                               — the executable form of notes/instrument-variants.md — the task-2 iteration: variants tested,
+                               — the executable form of notes/step-variants.md — the task-1 iteration: masking, class weights,
+                               DINOv2, and the winning configuration
+  notes/instrument-variants.md — the task-2 iteration: variants tested,
                                the CV protocol, and the winning configuration
   notes/citi-dataflow.md
     arst.py                    CITI's task-1 architecture: spatial embedding +
