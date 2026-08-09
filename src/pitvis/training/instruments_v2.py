@@ -295,8 +295,12 @@ def main(argv: list[str] | None = None) -> None:
           f"per-class tau: {variant.per_class}")
 
     if args.cv:
+        # Label by space when it is overridden, so `--variant best --space X`
+        # cannot silently overwrite the entry for `best` on its own space.
+        label = (variant.name if args.space == variant.space
+                 else f"{variant.name}@{args.space}")
         cross_validate(make_fit(variant), args, dev,
-                       variant=variant.name, space=args.space)
+                       variant=label, space=args.space)
         return
 
     # Single split: train on all of TRAIN, score VAL once. This is the run that
