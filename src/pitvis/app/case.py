@@ -223,6 +223,12 @@ def _instruments(d: Path, seconds: int, summary: dict) -> dict:
     s1 = df["int_instrument1"].to_numpy().astype(np.int64)
     s2 = df["int_instrument2"].to_numpy().astype(np.int64)
     meta = summary.get("instruments", {})
+    # A model with per-class thresholds has no single bar, and rendering 0.50
+    # beside a class whose actual bar is 0.05 would be a plain falsehood on a
+    # surface whose whole point is not flattering the model. `taus` is the
+    # 19-vector when the checkpoint carries one, None otherwise; `threshold`
+    # stays the scalar the older single-bar models use.
+    taus = meta.get("per_class_thresholds")
     threshold = float(meta.get("threshold", 0.5))
 
     state = [_instrument_state(int(a), int(b), truth=False)
@@ -247,12 +253,15 @@ def _instruments(d: Path, seconds: int, summary: dict) -> dict:
             "max_class": probs.argmax(1).astype(int).tolist(),
             # `decide` keeps only the top 2 when more clear the threshold, and
             # silently drops the rest. Surfacing that rather than hiding it.
-            "capped": ((probs >= threshold).sum(1) > 2).astype(int).tolist(),
+            "capped": ((probs >= (np.asarray(taus, dtype=np.float32)
+                                  if taus else threshold)).sum(1) > 2)
+                      .astype(int).tolist(),
         }
 
     return {
         "available": True,
         "threshold": threshold,
+        "per_class_thresholds": taus,
         "checkpoint": Path(meta.get("checkpoint", "?")).name,
         "note": NO_OUT_OF_PATIENT_CLASS,
         "lanes": _lanes(s1, s2),

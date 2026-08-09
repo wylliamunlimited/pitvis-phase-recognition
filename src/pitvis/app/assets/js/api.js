@@ -126,6 +126,9 @@ function parseInstruments(inst, seconds) {
   return {
     available: true,
     threshold: inst.threshold,
+    // null unless the checkpoint carries one bar per class, in which case
+    // there is no single number to quote to the viewer.
+    perClassThresholds: inst.per_class_thresholds || null,
     note: inst.note,
     lanes: inst.lanes || [],
     // 'none' means nothing cleared the threshold. It is NOT out-of-patient —

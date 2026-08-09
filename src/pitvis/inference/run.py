@@ -40,6 +40,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from pitvis.data import spaces
 from pitvis.data.dataset import step_name
 from pitvis.evaluation.instruments import INSTRUMENT_NAMES
 from pitvis.evaluation.instruments import report as ireport
@@ -60,10 +61,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="ground truth (.npy or annotations CSV) — enables scoring")
     ap.add_argument("--ckpt", type=Path, default=CKPT / "citi.pt")
     ap.add_argument("--standardize", type=Path, default=CKPT / "standardize.npz")
-    ap.add_argument("--instrument-ckpt", type=Path,
-                    default=CKPT_INSTRUMENTS / "sano.pt")
-    ap.add_argument("--instrument-standardize", type=Path,
-                    default=CKPT_INSTRUMENTS / "standardize.npz")
+    ap.add_argument("--instrument-ckpt", type=Path, default=None,
+                    help="task-2 checkpoint (default: the best variant if "
+                         "trained, else the SANO reproduction)")
+    ap.add_argument("--instrument-standardize", type=Path, default=None,
+                    help="task-2 standardisation stats (default: beside the "
+                         "checkpoint)")
     ap.add_argument("--threshold", type=float, default=0.5,
                     help="instrument sigmoid decision threshold")
     ap.add_argument("--no-steps", dest="steps", action="store_false",
@@ -86,6 +89,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --labels, also print the 15-way confusion matrix")
     args = ap.parse_args(argv)
 
+    # The winner ships as the default when it exists; sano.pt is the fallback
+    # so a machine that only ran the reproduction still works unchanged.
+    best = CKPT_INSTRUMENTS / "v2" / "best"
+    if args.instrument_ckpt is None:
+        args.instrument_ckpt = (best / "model.pt" if (best / "model.pt").exists()
+                                else CKPT_INSTRUMENTS / "sano.pt")
+    if args.instrument_standardize is None:
+        args.instrument_standardize = args.instrument_ckpt.parent / "standardize.npz"
+
     if not args.video.exists():
         raise SystemExit(f"video not found: {args.video}")
     if not args.steps and not args.instruments:
@@ -104,16 +116,38 @@ def main(argv: list[str] | None = None) -> int:
     print(f"video   {args.video}")
     print(f"device  {dev}")
 
-    t0 = time.time()
-    features = P.cached_features(args.video) if args.cache else None
-    if features is not None:
-        print(f"features  cache hit — {features.shape} ({time.time() - t0:.1f}s)")
-    else:
-        print("features  decoding at 1 fps (no cache entry for this video)"
-              if args.cache else "features  decoding at 1 fps (--no-cache)")
-        features = P.embed(args.video, dev)
-        print(f"          {features.shape} in {time.time() - t0:.0f}s")
+    # ONE PASS PER FEATURE SPACE, not one per task. The two tasks used to
+    # share a single decode; a task-2 model trained on a different backbone
+    # breaks that, so features are resolved per space and memoised. When both
+    # tasks want the same space -- the SANO default -- this is exactly the old
+    # behaviour and costs nothing.
+    _feats: dict[str, np.ndarray] = {}
 
+    def features_for(space: str) -> np.ndarray:
+        if space in _feats:
+            return _feats[space]
+        t = time.time()
+        f = P.cached_features(args.video, space) if args.cache else None
+        if f is not None:
+            print(f"features  [{space}] cache hit — {f.shape} "
+                  f"({time.time() - t:.1f}s)")
+        else:
+            print(f"features  [{space}] decoding at 1 fps"
+                  + ("" if args.cache else " (--no-cache)"))
+            f = P.embed(args.video, dev, space)
+            print(f"          [{space}] {f.shape} in {time.time() - t:.0f}s")
+        _feats[space] = f
+        return f
+
+    step_space = spaces.DEFAULT
+    inst_space = (P.instrument_space(args.instrument_ckpt)
+                  if args.instruments else step_space)
+    if args.instruments and inst_space != step_space and args.steps:
+        print(f"note    the two tasks use different feature spaces "
+              f"({step_space} for steps, {inst_space} for instruments), "
+              f"so this video is embedded twice")
+
+    features = features_for(step_space if args.steps else inst_space)
     summary = {"video": str(args.video), "tasks": []}
     n_frames = len(features)
 
@@ -187,23 +221,31 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- task 2: instruments ----------------------------------------------
     if args.instruments:
+        ifeatures = features_for(inst_space)
         loaded = P.load_instrument_checkpoint(
             args.instrument_ckpt, args.instrument_standardize,
-            features.shape[1], dev,
+            ifeatures.shape[1], dev,
         )
         if loaded is None:
             print(f"\ntask 2  SKIPPED — no checkpoint at {args.instrument_ckpt}\n"
                   f"        train one with `uv run pitvis-train instruments`")
         else:
-            imodel, imean, istd, iargs = loaded
+            imodel, imean, istd, iargs, imeta = loaded
+            n_frames = len(ifeatures)
             print(f"\ntask 2  {args.instrument_ckpt.name}  "
-                  f"(window={iargs['window']}, seed={iargs['seed']})")
+                  f"(variant={imeta['variant']}, space={imeta['space']}, "
+                  f"window={iargs['window']}, seed={iargs['seed']})")
+            if imeta["thresholds"] is not None:
+                lo, hi = imeta["thresholds"].min(), imeta["thresholds"].max()
+                print(f"        per-class thresholds {lo:.2f}-{hi:.2f}, "
+                      f"capped by margin")
             print(f"        threshold={args.threshold}")
 
             t2 = time.time()
-            iout = P.predict_instruments(features, imodel, imean, istd, dev,
+            iout = P.predict_instruments(ifeatures, imodel, imean, istd, dev,
                                          args.threshold, args.chunk,
-                                         return_probs=args.probs)
+                                         return_probs=args.probs,
+                                         thresholds=imeta["thresholds"])
             inst, iprobs, ikeep = iout if args.probs else (iout, None, None)
             print(f"        {len(inst)} seconds in {time.time() - t2:.0f}s")
 
@@ -226,6 +268,10 @@ def main(argv: list[str] | None = None) -> int:
                 "frames": int(len(inst)), "threshold": args.threshold,
                 "classes_predicted": len(present),
                 "checkpoint": str(args.instrument_ckpt),
+                "variant": imeta["variant"], "space": imeta["space"],
+                "per_class_thresholds": (None if imeta["thresholds"] is None
+                                         else [round(float(t), 3)
+                                               for t in imeta["thresholds"]]),
             }
 
             if iprobs is not None:
