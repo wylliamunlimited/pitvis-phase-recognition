@@ -653,6 +653,7 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "timm" },
     { name = "torch" },
+    { name = "torchvision" },
 ]
 
 [package.dev-dependencies]
@@ -668,6 +669,7 @@ requires-dist = [
     { name = "scikit-learn", specifier = ">=1.5" },
     { name = "timm", specifier = ">=1.0" },
     { name = "torch", specifier = ">=2.4" },
+    { name = "torchvision", specifier = ">=0.19" },
 ]
 
 [package.metadata.requires-dev]
