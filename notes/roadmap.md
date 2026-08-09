@@ -77,11 +77,16 @@ loader.
       variable lengths with a mask. Build all three behind one interface so
       model code never touches `.npy` paths.
 
-- [ ] **1.5 Imbalance utilities.** Class frequencies from the train split →
-      inverse-frequency and effective-number class weights, plus a balanced
-      sampler. The metric is macro-averaged over a 23.9% / 0.06% distribution
-      while the baseline uses unweighted cross-entropy, so this is a direct
-      mismatch between what we optimise and what we are scored on.
+- [~] **1.5 Imbalance utilities.** Done for task 2, still open for task 1.
+      `training/instruments_v2.py` computes capped inverse-frequency
+      `pos_weight` from the fold's own training videos, and it is the single
+      largest win measured so far: macro F1 0.296 → 0.401 out of fold, with
+      classes never predicted going 7/19 → 0/19. The steps model still trains
+      on unweighted cross-entropy over a 23.9% / 0.06% distribution while being
+      scored macro, so the same mismatch remains there.
+      No balanced *sampler* was needed — `pos_weight` reweights the loss without
+      changing the effective epoch length, which keeps a variant comparable to
+      its control on the same compute budget.
 
 - [ ] **1.6 Generalised extraction path.** `extract_features.py` is hardcoded to
       `26531686/video_{n:02d}.mp4` and the `annotations_{n}.csv` convention
@@ -167,14 +172,19 @@ before the next one starts, so we always know what an idea actually bought.
       surfaced. Results and the val->test caveat in `notes/instruments.md`.
       Note this is the *standalone* task-2 model; 3.5 below is still open.
 
-- [ ] **3.5 (D) Instruments as an auxiliary task.** Every annotation row carries
-      `int_instrument1` / `int_instrument2` and we currently discard both. The
-      instrument in view is strongly predictive of the step, and multi-task
-      supervision is a well-established win on this kind of data. Cheap to try
-      once 1.4 exists.
+- [x] **3.5 (D) Instruments as an auxiliary task.** Done in the other
+      direction: `models/lstm.py` carries a 15-way step head alongside the
+      19-way instrument head, trained and discarded, which is SANO's own
+      "step (just for training)" design. `--no-aux-step` ablates it. The
+      reverse — instruments supervising the *step* model — is still untested.
 
-- [ ] **3.6 (D) End-to-end fine-tuned backbone.** Gated on 1.7. Highest expected
-      gain, highest cost.
+- [ ] **3.6 (D) End-to-end fine-tuned backbone.** Gated on 1.7. Still the
+      largest untested lever, and the evidence for it firmed up: swapping the
+      *frozen* encoder to DINOv2 gains +0.055 macro once the loss is fixed
+      (`notes/instrument-variants.md`), which says the representation genuinely
+      binds — but only after the imbalance defect stops masking it. Fine-tuning
+      is the version of that lever we cannot pull until extraction keeps
+      pixels.
 
 ---
 
@@ -194,10 +204,14 @@ The metric itself is done and tested; what is missing is everything *around* it.
       boundaries drift, and which of the 5 val videos drive the variance.
 - [ ] **4.3 Ablations.** Temporal context length, class weighting on/off,
       post-processing on/off.
-- [ ] **4.4 Split-variance caveat.** Five validation videos is a small sample and
-      the reported std is across only those five. Worth stating explicitly
-      wherever we quote a number, and worth a cross-validation run before
-      believing any small improvement.
+- [x] **4.4 Split-variance caveat.** `data/folds.py` + `training/crossval.py`.
+      Variants are ranked by 5-fold cross-validation over the 19 training
+      videos — each held out exactly once, scored per-video-then-mean — and VAL
+      is touched once, for the winner. Folds are frozen literals so every
+      variant sees the identical partition.
+      It earned its keep immediately: DINOv2 alone gains +0.021 macro against a
+      ±0.048 fold spread, which on the five-video split could easily have read
+      as a real improvement and been shipped.
 
 ---
 
@@ -284,6 +298,32 @@ the *where*.
 - [ ] **5.9 Multi-case comparison.** Seam exists: case documents are
       self-contained (comparison is N fetches) and `renderTimeline` is a pure
       function of its arguments.
+
+---
+
+## Phase 6 — Task-2 iteration (done)
+
+Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
+
+- [x] **6.1 Multi-space feature cache.** `data/features/<space>/`, named in
+      `data/spaces.py`. The hashed payload is frozen, so the existing cache
+      migrated by rename rather than re-extraction and still verifies at
+      `67912d3efc6852e7`.
+- [x] **6.2 Cross-validation harness.** See 4.4.
+- [x] **6.3 Variants tested.** control / weighted / thresholds / dinov2 /
+      composed. Winner is pos_weight + per-class thresholds on DINOv2:
+      **macro 0.2556 → 0.3792 on val, official 0.2321 → 0.5572, and 9/19
+      classes never predicted → 0/19.**
+- [x] **6.4 Wired into the product.** `pitvis-predict` and the app dispatch on
+      the checkpoint's arch/space tags and embed per space. `sano.pt` is
+      untouched and still reproduces byte for byte.
+- [ ] **6.5 Four classes are emitted but not usable.** Classes 1, 4, 12 and 17
+      are predicted 1, 25, 19 and 7 times against supports of 184–492, so
+      "0 never predicted" flatters. They cleared the bar of being emitted
+      without becoming useful, and that is the next honest target.
+- [ ] **6.6 The same treatment for task 1.** Steps still train on unweighted
+      cross-entropy with a global argmax; 1.5 and the masking win recorded in
+      `CLAUDE.md` are both unclaimed there.
 
 ---
 
