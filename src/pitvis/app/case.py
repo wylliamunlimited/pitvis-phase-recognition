@@ -154,8 +154,20 @@ def _prediction(d: Path, ref: CaseRef, raw_steps: np.ndarray,
         "available": True,
         "stale": bool(ref.prediction.get("stale")),
         "computed_at": ref.prediction.get("computed_at"),
+        # Which model produced this. There are now four checkpoint families
+        # and three feature spaces, and every v2 checkpoint is named `model.pt`
+        # — so the filename alone cannot answer "what am I looking at". These
+        # three keys have been written into summary.json since the variant
+        # work landed; they were being dropped here.
+        #
+        # They are absent from every prediction made before that, which is the
+        # common case rather than the edge one, so the wire carries None and
+        # the UI says so rather than rendering a confident blank.
         "model": {
             "task1": {
+                "name": steps.get("model"),
+                "variant": steps.get("variant"),
+                "space": steps.get("space"),
                 "checkpoint": Path(steps.get("checkpoint", "?")).name,
                 "width": steps.get("width"),
                 "cci": steps.get("cci"),
@@ -263,6 +275,11 @@ def _instruments(d: Path, seconds: int, summary: dict) -> dict:
         "threshold": threshold,
         "per_class_thresholds": taus,
         "checkpoint": Path(meta.get("checkpoint", "?")).name,
+        # Same reasoning as task 1's model card: None on anything predicted
+        # before the variant work, and the UI states that rather than hiding it.
+        "variant": meta.get("variant"),
+        "space": meta.get("space"),
+        "classes_predicted": meta.get("classes_predicted"),
         "note": NO_OUT_OF_PATIENT_CLASS,
         "lanes": _lanes(s1, s2),
         "per_second": per_second,
