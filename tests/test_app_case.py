@@ -131,6 +131,49 @@ def test_case_document_is_json_serialisable(synthetic):
     assert json.loads(json.dumps(doc)) == doc
 
 
+# --------------------------------------------------------------------------
+# Provenance — which model produced what is on screen
+
+
+def test_model_provenance_reaches_the_wire(synthetic, tmp_path):
+    """There are four checkpoint families and three feature spaces, and every
+    v2 checkpoint is named `model.pt` — so the filename alone cannot say what
+    produced a number. summary.json has carried these tags since the variant
+    work; case.py was dropping them."""
+    d = tmp_path / "predictions" / "case_x"
+    summary = json.loads((d / "summary.json").read_text())
+    summary["steps"] |= {"model": "arst-v2", "variant": "best",
+                         "space": "dinov2_vitb14"}
+    summary["instruments"] |= {"variant": "weighted", "space": "dinov2_vitb14",
+                               "classes_predicted": 11}
+    (d / "summary.json").write_text(json.dumps(summary))
+
+    doc = C.build_case(synthetic)
+    task1 = doc["prediction"]["model"]["task1"]
+    assert (task1["name"], task1["variant"], task1["space"]) \
+        == ("arst-v2", "best", "dinov2_vitb14")
+    assert task1["width"] == 5 and task1["cci"] is True   # the old keys survive
+
+    inst = doc["instruments"]
+    assert (inst["variant"], inst["space"], inst["classes_predicted"]) \
+        == ("weighted", "dinov2_vitb14", 11)
+
+
+def test_provenance_is_absent_not_invented_on_older_predictions(synthetic):
+    """The common case, not the edge one: nothing predicted before the variant
+    work carries these tags, so the wire must say None and let the UI report
+    that rather than render a confident blank."""
+    doc = C.build_case(synthetic)          # the fixture's summary has no tags
+    task1 = doc["prediction"]["model"]["task1"]
+    assert task1["name"] is None
+    assert task1["variant"] is None
+    assert task1["space"] is None
+    # ...but what IS known is still reported.
+    assert task1["checkpoint"] == "citi.pt"
+    assert doc["instruments"]["variant"] is None
+    assert doc["instruments"]["checkpoint"] == "sano.pt"
+
+
 def test_every_per_second_array_has_exactly_one_entry_per_second(synthetic):
     doc = C.build_case(synthetic)
     n = doc["video"]["seconds"]
