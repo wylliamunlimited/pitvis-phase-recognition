@@ -43,6 +43,15 @@ class Space:
     summary: str
     target_fps: int = 1
     model_kwargs: dict = field(default_factory=dict)
+    # Fine-tuned weights, relative to data/. None means the timm pretrained
+    # weights, i.e. an off-the-shelf encoder.
+    checkpoint: str | None = None
+    # "video" decodes the mp4; "frames" reads the JPEG cache. A fine-tuned
+    # encoder MUST read frames: it was tuned on 384px centre-square JPEGs
+    # cropped to 224, and feeding it pixels framed differently would measure
+    # the preprocessing mismatch as much as the model.
+    source: str = "video"
+    frame_size: int = 384
 
 
 SPACES: dict[str, Space] = {
@@ -52,6 +61,13 @@ SPACES: dict[str, Space] = {
             name="resnet50",
             backbone="resnet50",
             summary="ImageNet ResNet-50, 2048-d, 224px — the original cache",
+        ),
+        Space(
+            name="resnet50_ft",
+            backbone="resnet50",
+            summary="ResNet-50 fine-tuned on PitVis frames — surgical-specific",
+            checkpoint="backbone/resnet50-5ep/backbone.pt",
+            source="frames",
         ),
         Space(
             name="dinov2_vitb14",

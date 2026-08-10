@@ -44,7 +44,8 @@ import torch
 from PIL import Image
 
 from pitvis.data import spaces
-from pitvis.paths import FEATURES, RAW, features_dir, manifest_path, video_dir
+from pitvis.paths import (DATA, FEATURES, RAW, features_dir, manifest_path,
+                          video_dir)
 
 BATCH = 64
 
@@ -89,6 +90,14 @@ def build_model(device: torch.device, space: spaces.Space):
 
     model = timm.create_model(space.backbone, pretrained=True, num_classes=0,
                               **space.model_kwargs)
+    if space.checkpoint:
+        ck = torch.load(DATA / space.checkpoint, map_location="cpu",
+                        weights_only=False)
+        missing, unexpected = model.load_state_dict(ck["backbone"], strict=False)
+        if unexpected:
+            raise SystemExit(f"{space.checkpoint}: unexpected keys {unexpected[:4]}")
+        print(f"loaded fine-tuned weights from {space.checkpoint}"
+              + (f" ({len(missing)} head keys absent, as expected)" if missing else ""))
     model.eval().to(device)
 
     # `resolve_data_config` reports the CHECKPOINT's native config, not the
@@ -101,6 +110,11 @@ def build_model(device: torch.device, space: spaces.Space):
     if "img_size" in space.model_kwargs:
         s = space.model_kwargs["img_size"]
         overrides["input_size"] = (3, s, s)
+    if space.source == "frames":
+        # The frame cache is already a centre square, and fine-tuning resized
+        # it straight to 224. crop_pct=1.0 reproduces that exactly; the default
+        # 0.95 would crop again and re-introduce the mismatch this avoids.
+        overrides["crop_pct"] = 1.0
     cfg = resolve_data_config(overrides, model=model)
     transform = create_transform(**cfg)
     payload = {
@@ -112,6 +126,15 @@ def build_model(device: torch.device, space: spaces.Space):
             for k in ("crop_mode", "crop_pct", "input_size", "interpolation", "mean", "std")
         },
     }
+    # Extra keys ONLY when they are non-default, so resnet50's payload -- and
+    # therefore its id 67912d3efc6852e7 and its 940 MB of cached features --
+    # is bit-for-bit what it always was.
+    if space.checkpoint:
+        digest = hashlib.sha256((DATA / space.checkpoint).read_bytes()).hexdigest()
+        payload["checkpoint"] = digest[:16]
+    if space.source != "video":
+        payload["source"] = space.source
+        payload["frame_size"] = space.frame_size
     payload["id"] = space_id(payload)
     return model, transform, payload
 
@@ -287,11 +310,49 @@ def embed_video(video: Path, model, transform, device: torch.device,
 
 
 @torch.no_grad()
+def embed_frames(vid: int, size: int, model, transform, device: torch.device,
+                 tag: str | None = None) -> np.ndarray:
+    """Embed a video from the JPEG frame cache rather than the mp4.
+
+    The path a fine-tuned encoder must take. It was tuned on these exact
+    files -- same centre-square crop, same 384px source -- so re-deriving
+    pixels from the video would introduce a preprocessing difference and the
+    measurement would confound the model with the framing. It also skips the
+    ~18-minute ffmpeg decode entirely.
+    """
+    from pitvis.data.extract_frames import video_frames
+    d = video_frames(size, vid)
+    paths = sorted(d.glob("*.jpg"))
+    if not paths:
+        raise SystemExit(
+            f"no frames at {d} — run `uv run pitvis-frames --size {size}` first"
+        )
+    tag = tag or f"video {vid:02d}"
+    t0, feats, batch = time.time(), [], []
+
+    def flush():
+        if batch:
+            feats.append(model(torch.stack(batch).to(device)).float().cpu().numpy())
+            batch.clear()
+
+    for n, path in enumerate(paths, 1):
+        batch.append(transform(Image.open(path).convert("RGB")))
+        if len(batch) == BATCH:
+            flush()
+        if n % 1000 == 0:
+            print(f"  {tag}: {n}/{len(paths)} ({n / (time.time() - t0):.0f} fps)")
+    flush()
+    return np.concatenate(feats).astype(np.float32)
+
+
+@torch.no_grad()
 def extract_video(vid: int, model, transform, device: torch.device, manifest: dict,
-                  space: str = spaces.DEFAULT) -> None:
+                  space: spaces.Space | None = None) -> None:
+    space = space or spaces.get(spaces.DEFAULT)
+    name = space.name
     video = RAW / f"video_{vid:02d}.mp4"
-    out_dir = video_dir(space, vid)
-    mpath = manifest_path(space)
+    out_dir = video_dir(name, vid)
+    mpath = manifest_path(name)
     nb_frames, r, _, _ = probe(video)
     expected = math.ceil(nb_frames / r)
 
@@ -322,7 +383,17 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
         print(f"video {vid:02d}: found {len(existing)} != {expected} frames, redoing")
 
     t0 = time.time()
-    features, r = embed_video(video, model, transform, device, tag=f"video {vid:02d}")
+    if space.source == "frames":
+        features = embed_frames(vid, space.frame_size, model, transform, device,
+                                tag=f"video {vid:02d}")
+        if len(features) != expected:
+            raise RuntimeError(
+                f"video {vid:02d}: frame cache holds {len(features)}, expected "
+                f"{expected} — the frame cache and the video disagree"
+            )
+    else:
+        features, r = embed_video(video, model, transform, device,
+                                  tag=f"video {vid:02d}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     np.save(feat_path, features)
@@ -367,7 +438,7 @@ def main(argv: list[str] | None = None) -> None:
     manifest = load_manifest(payload, manifest_path(space.name))
     print(f"feature space id: {payload['id']}  dim: {payload['feature_dim']}")
     for vid in vids:
-        extract_video(vid, model, transform, device, manifest, space.name)
+        extract_video(vid, model, transform, device, manifest, space)
 
 
 if __name__ == "__main__":
