@@ -195,12 +195,76 @@ working, and the detail panel names it:
 
 ---
 
+## 4b. Why it stopped looking like a video editor
+
+The first version put a six-lane timeline along the bottom, a transport row
+under the video and an asset picker in the header. That is a non-linear editor,
+and `timeline.js` had already said so in its own comment: *"six stacked channels
+is what a video editor looks like, and it invites reading the timeline as a
+workspace rather than as an answer."*
+
+The fix was not to restyle it. It was to move **what is happening now onto the
+image**, PACS-fashion, and give the rail to a question a timeline cannot
+answer.
+
+**Four saccades became one fixation.** Case identity, elapsed time, current
+step and instruments in view were four separate places to look — header, header,
+rail card, rail card. They are now burned into the corners of the frame, where
+the eye already is. That is what let the rail drop two cards while saying more
+than before, and it is the whole argument for the burn-in.
+
+It is DOM above the `#overlay` canvas, never painted into it. The canvas works
+in video pixels and belongs to the agentic layer (5.4); corner text wants screen
+pixels at a fixed size, and mixing the two conventions would have ruined the
+layer registry before it had a layer. It shares the *geometry* — at 1440×900 the
+video renders 1031×580 inside a 1031×688 frame, so ~54px of paper sits above and
+below it, and corners pinned to the frame would float off the image.
+
+Legibility over both a bright mucosa frame and a near-black out-of-patient frame
+is a white glyph with a tight hard halo, which is how broadcast and DICOM solve
+it. Not a translucent scrim box: that is a lower-third, which is the register
+being removed.
+
+**The worklist answers the question the timeline could not.** Fourteen steps in
+canonical order, always all of them. Measured on the predictions: first-visit
+order is near-monotonic — two inversions per case — so a fixed order is measured
+rather than imposed. But a step is not one block: steps are revisited 13-26
+times per case, so a row aggregates across visits, and *haemostasis ×7* is a
+fact the app previously could not express anywhere.
+
+The decisive argument is absence. video_25 never predicts steps 3, 5, 6, 11, 12
+or 13. "Durotomy was never detected" is arguably the most clinically interesting
+fact about that case, and a log of what happened **cannot state it** — there is
+no row for a thing that did not happen. Same principle as the dotted absent lane.
+
+The status column *is* the phase ramp, so the list reads top-to-bottom as the
+same single-hue deepening the progress bar reads left-to-right — one colour
+system, two projections, no new colours. Deliberately not a checkmark: a tick
+asserts verification.
+
+**The instrument tray is a record, not a chart.** The obvious thing to do with
+`instruments.lanes` is draw the intervals, and that is the trap: suction alone
+has **201 intervals on video_25 and 319 on video_01**. Nineteen rows of that is
+a barcode, and a barcode with labels is the multitrack timeline again. So the
+tray carries no horizontal geometry mapped to time — name, share, total, and the
+interval count, which is the part that matters. A tool picked up 38 times is a
+different story from one held for 41 minutes.
+
+The interval geometry does exist, in one place: selecting a row lights that
+class on the timeline's existing TOOLS lane. Nineteen lanes become one lane plus
+a selection, which honours the identity/density split the timeline already
+documented instead of contradicting it.
+
+---
+
 ## 5. Honesty is load-bearing, not decoration
 
-ARST scores **0.331** on the challenge metric and gets **40.5%** of seconds
-right on video_25. A composed, clinical-looking surface makes any number on it
-read as authority. Four things exist specifically to resist that, and none of
-them should be trimmed for cleanliness:
+The best step model scores **0.461 ± 0.043** on the challenge metric — and the
+predictions this app is usually shown with are the earlier reproduction, which
+scores 0.340 across the val split and gets **40.5%** of seconds right on
+video_25. A composed, clinical-looking surface makes any number on it read as
+authority. Five things exist specifically to resist that, and none of them
+should be trimmed for cleanliness:
 
 1. **`RESEARCH — NOT FOR CLINICAL USE`** in the header, non-dismissible.
 2. **The split chip turns amber on a training video.** video_02 reads 0.891
@@ -211,6 +275,12 @@ them should be trimmed for cleanliness:
 3. **Missing ground truth is stated, never blank.** video_19 has no
    `annotations_19.csv` — a gap in the download, not an exclusion. Its truth
    lane says so in words. An empty lane would read as "all background".
+5. **The provenance chip says `MODEL NOT RECORDED`** when it is. Four
+   checkpoint families and three feature spaces now exist, and every v2
+   checkpoint is called `model.pt` — so a filename cannot answer "what am I
+   looking at". Predictions made before the tags existed carry none, which is
+   the common case rather than the edge one, and the chip says so in amber
+   rather than rendering a confident blank.
 4. **Confidence is always a number**, never a bar alone, and scores are
    labelled *this video alone — NOT the 5-video mean±std* that the paper and
    the README quote.
