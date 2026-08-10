@@ -19,8 +19,8 @@
       <select id="case-select"></select>
     </label>
     <span class="split" id="split"></span>
+    <span class="prov" id="prov"></span>
     <span class="grow"></span>
-    <span class="clock" id="clock">--:--:-- / --:--:--</span>
     <button id="detail-toggle" class="ghost" aria-pressed="false">+ DETAIL</button>
     <span class="chip warn" title="This renders research model output on recorded video. It is not a medical device and must not inform clinical decisions.">RESEARCH — NOT FOR CLINICAL USE</span>
   </header>
@@ -30,8 +30,33 @@
       <div class="frame brk" id="frame">
         <video id="video" preload="metadata" playsinline></video>
         <!-- Seam (a): the agentic explanation layer draws here. Sized to the
-             video's displayed rect, empty until something registers a layer. -->
+             video's displayed rect, empty until something registers a layer.
+             The burn-in below sits ABOVE this canvas and never draws into it —
+             the canvas works in video pixels, burn-in text works in screen
+             pixels, and mixing the two would ruin the layer registry before it
+             has a layer. -->
         <canvas id="overlay"></canvas>
+
+        <!-- Burned into the image, PACS convention. Positioned against the
+             VIDEO rect, not the frame: the video letterboxes, so at 1440x900
+             there are ~54px of paper above and below it. -->
+        <div class="burn" id="burn">
+          <div class="corner tl">
+            <span class="id" id="b-case">--</span>
+            <span class="sub" id="b-split"></span>
+            <span class="sub warn">RESEARCH — NOT FOR CLINICAL USE</span>
+          </div>
+          <div class="corner tr">
+            <span class="id" id="b-clock">--:--:-- / --:--:--</span>
+          </div>
+          <div class="corner bl">
+            <span class="step" id="b-step">--</span>
+          </div>
+          <div class="corner br">
+            <span class="inst" id="b-inst">--</span>
+          </div>
+        </div>
+
         <div class="veil" id="veil"><span></span></div>
       </div>
 
@@ -43,51 +68,50 @@
         <button id="prevseg" title="previous step ([)">&lsaquo; STEP</button>
         <button id="nextseg" title="next step (])">STEP &rsaquo;</button>
         <span class="grow"></span>
-        <button id="rerun" class="ghost">RE-RUN</button>
+        <button id="rerun" class="ghost more">RE-RUN</button>
       </div>
     </section>
 
     <aside class="rail">
 
-      <section class="card brk" id="step-card">
-        <div class="cap">CURRENT STEP</div>
-        <div class="step-body">
-          <div class="tint" id="step-tint"></div>
-          <div class="num" id="step-num">--</div>
-          <div class="meta">
-            <div class="name" id="step-name">no prediction</div>
-            <div class="sub">
-              <span id="step-elapsed">--:--</span>
-              <span class="sep">of</span>
-              <span id="step-total">--:--</span>
-            </div>
-          </div>
+      <div class="tiles" id="tiles">
+        <div class="tile brk">
+          <span class="cap">STEP</span>
+          <span class="v" id="t-step">--</span>
+          <span class="u" id="t-elapsed">--:--</span>
         </div>
+        <div class="tile brk">
+          <span class="cap">STEPS SEEN</span>
+          <span class="v" id="t-seen">--</span>
+          <span class="u">of 14</span>
+        </div>
+        <div class="tile brk more">
+          <span class="cap">CONFIDENCE</span>
+          <span class="v" id="t-conf">--</span>
+          <span class="u" id="t-conf-note"></span>
+        </div>
+      </div>
 
-        <div class="more">
-          <div class="conf" id="conf-row">
-            <span class="cap">CONFIDENCE</span>
-            <span class="bar"><i id="conf-fill"></i></span>
-            <span class="val" id="conf-val">--</span>
-          </div>
-          <div class="alt" id="step-alt" hidden></div>
-        </div>
+      <section class="card brk" id="worklist-card">
+        <div class="cap">PROCEDURE STEPS</div>
+        <ol class="worklist" id="worklist"></ol>
+        <div class="wl-foot" id="wl-foot"></div>
       </section>
 
-      <section class="card brk" id="inst-card">
-        <div class="cap">INSTRUMENTS</div>
-        <div class="slots">
-          <div class="slot"><span class="cap">PRIMARY</span>
-            <span class="v" id="inst1">--</span></div>
-          <div class="slot"><span class="cap">SECONDARY</span>
-            <span class="v" id="inst2">--</span></div>
-        </div>
-        <ul class="probs more" id="inst-probs"></ul>
+      <section class="card brk more" id="inst-card">
+        <div class="cap">INSTRUMENT USE</div>
+        <ul class="tray" id="tray"></ul>
+        <div class="tray-foot" id="tray-foot"></div>
       </section>
 
       <section class="card brk more" id="ref-card">
         <div class="cap">GROUND TRUTH</div>
         <div id="ref-body"></div>
+      </section>
+
+      <section class="card brk more" id="alt-card" hidden>
+        <div class="cap">POST-PROCESSING</div>
+        <div class="alt" id="step-alt"></div>
       </section>
 
     </aside>
