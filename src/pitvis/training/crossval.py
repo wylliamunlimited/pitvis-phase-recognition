@@ -98,10 +98,50 @@ def git_rev() -> str:
         return "unknown"
 
 
+def encoder_saw(space: str) -> list[int] | None:
+    """Videos the space's encoder was fine-tuned on, or None if it is frozen."""
+    from pitvis.paths import manifest_path
+    p = manifest_path(space)
+    if not p.exists():
+        return None
+    return json.loads(p.read_text()).get("space", {}).get("_trained_on")
+
+
+def check_no_leak(space: str, k: int) -> None:
+    """Refuse a fold whose held-out videos the encoder has already seen.
+
+    THE FAILURE THIS EXISTS FOR, because it already happened once. A backbone
+    fine-tuned on all 19 TRAIN videos -- with their step and instrument labels,
+    to 0.944 frame accuracy -- was then cross-validated over folds drawn from
+    that same set. Every "held-out" video's features came from an encoder that
+    had memorised its answers, and the scores went from 0.504 to 0.917 macro on
+    steps. That is the size of the leak, not the size of an improvement.
+
+    A fine-tuned space is only valid for cross-validation if there is one
+    encoder per fold, each trained with that fold's videos excluded.
+    """
+    seen = encoder_saw(space)
+    if seen is None:
+        return                                   # frozen encoder: nothing to leak
+    overlap = sorted(set(seen) & {v for f in fold_ids(k) for v in f})
+    if overlap:
+        raise SystemExit(
+            f"LEAK: the encoder behind space {space!r} was fine-tuned on "
+            f"{len(overlap)} of the videos this cross-validation holds out "
+            f"({overlap[:6]}{'...' if len(overlap) > 6 else ''}).\n"
+            f"Its features already encode their labels, so the scores would be "
+            f"memorisation.\n"
+            f"Fix: one encoder per fold —\n"
+            f"    uv run pitvis-finetune --exclude <fold videos> --tag fold<i>\n"
+            f"or score on VAL instead, which no TRAIN-fitted encoder has seen."
+        )
+
+
 def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
                    space: str, task: Task = INSTRUMENTS, k: int = 5,
                    quiet: bool = False) -> dict:
     """Fit `k` models, score every training video out of fold, aggregate once."""
+    check_no_leak(space, k)
     t0 = time.time()
     # Loaded once and sliced. 19 videos at 2048-d is ~693 MB; reloading it per
     # fold would turn a 5-minute sweep into a disk-bound one.

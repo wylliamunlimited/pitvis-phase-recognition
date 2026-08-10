@@ -178,6 +178,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--device", default=None, choices=("cuda", "mps", "cpu"))
     ap.add_argument("--tag", default=None,
                     help="output directory name (default: <backbone>-<epochs>ep)")
+    ap.add_argument("--exclude", type=int, nargs="*", default=None, metavar="V",
+                    help="video ids to hold OUT of fine-tuning. Required for a "
+                         "per-fold backbone: a cross-validation fold is only "
+                         "honest if the encoder never saw its held-out videos")
     ap.add_argument("--limit", type=int, default=None,
                     help="cap training frames — for smoke tests only")
     args = ap.parse_args(argv)
@@ -187,12 +191,16 @@ def main(argv: list[str] | None = None) -> None:
     out = CKPT_BACKBONE / tag
     out.mkdir(parents=True, exist_ok=True)
 
-    train_ds = Frames(TRAIN, args.size, train=True)
+    excluded = set(args.exclude or [])
+    videos = [v for v in TRAIN if v not in excluded]
+    if excluded:
+        print(f"holding out {sorted(excluded)} — this backbone never sees them")
+    train_ds = Frames(videos, args.size, train=True)
     val_ds = Frames(VAL, args.size, train=False)
     if args.limit:
         train_ds.items = train_ds.items[:args.limit]
     print(f"device {dev}  backbone {args.backbone}  epochs {args.epochs}")
-    print(f"train {len(train_ds):,} frames from {len(TRAIN)} videos   "
+    print(f"train {len(train_ds):,} frames from {len(videos)} videos   "
           f"val {len(val_ds):,} from {len(VAL)}")
 
     loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True,
@@ -230,12 +238,16 @@ def main(argv: list[str] | None = None) -> None:
               f"step-acc {correct / seen:.3f}  [{time.time() - te:.0f}s]")
 
     # Only the backbone matters downstream — the heads exist to shape it.
-    torch.save({"backbone": model.backbone.state_dict(),
-                "name": args.backbone, "args": vars(args)}, out / "backbone.pt")
+    # `trained_on` is what lets crossval refuse to hold out a video this
+    # encoder has already memorised. Without it the leak is invisible.
+    torch.save({"backbone": model.backbone.state_dict(), "name": args.backbone,
+                "trained_on": sorted(videos), "args": vars(args)},
+               out / "backbone.pt")
     (out / "result.json").write_text(json.dumps(
         {"backbone": args.backbone, "epochs": args.epochs,
-         "train_frames": len(train_ds), "seconds": round(time.time() - t0, 1),
-         "args": vars(args)}, indent=2) + "\n")
+         "train_frames": len(train_ds), "trained_on": sorted(videos),
+         "seconds": round(time.time() - t0, 1), "args": vars(args)},
+        indent=2) + "\n")
     print(f"\nwrote {out / 'backbone.pt'}  [{(time.time() - t0) / 60:.1f} min]")
     print(f"next: add a space pointing at it, then `uv run pitvis-extract "
           f"--space <name>`")

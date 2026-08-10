@@ -70,8 +70,14 @@ def probe(video: Path) -> tuple[int, int, int, int]:
 
 
 def space_id(space: dict) -> str:
-    """Content hash of a feature-space dict (without its 'id' key)."""
-    payload = {k: v for k, v in space.items() if k != "id"}
+    """Content hash of a feature-space dict.
+
+    Keys starting with `_` are provenance carried alongside rather than
+    identity: `_trained_on` is already implied by the checkpoint digest, and
+    hashing it would make the id depend on how the list happened to be sorted.
+    """
+    payload = {k: v for k, v in space.items()
+               if k != "id" and not k.startswith("_")}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -130,8 +136,18 @@ def build_model(device: torch.device, space: spaces.Space):
     # therefore its id 67912d3efc6852e7 and its 940 MB of cached features --
     # is bit-for-bit what it always was.
     if space.checkpoint:
-        digest = hashlib.sha256((DATA / space.checkpoint).read_bytes()).hexdigest()
-        payload["checkpoint"] = digest[:16]
+        # Digest the WEIGHTS, not the file. Hashing the container made the id
+        # move when a provenance key was added to it, invalidating 940 MB of
+        # features whose contents were bit-identical. Identity is what the
+        # encoder computes, not how it was serialised.
+        h = hashlib.sha256()
+        for key in sorted(ck["backbone"]):
+            h.update(key.encode())
+            h.update(ck["backbone"][key].cpu().numpy().tobytes())
+        payload["checkpoint"] = h.hexdigest()[:16]
+        # Carried out of band, not hashed — it is already implied by the
+        # digest. crossval reads it to refuse folds the encoder has seen.
+        payload["_trained_on"] = ck.get("trained_on")
     if space.source != "video":
         payload["source"] = space.source
         payload["frame_size"] = space.frame_size
@@ -150,13 +166,21 @@ def load_manifest(payload: dict, path: Path) -> dict:
         return {"space": payload, "videos": {}}
     manifest = json.loads(path.read_text())
     canonical = json.loads(json.dumps(payload))  # tuples -> lists, as stored
-    if manifest["space"] != canonical:
+
+    # Compare only the keys that define identity. Provenance (`_`-prefixed) is
+    # carried alongside and refreshed in place: it is already implied by the
+    # checkpoint digest, so letting it force a mismatch would reject a cache
+    # for a reason the id itself does not see -- and produce the memorable
+    # error "space X != current X".
+    ident = lambda d: {k: v for k, v in d.items() if not k.startswith("_")}
+    if ident(manifest["space"]) != ident(canonical):
         raise SystemExit(
             f"manifest feature space {manifest['space']['id']} != current "
             f"{payload['id']} — {path.parent} holds features from a different "
             f"backbone/transform. Extract to a different --space, or delete "
             f"that directory and re-extract."
         )
+    manifest["space"] = canonical      # refresh provenance without re-extracting
     return manifest
 
 
