@@ -558,6 +558,10 @@ Three structural rules:
 Do not merge them. Each has a different reader in a different moment:
 
 - **`CLAUDE.md`** — decisions only, terse. What we chose and what must not change.
+- **`notes/where-we-are.md`** — the orientation layer, and a dated snapshot rather
+  than a permanent reference: vocabulary, the iterations so far with their numbers,
+  what to run next, and what to carry to another machine. Read it first after time
+  away; re-date it when it goes stale rather than leaving stale numbers standing.
 - **`notes/embeddings.md`** — conceptual, assumes nothing, every number read off the
   real cache. The grounded-explanation layer; entry point for the ML side.
 - **`notes/walkthrough.md`** — reasoning and domain, with `file.py:NN` pointers.
