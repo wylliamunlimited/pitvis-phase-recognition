@@ -31,6 +31,7 @@ pitvis-extract = "pitvis.data.extract_features:main"
 pitvis-verify = "pitvis.data.verify_cache:main"
 pitvis-frames = "pitvis.data.extract_frames:main"
 pitvis-finetune = "pitvis.training.backbone:main"
+pitvis-probe = "pitvis.evaluation.probe:main"
 
 # A CUDA host needs torch from NVIDIA's index rather than default PyPI.
 # Uncomment both blocks on a GPU box; the default (CPU + MPS) build is what
