@@ -1,12 +1,15 @@
 // Wiring. Owns the store; every other module is a pure renderer or an adapter.
 
 import * as api from './api.js';
+import * as burn from './burn.js';
+import * as tray from './tray.js';
+import * as worklist from './worklist.js';
 import { follow, phaseOf } from './jobs.js';
 import { CanvasHost } from './overlay.js';
 import { VideoTimeSource } from './player.js';
-import { renderStatus } from './status.js';
+import { renderStatus, thresholdPhrase } from './status.js';
 import { laneSet, renderTimeline } from './timeline.js';
-import { hmsFixed } from './format.js';
+import { hmsFixed, prob } from './format.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,6 +20,8 @@ const state = {
   t: -1,
   segIndex: -1,
   iprobs: null,          // 19-way distribution, fetched lazily
+  wl: null,              // worklist aggregate, built once per case
+  lane: null,            // instrument class selected in the tray, or null
   cacheState: 'ok',      // ok | legacy | absent — see api.listCases
   colors: {},
   // OFF by default. The interface answers "what is happening now" until asked
@@ -38,6 +43,17 @@ async function boot() {
 
   overlay = new CanvasHost($('overlay'), $('video'));
   tlCtx = $('tl-canvas').getContext('2d');
+
+  // The burn-in is pinned to the video's rendered rect, and that rect moves for
+  // reasons a resize listener never sees: metadata arriving (before which
+  // videoWidth is 0 and geometry() is guessing), and the DETAIL toggle growing
+  // the footer — which is a 360ms grid transition, so even re-placing on the
+  // click would land on the pre-transition geometry. Observing the element
+  // itself catches every frame of both.
+  new ResizeObserver(() => {
+    overlay.resize();
+    burn.place(overlay.geometry());
+  }).observe($('video'));
 
   const listing = await api.listCases();
   state.cases = listing.cases;
@@ -120,7 +136,11 @@ async function open(id) {
 
   state.doc = null;
   state.iprobs = null;
+  state.wl = null;
+  state.lane = null;
   state.t = -1;
+  burn.show(false);
+  $('tray').dataset.all = '0';
 
   const video = $('video');
   video.src = `/api/cases/${encodeURIComponent(id)}/video`;
@@ -152,6 +172,16 @@ async function open(id) {
 
   $('rerun').disabled = false;
 
+  // Once per case, never per second: fourteen rows aggregated from the
+  // segments, and the tray built from the lanes.
+  state.wl = worklist.build(doc);
+  worklist.render($('worklist'), state.wl, doc);
+  $('wl-foot').textContent = worklist.footnote(state.wl, doc);
+  $('t-seen').textContent = String(state.wl.seen);
+  renderProvenance(doc);
+  burn.identity(doc, ref);
+  burn.show(true);
+
   clock = new VideoTimeSource(video, doc.video.seconds)
     .onSecond(onSecond)
     .onFrame(onFrame)
@@ -167,7 +197,8 @@ async function open(id) {
     .then((j) => {
       if (j && state.caseId === id) {
         state.iprobs = j.probs;
-        renderStatus(state.doc, Math.max(0, state.t), { iprobs: state.iprobs });
+        renderStatus(state.doc, Math.max(0, state.t));
+        renderTray();
       }
     })
     .catch(() => {});
@@ -175,7 +206,11 @@ async function open(id) {
 
 function veil(message, command) {
   const el = $('veil');
-  if (!message) { delete el.dataset.on; return; }
+  if (!message) {
+    delete el.dataset.on;
+    $('rerun').classList.add('more');     // back behind the toggle
+    return;
+  }
   el.dataset.on = '1';
   const span = el.querySelector('span');
   span.textContent = message;
@@ -185,6 +220,11 @@ function veil(message, command) {
     span.appendChild(code);
   }
   $('rerun').disabled = false;
+  // RE-RUN normally lives in the analyst layer — re-running inference is an
+  // analyst action. But this message tells you to press it, so it has to be
+  // reachable regardless of the toggle. An instruction pointing at a hidden
+  // control is worse than no instruction.
+  $('rerun').classList.remove('more');
 }
 
 // -- the clock drives everything -------------------------------------------
@@ -192,17 +232,30 @@ function veil(message, command) {
 function onFrame(time) {
   const doc = state.doc;
   if (!doc) return;
-  const track = $('track');
-  const w = track.clientWidth - 20;
   const frac = Math.min(1, time / doc.video.seconds);
   // transform only — no layout, no canvas work, thirty times a second
-  $('playhead').style.transform = `translateX(${frac * w}px)`;
+  $('playhead').style.transform = `translateX(${frac * trackWidth()}px)`;
   // This runs per rAF, but the clock changes at most once a second and the
   // play label only on toggle. Assigning textContent replaces the child text
   // node and invalidates layout whether or not the string differs, so both
   // are guarded — the one place in the app where the write really is hot.
-  write($('clock'), `${hmsFixed(time)} / ${hmsFixed(doc.video.duration)}`);
+  burn.clock(`${hmsFixed(time)} / ${hmsFixed(doc.video.duration)}`);
   write($('play'), clock?.playing ? 'PAUSE' : 'PLAY');
+}
+
+/**
+ * The drawable width of the timeline, in CSS pixels.
+ *
+ * Read off the canvas, never derived. Three places used to compute
+ * `track.clientWidth - 20`, which encoded the track's right padding as a magic
+ * number in three files' worth of arithmetic — and the moment the label gutter
+ * collapses and the canvas gains a left inset, all three are wrong by 20px:
+ * the playhead drifts from the pointer and a click seeks to the wrong second.
+ * The canvas is positioned by CSS `inset`, so its own clientWidth is the
+ * answer under any padding.
+ */
+function trackWidth() {
+  return $('tl-canvas').clientWidth;
 }
 
 /** textContent, but only when it would actually change. */
@@ -214,14 +267,75 @@ function onSecond(t) {
   const doc = state.doc;
   if (!doc) return;
   state.t = t;
-  renderStatus(doc, t, { iprobs: state.iprobs });
+  renderStatus(doc, t);
+  burn.state(doc, t, thresholdPhrase(doc));
+  worklist.update($('worklist'), state.wl, doc, t);
+  renderTiles(doc, t);
 
   const seg = doc.steps.segAt[t];
   if (seg !== state.segIndex) {
     state.segIndex = seg;
     flashStepCard();
     drawTimeline();                    // only the current-segment highlight moved
+    if (state.detail) renderTray();    // the ›-marks track what is in view
   }
+}
+
+function renderTiles(doc, t) {
+  const seg = doc.steps.segments[doc.steps.segAt[t]];
+  const step = seg ? seg.step : null;
+  write($('t-step'), step == null ? '--' : step === -1 ? '—'
+                                         : String(step).padStart(2, '0'));
+  write($('t-elapsed'), seg ? `${hmsFixed(t - seg.start_s).replace(/^0:/, '')} in step`
+                            : '--:--');
+
+  const s = doc.steps;
+  if (!s.hasConfidence) {
+    write($('t-conf'), '--');
+    write($('t-conf-note'), 'no probabilities recorded');
+    return;
+  }
+  const held = s.held ? !!s.held[t] : false;
+  write($('t-conf'), prob(s.confidence[t]));
+  // Reads low exactly where the consistency constraint is holding a phase the
+  // current frame does not support. That is the signal, not a defect.
+  write($('t-conf-note'), held ? 'CCI holding' : 'of the step shown');
+  $('t-conf-note').classList.toggle('held', held);
+}
+
+/** Which model produced what is on screen. */
+function renderProvenance(doc) {
+  const el = $('prov');
+  const m = doc.steps.model;
+  const i = doc.instruments;
+  if (!m.recorded && !i.recorded) {
+    // The common case, not the edge one: nothing predicted before the variant
+    // work carries these tags. Saying so is the honest render, and it doubles
+    // as the reason to re-run.
+    el.className = 'prov unrecorded';
+    el.textContent = 'MODEL NOT RECORDED';
+    el.title = 'This prediction predates provenance capture, so which variant '
+             + 'and feature space produced it is not recoverable from the '
+             + `artifact. Checkpoint on file: ${m.checkpoint || '?'}`
+             + `${i.checkpoint ? ` / ${i.checkpoint}` : ''}. Re-run to attach it.`;
+    return;
+  }
+  el.className = 'prov';
+  const parts = [m.name, m.variant, m.space].filter(Boolean);
+  el.textContent = parts.join(' · ').toUpperCase();
+  el.title = [
+    `steps: ${[m.name, m.variant, m.space].filter(Boolean).join(' / ') || m.checkpoint}`
+      + `${m.width != null ? ` · W=${m.width}` : ''}`
+      + `${m.cci != null ? ` · CCI ${m.cci ? 'on' : 'off'}` : ''}`
+      + `${m.maskExcluded ? ' · masked' : ''}`,
+    `instruments: ${[i.variant, i.space].filter(Boolean).join(' / ') || i.checkpoint || '—'}`,
+  ].join('\n');
+}
+
+function renderTray() {
+  if (!state.doc) return;
+  tray.render($('tray'), $('tray-foot'), state.doc, state.lane,
+              Math.max(0, state.t));
 }
 
 /** A step boundary: the card's brackets pull to accent, then release.
@@ -233,7 +347,7 @@ function onSecond(t) {
  * or the browser coalesces the pair into no change and the flash fires once.
  */
 function flashStepCard() {
-  const card = $('step-card');
+  const card = $('worklist-card');
   card.classList.remove('flash');
   void card.offsetWidth;
   card.classList.add('flash');
@@ -244,23 +358,21 @@ function flashStepCard() {
 function drawTimeline() {
   if (!state.doc) return;
   const { height } = laneSet(state.detail);
-  const w = $('track').clientWidth - 20;
-  const dpr = devicePixelRatio || 1;
   const cv = $('tl-canvas');
+  const w = trackWidth();
+  const dpr = devicePixelRatio || 1;
+  cv.style.height = `${height}px`;
   cv.width = Math.round(w * dpr);
   cv.height = Math.round(height * dpr);
-  cv.style.width = `${w}px`;
-  cv.style.height = `${height}px`;
   tlCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   renderTimeline(tlCtx, state.doc, { width: w, height },
-                 { t: state.t, colors: state.colors, segIndex: state.segIndex,
-                   detail: state.detail });
+                 { colors: state.colors, segIndex: state.segIndex,
+                   detail: state.detail, highlightLane: state.lane });
 }
 
 function onResize() {
-  drawTimeline();
-  overlay.resize();
+  drawTimeline();       // the video's own rect is handled by the ResizeObserver
 }
 
 // -- controls ---------------------------------------------------------------
@@ -272,8 +384,11 @@ function wireControls() {
     localStorage.setItem('pitvis.detail', state.detail ? '1' : '0');
     applyDetail();
     drawTimeline();
-    if (state.doc) renderStatus(state.doc, Math.max(0, state.t),
-                                { iprobs: state.iprobs });
+    if (state.doc) {
+      renderStatus(state.doc, Math.max(0, state.t));
+      renderTiles(state.doc, Math.max(0, state.t));
+      if (state.detail) renderTray();
+    }
   });
   $('play').addEventListener('click', () => clock?.toggle());
   $('back10').addEventListener('click', () => clock?.nudge(-10));
@@ -282,6 +397,26 @@ function wireControls() {
   $('nextseg').addEventListener('click', () => jumpSegment(1));
   $('rerun').addEventListener('click', rerun);
   $('console-close').addEventListener('click', () => { $('console').hidden = true; });
+
+  // A worklist row seeks to that step's NEXT visit at or after now, wrapping to
+  // the first. That is what makes a step visited six times reachable with one
+  // gesture and no modifier.
+  $('worklist').addEventListener('click', (e) => {
+    const li = e.target.closest?.('li[data-step]');
+    if (!li || !state.wl || !clock) return;
+    const to = worklist.seekTarget(state.wl, Number(li.dataset.step), state.t);
+    if (to != null) clock.seek(to);
+  });
+
+  // Selecting a tool lights its intervals on the timeline's TOOLS lane —
+  // nineteen tracks collapsed to one lane plus a selection.
+  $('tray').addEventListener('click', (e) => {
+    const id = tray.laneAt(e.target);
+    if (id == null) return;
+    state.lane = state.lane === id ? null : id;
+    renderTray();
+    drawTimeline();
+  });
 
   const track = $('track');
   track.addEventListener('click', (e) => {
@@ -303,8 +438,10 @@ function wireControls() {
 }
 
 function secondAt(e) {
-  const r = $('track').getBoundingClientRect();
-  const frac = (e.clientX - r.left) / (r.width - 20);
+  // Against the CANVAS rect, not the track's: the canvas is where the bar
+  // actually is, and its left inset changes when the label gutter collapses.
+  const r = $('tl-canvas').getBoundingClientRect();
+  const frac = (e.clientX - r.left) / r.width;
   return Math.max(0, Math.min(state.doc.video.seconds - 1,
                               Math.floor(frac * state.doc.video.seconds)));
 }

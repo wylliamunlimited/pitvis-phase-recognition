@@ -21,9 +21,12 @@
 // timeline as a workspace rather than as an answer. Confidence, ground truth
 // and agreement answer "how did the model do", which is a different question
 // asked at a different moment — so they arrive only when asked for.
+// One strip, no ruler, no label. Where you are in the operation and nothing
+// else. The ruler is gone from the default because absolute time is now an
+// exact numeral burned into the video's top-right corner, which strictly beats
+// reading a value off a tick scale.
 const MINIMAL = [
-  { key: 'ruler', label: '', y: 0, h: 12 },
-  { key: 'predicted', label: 'STEP', y: 18, h: 30 },
+  { key: 'predicted', label: '', y: 0, h: 16 },
 ];
 
 const DETAIL = [
@@ -47,11 +50,16 @@ const TICKS = [30, 60, 120, 300, 600, 900, 1800, 3600, 7200];
  * @param ctx   2D context, already scaled for devicePixelRatio
  * @param doc   parsed case document
  * @param geom  {width, height} in CSS pixels
- * @param opts  {t, colors, segIndex}
+ * @param opts  {colors, segIndex, detail, highlightLane}
+ *
+ * `highlightLane` is an instrument class id, or null. It rides in `opts`
+ * rather than being read from module state — that is what keeps this a pure
+ * function, and a pure function is what makes multi-case comparison N calls
+ * instead of a rewrite.
  */
 export function renderTimeline(ctx, doc, geom, opts) {
   const { width: W } = geom;
-  const { colors: C, segIndex, detail } = opts;
+  const { colors: C, segIndex, detail, highlightLane } = opts;
   const N = doc.video.seconds;
   if (!N || W <= 0) return;
 
@@ -59,12 +67,15 @@ export function renderTimeline(ctx, doc, geom, opts) {
   const lane = (k) => lanes.find((l) => l.key === k);
 
   ctx.clearRect(0, 0, W, geom.height);
-  ctx.font = '8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+  // Sans, not mono. These segment numbers are the only numerals the default
+  // timeline draws, and a monospace label under a sans interface was a gap
+  // that predates this redesign.
+  ctx.font = '400 8.5px ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif';
   ctx.textBaseline = 'middle';
 
   const x = (s) => (s / N) * W;
 
-  drawRuler(ctx, lane('ruler'), W, N, x, C);
+  if (detail) drawRuler(ctx, lane('ruler'), W, N, x, C);
   drawSegments(ctx, doc.steps.segments, lane('predicted'), x, doc.names.ramp, C,
                { current: segIndex, labels: true });
   if (!detail) return;
@@ -80,7 +91,7 @@ export function renderTimeline(ctx, doc, geom, opts) {
     absent(ctx, lane('agreement'), W, C, '');
   }
 
-  drawInstruments(ctx, doc.instruments, lane('instruments'), W, N, C);
+  drawInstruments(ctx, doc.instruments, lane('instruments'), W, N, C, highlightLane);
 }
 
 // -- lanes ------------------------------------------------------------------
@@ -166,10 +177,28 @@ function drawAgreement(ctx, agree, l, W, N, C) {
   ctx.globalAlpha = 1;
 }
 
-function drawInstruments(ctx, inst, l, W, N, C) {
+function drawInstruments(ctx, inst, l, W, N, C, highlight) {
   if (!inst.available) {
     absent(ctx, l, W, C, 'TASK 2 NOT RUN FOR THIS CASE');
     return;
+  }
+  // A class selected in the tray takes over the lane. This is where the
+  // per-tool interval geometry lives — one lane plus a selection, instead of
+  // nineteen stacked tracks. The density view is still drawn underneath, so
+  // the selection reads as a highlight rather than as a different chart.
+  if (highlight != null) {
+    const lane = inst.lanes.find((x) => x.id === highlight);
+    if (lane) {
+      ctx.fillStyle = C.raised;
+      ctx.fillRect(0, l.y, W, l.h);
+      ctx.fillStyle = C.accent;
+      for (const [a, b] of lane.intervals) {
+        const x0 = (a / N) * W;
+        const w = Math.max(1, ((b + 1) / N) * W - x0);   // end is INCLUSIVE
+        ctx.fillRect(x0, l.y, w, l.h);
+      }
+      return;
+    }
   }
   // Density, not identity: how many tools are in view, in the same lightness
   // language the phase ramp uses. Identity lives in the rail, where there is

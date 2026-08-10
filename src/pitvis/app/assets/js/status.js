@@ -1,174 +1,55 @@
-// The rail: what the model believes right now, and how sure it is.
+// The analyst layer: ground truth, the score, and what post-processing did.
+//
+// What is happening *now* no longer lives here — it is burned into the corners
+// of the image (burn.js) and aggregated in the worklist (worklist.js). What is
+// left is the second question: how well is the model doing, which is only ever
+// asked deliberately and therefore only ever rendered behind + DETAIL.
 //
 // Every honesty rule in this file is load-bearing rather than decorative. The
-// model scores 0.331; an interface that looks like an instrument makes that
-// number read as authority, so anything uncertain, absent or overruled has to
-// say so where it is being shown, not in a footnote.
+// step model scores 0.461 and gets 40.5% of seconds right on the case it is
+// most often shown with; an interface that looks like an instrument makes any
+// number on it read as authority, so anything uncertain, absent or overruled
+// has to say so where it is being shown, not in a footnote.
 
-import { hms, prob, upper } from './format.js';
+import { prob, upper } from './format.js';
 
 const $ = (id) => document.getElementById(id);
-const TOP_N = 5;
 
-const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)');
-
-/** Write text, and animate the write when the value actually changed.
+/**
+ * How to name the bar a prediction had to clear.
  *
- * `renderStatus` runs once a second, so the equality check is doing two jobs:
- * it stops the swap re-triggering on a value that has not moved, and it stops
- * the DOM being written at all when nothing did. Values that DO move every
- * second — elapsed, total, confidence — must not come through here; a step
- * card that pulses once a second is worse than one that snaps.
- *
- * `cls` is applied before the text so it cannot clobber the `swap` class the
- * write is about to add. Ordering that the other way is silent: the animation
- * simply never plays on that branch.
- *
- * The remove/reflow/add dance restarts the animation. The reflow read is
- * required *for this approach* — dropping and re-adding a class inside one
- * task is coalesced into no change, so the flash would fire once and never
- * again. It is not the only approach: `Element.animate()` restarts
- * unconditionally with no forced layout, at the cost of moving duration and
- * easing out of CSS. Worth switching if the scrub path ever profiles hot.
+ * Shared rather than duplicated: the burn-in says this over the video and the
+ * rail says it here, and a model with per-class thresholds has no single
+ * number to quote. Two copies of this line is how that honesty rule dies in
+ * one of the two places without anyone noticing.
  */
-function setText(el, value, cls) {
-  if (cls !== undefined && el.className !== cls) el.className = cls;
-  if (el.textContent === value) return;
-  el.textContent = value;
-  // A hidden tab PAUSES animations mid-flight, so a value written while
-  // backgrounded would sit at whatever opacity it froze at until the tab came
-  // back — measured at 0.006, i.e. a blank step card on the one surface whose
-  // whole job is to say what is happening. Under reduced motion there is
-  // nothing to play in the first place. Either way, skip the class: the
-  // readable state must never depend on an animation having run.
-  if (document.hidden || REDUCED_MOTION.matches) return;
-  el.classList.remove('swap');
-  void el.offsetWidth;
-  el.classList.add('swap');
-}
-
-export function renderStatus(doc, t, extra = {}) {
-  renderStep(doc, t);
-  renderInstruments(doc, t, extra.iprobs);
-  renderReference(doc, t);
-}
-
-// -- current step -----------------------------------------------------------
-
-function renderStep(doc, t) {
-  const s = doc.steps;
-  const seg = s.segments[s.segAt[t]];
-  if (!seg) return;
-
-  const step = seg.step;
-  // Background is -1 in the challenge encoding, which is not a number worth
-  // setting in 68px type. "BG" is the abbreviation of the name already shown
-  // beside it, not a new label.
-  setText($('step-num'), step === -1 ? 'BG' : String(step).padStart(2, '0'));
-  setText($('step-name'), upper(doc.names.steps[String(step)] || 'unknown'));
-  $('step-tint').style.background = doc.names.ramp[String(step)] || 'var(--faint)';
-  $('step-elapsed').textContent = hms(t - seg.start_s);
-  $('step-total').textContent = hms(seg.duration_s);
-
-  // The CCI-hold marker lives in the detail layer, not beside the step name.
-  // It says the displayed label is being held by post-processing against the
-  // model's current belief — a real caveat, but one that belongs with the
-  // confidence it qualifies rather than in the glanceable line.
-  const held = s.held ? !!s.held[t] : false;
-
-  const row = $('conf-row');
-  if (!s.hasConfidence) {
-    row.style.display = 'none';
-    $('step-alt').hidden = true;
-    return;
-  }
-  row.style.display = '';
-  const c = s.confidence[t];
-  $('conf-fill').style.width = `${Math.round(c * 100)}%`;
-  // Always a number as well as a bar. A bar alone invites reading "mostly
-  // full" as "confident" when the value is 0.31.
-  $('conf-val').textContent = prob(c);
-  $('conf-fill').style.background =
-    held ? 'var(--warn)' : c < 0.4 ? 'var(--dim)' : 'var(--accent)';
-
-  const alt = $('step-alt');
-  if (held) {
-    const top = s.top1[t];
-    alt.hidden = false;
-    alt.innerHTML =
-      `<b>CCI HOLD</b> — the decoder preferred ` +
-      `<span style="color:var(--text)">${upper(doc.names.steps[String(top)])}</span> ` +
-      `at ${prob(s.top1Prob[t])}, but the consistency constraint is holding the ` +
-      `previous step pending 10 s of agreement. Confidence above is the ` +
-      `probability of the step actually shown.`;
-  } else {
-    alt.hidden = true;
-  }
-}
-
-// -- instruments ------------------------------------------------------------
-
-function renderInstruments(doc, t, iprobs) {
+export function thresholdPhrase(doc) {
   const inst = doc.instruments;
-  const one = $('inst1'), two = $('inst2'), list = $('inst-probs');
+  if (!inst.available) return '—';
+  return inst.perClassThresholds ? 'its per-class threshold' : prob(inst.threshold);
+}
 
-  if (!inst.available) {
-    setText(one, 'task 2 not run', 'v empty');
-    setText(two, '--', 'v empty');
-    list.innerHTML = '';
-    return;
-  }
+export function renderStatus(doc, t) {
+  renderReference(doc, t);
+  renderHold(doc, t);
+}
 
-  const state = inst.state[t];
-  if (state === 'none') {
-    // NOT "out of patient". SANO's head is 19 sigmoids with no such class, so
-    // this can only mean nothing cleared the bar. Showing the runner-up makes
-    // the difference between "nothing there" and "nearly something" visible.
-    const best = inst.maxClass ? doc.names.instruments[String(inst.maxClass[t])] : null;
-    const p = inst.maxProb ? inst.maxProb[t] : null;
-    // With per-class thresholds there is no single bar to quote, and printing
-    // 0.50 beside a class whose actual bar is 0.05 would simply be false.
-    const bar = inst.perClassThresholds
-      ? 'its per-class threshold'
-      : prob(inst.threshold);
-    setText(one, `nothing above ${bar}`, 'v empty');
-    // Three decimals here specifically: the runner-up sits just under the
-    // threshold by definition, and at two decimals a 0.498 prints as "0.50"
-    // directly beside "nothing above 0.50", which reads as a contradiction.
-    setText(two, best ? `closest: ${best} ${p.toFixed(3)}` : '--', 'v empty');
-  } else {
-    setText(one, upper(doc.names.instruments[String(inst.slot1[t])] || '--'), 'v');
-    const s2 = inst.slot2[t];
-    setText(two, s2 == null ? 'none' : upper(doc.names.instruments[String(s2)]),
-            s2 == null ? 'v empty' : 'v');
-  }
+// -- what the consistency constraint did ------------------------------------
 
-  list.innerHTML = '';
-  const active = new Set([inst.slot1[t], inst.slot2[t]].filter((v) => v != null));
+function renderHold(doc, t) {
+  const s = doc.steps;
+  const card = $('alt-card');
+  const held = s.hasConfidence && s.held && s.held[t];
+  card.hidden = !held;
+  if (!held) return;
 
-  let rows;
-  if (iprobs) {
-    rows = iprobs[t]
-      .map((p, id) => ({ id, p }))
-      .sort((a, b) => b.p - a.p)
-      .slice(0, TOP_N);
-  } else {
-    // Before the 19-way distribution arrives, show what the document carries.
-    rows = [...active].map((id) => ({
-      id, p: id === inst.slot1[t] ? inst.conf1?.[t] : inst.conf2?.[t],
-    }));
-  }
-
-  for (const r of rows) {
-    const li = document.createElement('li');
-    if (active.has(r.id)) li.className = 'on';
-    li.innerHTML =
-      `<span class="tick">&rsaquo;</span>` +
-      `<span class="nm">${doc.names.instruments[String(r.id)]}</span>` +
-      `<span class="mb"><i style="width:${Math.round((r.p ?? 0) * 100)}%"></i></span>` +
-      `<span class="pv">${prob(r.p)}</span>`;
-    list.appendChild(li);
-  }
+  const top = s.top1[t];
+  $('step-alt').innerHTML =
+    `<b>CCI HOLD</b> — the decoder preferred ` +
+    `<span style="color:var(--text)">${upper(doc.names.steps[String(top)])}</span> ` +
+    `at ${prob(s.top1Prob[t])}, but the consistency constraint is holding the ` +
+    `previous step pending 10 s of agreement. The confidence shown is the ` +
+    `probability of the step actually displayed, which is why it reads low here.`;
 }
 
 // -- ground truth -----------------------------------------------------------
@@ -195,7 +76,8 @@ function renderReference(doc, t) {
   if (inst) {
     const label = inst === 'out_of_patient'
       // The one place this phrase is legitimate: the annotations really do
-      // record the scope leaving the patient. A prediction never can.
+      // record the scope leaving the patient. A prediction never can — the
+      // model has no class for it.
       ? 'scope out of patient'
       : [truth.instSlot1[t], truth.instSlot2[t]]
           .filter((v) => v != null)
