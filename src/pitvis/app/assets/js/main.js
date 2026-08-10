@@ -17,6 +17,7 @@ const state = {
   t: -1,
   segIndex: -1,
   iprobs: null,          // 19-way distribution, fetched lazily
+  cacheState: 'ok',      // ok | legacy | absent — see api.listCases
   colors: {},
   // OFF by default. The interface answers "what is happening now" until asked
   // to answer "how well is the model doing", which is a different question at
@@ -38,7 +39,9 @@ async function boot() {
   overlay = new CanvasHost($('overlay'), $('video'));
   tlCtx = $('tl-canvas').getContext('2d');
 
-  state.cases = await api.listCases();
+  const listing = await api.listCases();
+  state.cases = listing.cases;
+  state.cacheState = listing.cacheState;
   fillPicker();
 
   const wanted = new URLSearchParams(location.search).get('case');
@@ -128,6 +131,15 @@ async function open(id) {
     state.doc = await api.loadCase(id);
   } catch (err) {
     if (err.code !== 'no_prediction') return veil(err.message);
+    if (state.cacheState === 'legacy') {
+      // Do not tell someone to sit through a 20-minute decode when the
+      // features are already on disk, one rename away.
+      return veil(
+        `${err.message}.\n\nThe feature cache on this machine still uses the `
+        + `pre-space layout,\nso nothing can find it and every case reads as `
+        + `uncached. Migrating\nis a rename, not a re-extraction:`,
+        'uv run pitvis-extract --migrate');
+    }
     return veil(
       `${err.message}.\n\n` + (ref?.features_cached
         ? 'Its features are already cached, so running it takes about 45 s —\npress RE-RUN, or run it yourself:'
@@ -351,7 +363,9 @@ async function rerun() {
     onDone: async () => {
       $('rerun').disabled = false;
       log.insertAdjacentText('beforeend', '\n— reloading case —\n');
-      state.cases = await api.listCases();
+      const listing = await api.listCases();
+      state.cases = listing.cases;
+      state.cacheState = listing.cacheState;
       fillPicker();
       await open(id);
     },

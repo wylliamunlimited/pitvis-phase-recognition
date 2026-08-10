@@ -25,7 +25,8 @@ from pathlib import Path
 
 from pitvis.data.dataset import TRAIN, VAL
 from pitvis.data import spaces
-from pitvis.paths import CKPT, CKPT_INSTRUMENTS, PREDICTIONS, RAW, manifest_path
+from pitvis.paths import (CKPT, CKPT_INSTRUMENTS, FEATURES, PREDICTIONS, RAW,
+                          manifest_path)
 
 CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
@@ -83,6 +84,25 @@ def _manifest() -> dict:
         return json.loads(mpath.read_text()).get("videos", {})
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def cache_state() -> str:
+    """`ok`, `legacy`, or `absent` — and the middle one is why this exists.
+
+    Feature caches moved to one directory per feature space, with the manifest
+    inside it. Migration is opt-in (`pitvis-extract --migrate`), and until it
+    runs `manifest_path(DEFAULT)` simply does not exist — so `_manifest()`
+    returns {} and every case reports `features_cached: False`.
+
+    That is indistinguishable, from here, from having no features at all. The
+    app would then tell you predicting a case means a 10-25 minute decode of
+    the whole video, when in fact the features are sitting on disk one rename
+    away. Saying "not cached" there is not a small inaccuracy; it is the wrong
+    instruction. So the difference is detected and reported.
+    """
+    if manifest_path(spaces.DEFAULT).exists():
+        return "ok"
+    return "legacy" if (FEATURES / "manifest.json").exists() else "absent"
 
 
 def _checkpoint_mtime() -> float:

@@ -23,7 +23,11 @@ async function get(url) {
 }
 
 export async function listCases() {
-  return (await get('/api/cases')).cases;
+  const r = await get('/api/cases');
+  // `legacy` means the features are on disk but in the pre-space layout, so
+  // nothing can find them — a different problem from having none, and a
+  // different instruction.
+  return { cases: r.cases, cacheState: r.cache_state || 'ok' };
 }
 
 export async function loadCase(id) {
