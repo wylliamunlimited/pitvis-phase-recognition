@@ -59,8 +59,14 @@ export class CanvasHost {
   resize() {
     const r = (this.canvas.parentElement || this.canvas).getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = Math.round(r.width * dpr);
-    this.canvas.height = Math.round(r.height * dpr);
+    const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    // No-op when nothing moved. Two elements are observed for this callback, so
+    // most transition frames arrive twice — and assigning canvas.width CLEARS
+    // the bitmap, so an unguarded write would blank a registered layer on every
+    // duplicate frame rather than merely costing a reallocation.
+    if (w === this.canvas.width && h === this.canvas.height) return;
+    this.canvas.width = w;
+    this.canvas.height = h;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.invalidate();
   }

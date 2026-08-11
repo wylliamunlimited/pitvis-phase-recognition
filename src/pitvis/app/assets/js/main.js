@@ -52,10 +52,22 @@ async function boot() {
   // the footer — which is a 360ms grid transition, so even re-placing on the
   // click would land on the pre-transition geometry. Observing the element
   // itself catches every frame of both.
-  new ResizeObserver(() => {
+  // THE FRAME IS OBSERVED TOO, AND THAT IS NOT REDUNDANT. A ResizeObserver
+  // fires on size, never on position. The video is letterboxed inside .frame
+  // with `align-items: center`, so whenever it is WIDTH-constrained — frame
+  // aspect narrower than 16:9, which a tall window gives you — changing the
+  // frame's height moves the video without resizing it by so much as a pixel.
+  // The DETAIL toggle does exactly that: it grows the footer by 118px, the
+  // frame shrinks, and the video slides up 59px at an unchanged 832x468. The
+  // burn-in stayed behind, misaligned by half the footer growth, because
+  // observing the video alone can never see it. Observing the frame catches
+  // the geometry change the video's own box hides.
+  const track = new ResizeObserver(() => {
     overlay.resize();
     burn.place(overlay.geometry());
-  }).observe($('video'));
+  });
+  track.observe($('video'));
+  track.observe($('frame'));
 
   panels = new Panels($('panels'));
 
