@@ -316,9 +316,6 @@ main {
 
 .burn .id   { font-size: 11px; letter-spacing: .1em; }
 .burn .sub  { font-size: 9px; letter-spacing: .1em; opacity: .82; }
-/* The disclaimer travels with the pixels. A screenshot cropped to the frame
-   carries case id and predicted step; it must carry this too. */
-.burn .sub.warn { color: #FFD9A0; opacity: .95; }
 .burn .step { font-size: 15px; letter-spacing: .05em; text-transform: uppercase; }
 .burn .inst { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
 .burn .inst.empty { text-transform: none; letter-spacing: .02em; opacity: .8; }

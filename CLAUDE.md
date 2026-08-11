@@ -529,10 +529,21 @@ Reasoning and measured numbers live in `notes/app.md`. These are the rules.
   agreement, scores and per-class probabilities are behind `[ + DETAIL ]`. The
   visible layer answers "what is happening now"; the hidden one answers "how
   well is the model doing". Six stacked timeline lanes reads as a video editor.
-- **Honesty elements are load-bearing.** The research banner, the amber
-  train-split chip, the stated absence of ground truth, and always-numeric
-  confidence exist because the model scores 0.331 and a composed surface makes
-  any number on it read as authority. Do not trim them for cleanliness.
+- **Honesty elements are load-bearing, but stated once.** The research
+  disclaimer, the stated absence of ground truth, and always-numeric confidence
+  exist because a composed surface makes any number on it read as authority.
+  **The disclaimer lives in the header and nowhere else** — it used to be
+  burned into the image as well, and a claim repeated twice on one screen reads
+  as decoration rather than a warning. Do not trim the remaining copy for
+  cleanliness, and do not reintroduce a second one.
+- **Split vocabulary is analyst-layer.** `[ VAL SPLIT ]` / `[ TRAIN SPLIT ]`,
+  in both the header and the burn-in, carry `.more`. A viewer of the image is
+  asking what is happening; whether a score is honest or memorised is a
+  different question at a different moment, and that is what DETAIL is for.
+  The amber `trained` styling is retained and must stay — it is the warning
+  that a number measures fit, not generalisation. Note `renderProvenance`
+  writes that chip with `classList`, never `className`, or `.more` is dropped
+  and the vocabulary leaks back into the default view.
 - **One inference worker, permanently.** `redirect_stdout` swaps a
   process-global `sys.stdout`.
 - `renderTimeline(ctx, doc, geom, opts)` **is pure**. That is what makes

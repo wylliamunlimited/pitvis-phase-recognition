@@ -18,7 +18,7 @@
     <label class="picker">
       <select id="case-select"></select>
     </label>
-    <span class="split" id="split"></span>
+    <span class="split more" id="split"></span>
     <span class="prov" id="prov"></span>
     <span class="grow"></span>
     <button id="layout-reset" class="ghost" title="return every panel to its default position and open state">RESET LAYOUT</button>
@@ -42,10 +42,13 @@
              VIDEO rect, not the frame: the video letterboxes, so at 1440x900
              there are ~54px of paper above and below it. -->
         <div class="burn" id="burn">
+          <!-- Case identity only. The split is analyst vocabulary and lives
+               behind DETAIL now; the disclaimer is stated once, in the header,
+               rather than twice. Three lines here also collided with the left
+               panel column, which is what made the duplication visible. -->
           <div class="corner tl">
             <span class="id" id="b-case">--</span>
-            <span class="sub" id="b-split"></span>
-            <span class="sub warn">RESEARCH — NOT FOR CLINICAL USE</span>
+            <span class="sub more" id="b-split"></span>
           </div>
           <div class="corner tr">
             <span class="id" id="b-clock">--:--:-- / --:--:--</span>

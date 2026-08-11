@@ -32,6 +32,9 @@ export function place(geom) {
 
 export function identity(doc, ref) {
   $('b-case').textContent = doc.id.replace('video_', 'CASE ').toUpperCase();
+  // Still written, but the element is `.more` — the split is an analyst's
+  // question about whether a score is honest, not something a viewer of the
+  // image needs. It reappears with DETAIL.
   const split = ref?.split || doc.split;
   $('b-split').textContent = split ? `${split.toUpperCase()} SPLIT` : '';
 }

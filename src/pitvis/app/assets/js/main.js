@@ -131,7 +131,10 @@ async function open(id) {
   // the single most important caveat on any score in this interface.
   const split = $('split');
   split.textContent = ref?.split ? `[ ${ref.split.toUpperCase()} SPLIT ]` : '';
-  split.className = ref?.split === 'train' ? 'split trained' : 'split';
+  // classList, not className: the chip also carries `more`, which puts it in
+  // the analyst layer, and assigning the whole attribute would drop it and
+  // leak split vocabulary back into the default view.
+  split.classList.toggle('trained', ref?.split === 'train');
   split.title = ref?.split === 'train'
     ? 'This video was TRAINED ON. Its scores measure fit, not generalisation, '
       + 'and are not comparable to the validation numbers.'
