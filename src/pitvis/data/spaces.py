@@ -75,6 +75,26 @@ SPACES: dict[str, Space] = {
             summary="DINOv2 ViT-B/14, 768-d, 224px — self-supervised, 16x16 grid",
             model_kwargs={"img_size": 224},
         ),
+        # The one the evidence points at. Fine-tuning was piloted on ResNet-50
+        # because ViT-B trains at 29 img/s against 96 — the cheap backbone
+        # answers "does fine-tuning help at all" for a quarter of the cost, and
+        # it does (mean AP 0.271 -> 0.445, 19/19 classes). But it was applied
+        # to the encoder that LOSES frozen: end to end the fine-tuned ResNet-50
+        # scores 0.4425 steps / 0.3805 instruments against frozen DINOv2's
+        # 0.4610 / 0.5572. So this space is that lever aimed at the winner.
+        #
+        # `img_size` MUST match what pitvis-finetune was given, or the encoder
+        # is tuned at one resolution and inferred at another. Produced by:
+        #   uv run pitvis-finetune --backbone vit_base_patch14_dinov2.lvd142m \
+        #       --img-size 224 --tag dinov2-50ep --epochs 50 --device cuda
+        Space(
+            name="dinov2_ft",
+            backbone="vit_base_patch14_dinov2.lvd142m",
+            summary="DINOv2 ViT-B/14 fine-tuned on PitVis frames — 768-d, 224px",
+            model_kwargs={"img_size": 224},
+            checkpoint="backbone/dinov2-50ep/backbone.pt",
+            source="frames",
+        ),
     ]
 }
 
