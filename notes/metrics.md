@@ -189,26 +189,28 @@ property). `--no-cci` gives the strictly causal number and both are reported.
 
 ---
 
-## 7. Three official behaviours that look like bugs and are preserved
+## 7. What the exclusion rule is worth
 
-Vendored verbatim in `evaluation/official.py`. A "cleaner" reimplementation
-would silently diverge from the challenge on all three:
+The three preserved official behaviours — exclusion by ground truth only,
+`zero_division=1`, and the edit score running after exclusion — are enumerated
+as rules in `CLAUDE.md` and traced to `file:line` with their pinning tests in
+[`walkthrough.md` §12](walkthrough.md). Not repeated here.
 
-1. **Exclusion filters by ground truth only.** A model that *predicts* an
-   excluded class on a retained row is not filtered — and since `f1_score` is
-   called with no `labels=`, that class joins the macro average at F1 = 0.
-   Corollary worth exploiting: masking classes 0/11/13 out of the argmax can
-   only *raise* the score. Measured at **+0.100** on a fixed checkpoint. It is a
-   scoring-rule exploit, not a modelling improvement, so the faithful number
-   stays the headline. TSO-NCT (2nd place) did the same thing.
-2. **`zero_division=1`.** Absent classes score 1.0, which inflates macro
-   averages over sparse label sets.
-3. **The edit score runs after exclusion**, splicing the sequence (§2).
+What belongs to *this* layer is what the first one is worth. Because a
+predicted-but-excluded class joins the macro average at F1 = 0, **masking
+classes 0/11/13 out of the argmax can only raise the score** — measured at
+**+0.100** on a fixed checkpoint, and +0.062 macro out of fold when it became
+the `masked` step variant. TSO-NCT (2nd place) did the same thing.
 
-Task 2 adds a fourth, genuinely broken one — separate `MultiLabelBinarizer`s
-producing divergent column orders that `f1_score` then compares positionally.
-It fires on 5/5 of our val videos and makes three different constant strategies
-score identically. See `instruments.md` §3.
+That is a scoring-rule exploit, not a modelling improvement, and the distinction
+is the point: it moves the number without the model having learnt anything. The
+faithful reproduction number stays the headline in
+[`citi-baseline.md`](citi-baseline.md); the masked number is reported as a
+variant in [`step-variants.md`](step-variants.md), never as a like-for-like
+comparison against the challenge table.
+
+Task 2's metric has a fourth behaviour that is genuinely broken rather than
+merely surprising — see [`instruments.md` §3](instruments.md).
 
 ---
 

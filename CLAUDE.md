@@ -201,7 +201,10 @@ A "cleaner" reimplementation would silently diverge from the challenge on all th
    label set from the union of cleaned trues *and* preds, so that class joins the macro
    average at F1 = 0 and drags the score down. `metric.report` counts these as `leaked`.
    Corollary worth exploiting: **masking classes 0/11/13 out of the argmax at inference can
-   only raise the official metric.** Not yet implemented in any model.
+   only raise the official metric.** Taken: the `masked` step variant does it,
+   and it was the largest single lever in that iteration (+0.062 macro out of
+   fold). It is a scoring-rule exploit rather than a modelling gain, so
+   checkpoints carry a `mask_excluded` tag and inference must honour it.
 2. **`zero_division=1`** in the `f1_score` call.
 3. **The edit score runs after exclusion**, so removed rows splice the sequence and the
    segments either side of a gap merge. `[1,1,bg,bg,1,1]` is ONE segment, not three.
@@ -615,3 +618,30 @@ Do not merge them. Each has a different reader in a different moment:
 `walkthrough.md` §8 and `embeddings.md` deliberately cover the same extraction stage
 at two depths. They are cross-linked, not deduplicated. When adding docs, pick the
 layer first.
+
+### Every fact has exactly one owner; everywhere else links
+
+Layering is not licence to restate. The failure mode is specific and it has
+already happened once: an iteration ships, a note is written, and the same
+scoreboard ends up maintained in four files — so a number changes in one and
+goes stale in three. Two stale claims (`masking … not yet implemented`) survived
+in `CLAUDE.md` and `walkthrough.md` for exactly this reason.
+
+The owners:
+
+| fact | owner |
+|---|---|
+| what a variant tried, and every result | `step-variants.md`, `instrument-variants.md` |
+| the reproduction baselines | `citi-baseline.md`, `instruments.md` |
+| the CV protocol and fold caveats | `instrument-variants.md` §2 |
+| what the AP probe measures and found | `instrument-variants.md` §6 |
+| the label leak, and what honest CV costs | `infra/README.md` |
+| the cross-task "backbone last" finding | `roadmap.md` |
+| the command surface | `README.md` §Usage |
+| rules that must not change | this file |
+| vocabulary, current status, what to run next | `where-we-are.md` |
+
+`where-we-are.md` is the index, not a summary — if it restates a result rather
+than linking to one, it has drifted back into being a fifth scoreboard. It is
+also a **dated snapshot**: re-date it when it goes stale rather than leaving old
+numbers standing.
