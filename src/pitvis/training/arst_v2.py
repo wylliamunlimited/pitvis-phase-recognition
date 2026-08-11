@@ -243,9 +243,15 @@ def main(argv: list[str] | None = None) -> None:
     print(f"device: {dev}  space: {args.space}  mask: {variant.mask}  "
           f"weighted: {variant.weighted}")
 
+    # A variant carries its own space, so the same variant run on a different
+    # one is a DIFFERENT result and needs a different name. CV already did this;
+    # the artifact path did not, and `--variant best --space resnet50_ft` wrote
+    # straight over the DINOv2 winner's model.pt — the checkpoint
+    # `pitvis-predict --steps-model arst-v2:best` resolves to.
+    label = (variant.name if args.space == variant.space
+             else f"{variant.name}@{args.space}")
+
     if args.cv:
-        label = (variant.name if args.space == variant.space
-                 else f"{variant.name}@{args.space}")
         cross_validate(make_fit(variant), args, dev, variant=label,
                        space=args.space, task=STEPS)
         return
@@ -255,7 +261,7 @@ def main(argv: list[str] | None = None) -> None:
     fit = make_fit(variant)(train, args, dev)
     print(f"trained in {time.time() - t0:.0f}s")
 
-    out = OUT_ROOT / variant.name
+    out = OUT_ROOT / label
     out.mkdir(parents=True, exist_ok=True)
     mean, std = fit.stats
     spatial, tecno, arst = fit.parts

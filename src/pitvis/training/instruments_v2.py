@@ -297,11 +297,15 @@ def main(argv: list[str] | None = None) -> None:
     print(f"device: {dev}  space: {args.space}  pos_weight: {variant.pos_weight}  "
           f"per-class tau: {variant.per_class}")
 
+    # Label by space when it is overridden, so `--variant best --space X`
+    # cannot silently overwrite the entry for `best` on its own space. This
+    # applies to the CHECKPOINT as much as to the CV entry — the artifact path
+    # below used the bare variant name and overwrote the DINOv2 winner's
+    # model.pt, which is what `instruments-v2:best` resolves to.
+    label = (variant.name if args.space == variant.space
+             else f"{variant.name}@{args.space}")
+
     if args.cv:
-        # Label by space when it is overridden, so `--variant best --space X`
-        # cannot silently overwrite the entry for `best` on its own space.
-        label = (variant.name if args.space == variant.space
-                 else f"{variant.name}@{args.space}")
         cross_validate(make_fit(variant), args, dev,
                        variant=label, space=args.space)
         return
@@ -314,7 +318,7 @@ def main(argv: list[str] | None = None) -> None:
     fit = make_fit(variant)(train, args, dev)
     print(f"trained in {time.time() - t0:.0f}s")
 
-    out = OUT_ROOT / variant.name
+    out = OUT_ROOT / label
     out.mkdir(parents=True, exist_ok=True)
     mean, std = fit.stats
     np.savez(out / "standardize.npz", mean=mean, std=std)

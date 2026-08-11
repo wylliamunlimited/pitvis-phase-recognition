@@ -328,6 +328,31 @@ A 5-epoch fine-tune of ResNet-50 on the frame cache moved **mean AP 0.271 →
 0.445, with 19 of 19 classes improving** (largest: cottle +0.385, haemostatic
 foam +0.383, stealth pointer +0.364, surgical drill +0.301). That number is
 clean — the probe fits on TRAIN and scores VAL, which no TRAIN-fitted encoder
-has seen. There is still **no valid end-to-end score** for a fine-tuned
-backbone; see [`infra/README.md`](../infra/README.md) for why that costs six
-fine-tunes rather than one.
+has seen.
+
+### End to end, the AP gain does not carry to the headline
+
+The `best` recipe on `resnet50_ft` instead of frozen DINOv2, VAL scored once
+each (`data/instruments/v2/best@resnet50_ft/`):
+
+| | frozen DINOv2 | fine-tuned ResNet-50 | Δ |
+|---|---|---|---|
+| official (weighted, w/ defect) | **0.5572** ±0.225 | 0.3805 ±0.232 | −0.177 |
+| aligned-weighted | 0.7383 | **0.7973** | +0.059 |
+| **macro F1** (primary) | 0.3792 | **0.4783** | **+0.099** |
+
+**The two metrics disagree, and that is the finding.** Macro rises by twice the
+fold spread while the official number falls. That is the support-domination the
+protocol's guard was written for, seen from the other side: the fine-tuned
+encoder is better on the rare classes the macro average weights equally, and
+worse on the four that carry ~91% of positives and therefore the weighted score.
+
+**This is not a ranking, and must not be treated as one.** Both arms are single
+VAL measurements on five videos, which is exactly what §2 forbids — a CV over
+`resnet50_ft` is unavailable because one encoder trained on all of TRAIN leaks
+into every fold. Note also that the official column's std (±0.23) is larger than
+the gap; video_25 alone scores 0.836 against 0.20–0.32 for the others.
+
+So it is a reason to fine-tune DINOv2 and cross-validate properly, not a reason
+to switch. See [`infra/README.md`](../infra/README.md) for why an honest version
+costs six fine-tunes rather than one.
