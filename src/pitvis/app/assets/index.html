@@ -18,12 +18,10 @@
     <label class="picker">
       <select id="case-select"></select>
     </label>
-    <span class="split more" id="split"></span>
     <span class="prov" id="prov"></span>
     <span class="grow"></span>
     <button id="layout-reset" class="ghost" title="return every panel to its default position and open state">RESET LAYOUT</button>
     <button id="detail-toggle" class="ghost" aria-pressed="false">+ DETAIL</button>
-    <span class="chip warn" title="This renders research model output on recorded video. It is not a medical device and must not inform clinical decisions.">RESEARCH — NOT FOR CLINICAL USE</span>
   </header>
 
   <main>
@@ -42,13 +40,11 @@
              VIDEO rect, not the frame: the video letterboxes, so at 1440x900
              there are ~54px of paper above and below it. -->
         <div class="burn" id="burn">
-          <!-- Case identity only. The split is analyst vocabulary and lives
-               behind DETAIL now; the disclaimer is stated once, in the header,
-               rather than twice. Three lines here also collided with the left
-               panel column, which is what made the duplication visible. -->
+          <!-- Case identity only. The split caveat now sits under the score
+               block in GROUND TRUTH, beside the numbers it qualifies, and the
+               research disclaimer lives in the README rather than on screen. -->
           <div class="corner tl">
             <span class="id" id="b-case">--</span>
-            <span class="sub more" id="b-split"></span>
           </div>
           <div class="corner tr">
             <span class="id" id="b-clock">--:--:-- / --:--:--</span>
