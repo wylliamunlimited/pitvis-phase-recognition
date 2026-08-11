@@ -19,3 +19,6 @@ __pycache__/
 
 # prediction outputs from pitvis-predict
 /predictions/
+
+# Rust build artifacts
+/rust/**/target/

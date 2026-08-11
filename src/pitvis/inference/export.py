@@ -51,6 +51,21 @@ from pitvis.paths import DATA, video_dir
 OUT_DEFAULT = DATA / "onnx"
 
 
+def _bins(out: Path, arrays: dict[str, np.ndarray]) -> None:
+    """Write float32 C-order .bin sidecars; shapes are recorded in pipeline.json."""
+    (out / "bin").mkdir(parents=True, exist_ok=True)
+    for name, a in arrays.items():
+        np.ascontiguousarray(a, dtype=np.float32).tofile(out / "bin" / f"{name}.bin")
+
+
+def _shapes(out: Path) -> dict:
+    import numpy as _np
+    got = {}
+    for f in sorted((out / "bin").glob("*.bin")):
+        got[f.stem] = int(f.stat().st_size // 4)
+    return got
+
+
 class Front(nn.Module):
     """Everything before the auto-regressive loop, run once per video."""
 
@@ -109,6 +124,12 @@ def export(spec: str, out: Path) -> dict:
     np.savez(out / "tables.npz",
              pe=arst.pos.pe.numpy(), phase=arst.phase.table.numpy(),
              mean=mean, std=std)
+    # Raw little-endian f32 sidecars alongside the .npz. The whole point of
+    # this bundle is to be consumed WITHOUT Python, and a non-Python runtime
+    # should not have to implement a .npy parser to read four constant tables.
+    # Shapes travel in pipeline.json.
+    _bins(out, {"pe": arst.pos.pe.numpy(), "phase": arst.phase.table.numpy(),
+                "steps_mean": mean, "steps_std": std})
 
     from pitvis.training.arst import CCI_N, EXCLUDED
     info = {"spec": spec, "space": meta["space"], "feature_dim": int(len(mean)),
@@ -154,9 +175,10 @@ def export_instruments(spec: str, out: Path) -> dict:
                       ).save(str(out / "instruments.onnx"))
 
     th = meta.get("thresholds")
-    np.savez(out / "instruments.npz", mean=mean, std=std,
-             thresholds=np.array(th, np.float32) if th is not None
-             else np.full(19, np.nan, np.float32))
+    tau = (np.array(th, np.float32) if th is not None
+           else np.full(19, np.nan, np.float32))
+    np.savez(out / "instruments.npz", mean=mean, std=std, thresholds=tau)
+    _bins(out, {"inst_mean": mean, "inst_std": std, "inst_tau": tau})
     return {"spec": spec, "space": meta["space"], "feature_dim": int(len(mean)),
             "window": int(model.window), "num_instruments": 19,
             "per_class_thresholds": th is not None,
@@ -328,7 +350,8 @@ def main(argv: list[str] | None = None) -> None:
     inst = export_instruments(args.instruments_model, args.out)
     back = export_backbone(info["space"], args.out)
     (args.out / "pipeline.json").write_text(json.dumps(
-        {"steps": info, "instruments": inst, "backbone": back}, indent=2) + "\n")
+        {"steps": info, "instruments": inst, "backbone": back,
+         "bin_floats": _shapes(args.out)}, indent=2) + "\n")
     print(f"exported -> {args.out}")
     print(f"  backbone    {back['backbone']} -> {back['feature_dim']}-d "
           f"@{back['transform']['input_size'][1]}px")
