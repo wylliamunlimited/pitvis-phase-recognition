@@ -311,9 +311,9 @@ Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
       `67912d3efc6852e7`.
 - [x] **6.2 Cross-validation harness.** See 4.4.
 - [x] **6.3 Variants tested.** control / weighted / thresholds / dinov2 /
-      composed. Winner is pos_weight + per-class thresholds on DINOv2:
-      **macro 0.2556 → 0.3792 on val, official 0.2321 → 0.5572, and 9/19
-      classes never predicted → 0/19.**
+      composed. Winner is pos_weight + per-class thresholds on DINOv2, and it
+      took classes never predicted from **9/19 to 0/19**. Numbers in
+      [`instrument-variants.md` §4](instrument-variants.md).
 - [x] **6.4 Wired into the product.** `pitvis-predict` and the app dispatch on
       the checkpoint's arch/space tags and embed per space. `sano.pt` is
       untouched and still reproduces byte for byte.
@@ -323,10 +323,9 @@ Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
       without becoming useful, and that is the next honest target.
 - [x] **6.6 The same treatment for task 1.** `training/arst_v2.py`, same
       protocol and the same folds. Winner is argmax masking + class weights on
-      DINOv2: **challenge metric 0.3425 → 0.4610 on val**, macro 0.3083 →
-      0.4420, edit 0.3767 → 0.4801. Masking alone was the largest single lever
-      (+0.062 macro out of fold) and had been sitting unclaimed as an ablation
-      flag. See [`notes/step-variants.md`](step-variants.md).
+      DINOv2. Masking alone was the largest single lever (+0.062 macro out of
+      fold) and had been sitting unclaimed as an ablation flag. Numbers in
+      [`step-variants.md` §4](step-variants.md).
 - [x] **6.7 The CV harness is task-agnostic.** `crossval.Task` holds the
       loader, scorer and ranking metric, so both tasks share the fold logic and
       the leaderboard instead of a second copy.

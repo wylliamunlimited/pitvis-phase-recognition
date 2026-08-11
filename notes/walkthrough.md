@@ -575,10 +575,11 @@ predicts but that is never true still joins the macro average, at F1 = 0, draggi
 down.
 
 `evaluation/metric.py:112` counts these as `leaked` and `report` prints them. The corollary is a free
-win nobody has taken yet: **masking classes 0/11/13 out of the argmax at inference can only
-raise this metric.** `test_leaking_costs_more_than_an_equally_wrong_scored_prediction` shows
-one wrong frame costing 0.667 when it leaks versus 0.822 when it is an equally-wrong guess at
-a scored class.
+win: **masking classes 0/11/13 out of the argmax at inference can only raise this metric.**
+`test_leaking_costs_more_than_an_equally_wrong_scored_prediction` shows one wrong frame costing
+0.667 when it leaks versus 0.822 when it is an equally-wrong guess at a scored class. It has since
+been taken — the `masked` step variant, and the largest single lever in that iteration
+(see [`step-variants.md`](step-variants.md)).
 
 **2. `zero_division=1`.** In the F1 call. Affects classes with an empty denominator.
 
