@@ -62,19 +62,16 @@ against 23.5M. Two ways to cut it before committing to the full run:
   Note the tag/space guard: `dinov2_ft` loads `backbone/dinov2-50ep/`, so a
   different EPOCHS needs the space's path updated. The job checks this in its
   first second rather than after the last hour.
-- **Run stage 2 only first.** Comment out the per-fold loop, fine-tune once on
-  all of TRAIN, and score VAL. That is 1 run instead of 6, and it answers "does
-  a fine-tuned DINOv2 beat a frozen one" — which is the question. The other
-  five exist only to make an honest *ranking* possible.
+- **`STAGE=full`.** One fine-tune instead of six — the column above divided by
+  six. It answers "does a fine-tuned DINOv2 beat a frozen one", which is the
+  question; the other five encoders exist only to make an honest *ranking*
+  possible later. **Start here.**
 
-Two things dominate the bill more than the card choice:
-
-- **Forgetting to shut down.** `startup.sh` shuts the instance down from a
-  `trap`, so it fires on success, on failure, and on signal. An idle A100 costs
-  more per forgotten day than this whole experiment costs to run.
-- **Not using spot/preemptible.** The job is idempotent — every stage skips
-  work already on disk and `startup.sh` re-syncs finished backbones before
-  starting — so a preemption costs the current fold, not the run.
+Two things dominate the bill more than the card choice, and both are handled by
+flags the [runbook](#2-launch) passes: leaving the instance running (the
+shutdown fires from a `trap`, so it survives failure) and not using spot (the
+job is idempotent, so a preemption costs the fold in flight, not the run).
+Neither is optional — check them against that section rather than improvising.
 
 ## What moves
 
@@ -99,13 +96,39 @@ fine. A **public** bucket would be redistribution of a no-derivatives dataset.
 Keep the bucket private, do not share the URL, and delete it when the job is
 done. See `NOTICE` at the repo root.
 
-## Running it
+## Runbook
+
+### 0. Before you spend anything
+
+- [ ] **Decide the pass.** `STAGE=full` (one fine-tune) unless you already have
+      a headline win and need a ranking. On an L4 that is roughly 4 h against
+      23 h — see [Cost](#cost).
+- [ ] **The frame cache exists locally.** `du -sh data/frames/384` should read
+      **~3.6 GB across 25 video directories**. If not:
+      ```sh
+      uv run pitvis-frames          # ~19 min, needs the 40 GB of video
+      ```
+      This is the one step that needs the raw videos, and it is done on your
+      machine, not the rented one — decoding 40 GB on a GPU instance would bill
+      an accelerator to run ffmpeg.
+- [ ] **A private bucket.** See [Dataset licence](#dataset-licence--read-before-creating-the-bucket).
+      Not optional and not a formality.
+- [ ] **`gcloud` is authenticated** and the project has GPU quota in the zone
+      you are about to use. Quota denial is the most common way this fails, and
+      it fails *after* the instance create call appears to succeed.
+
+### 1. Upload the frames — once, ~3.6 GB
 
 ```sh
 BUCKET=gs://your-private-bucket
+gsutil -m rsync -r data/frames "$BUCKET/frames"
+```
 
-gsutil -m rsync -r data/frames "$BUCKET/frames"      # ~3.6 GB, once
+Only the frames go up. **Not the 40 GB of video** — the job never decodes.
 
+### 2. Launch
+
+```sh
 gcloud compute instances create pitvis-ft \
   --zone=us-central1-a \
   --machine-type=g2-standard-8 \
@@ -115,41 +138,107 @@ gcloud compute instances create pitvis-ft \
   --maintenance-policy=TERMINATE \
   --provisioning-model=SPOT \
   --scopes=storage-rw \
-  --metadata=BUCKET="$BUCKET",EPOCHS=50,BACKBONE=vit_base_patch14_dinov2.lvd142m,BRANCH=main \
+  --metadata=BUCKET="$BUCKET",STAGE=full,EPOCHS=50,BACKBONE=vit_base_patch14_dinov2.lvd142m,BRANCH=main \
   --metadata-from-file=startup-script=infra/startup.sh
 ```
 
-Watch it:
+Three flags carry the cost discipline, and none is optional:
+
+- `--provisioning-model=SPOT` — the job is idempotent and `startup.sh` re-syncs
+  finished backbones before starting, so a preemption costs the fold in flight,
+  not the run.
+- `--maintenance-policy=TERMINATE` — required with an accelerator.
+- `--scopes=storage-rw` — without it the final rsync fails and the instance
+  shuts down having thrown the results away.
+
+`BRANCH` must name a branch that is **pushed**; the instance clones from the
+remote and cannot see your working tree.
+
+### 3. Watch
 
 ```sh
 gcloud compute ssh pitvis-ft --zone=us-central1-a -- tail -f /var/log/pitvis-job.log
 ```
 
-It shuts itself down when finished. Confirm, and confirm again:
+A healthy log reaches these within about two minutes:
+
+```
+backbone vit_base_patch14_dinov2.lvd142m   epochs 50   space dinov2_ft   tag dinov2-50ep
+NVIDIA L4, 23034 MiB
+torch 2.x.x cuda True
+backbone accepts 224x224 -> 768-d
+holding out [...]            # STAGE=all only
+  ep1 6,400/84,666  loss 2.41  step-acc 0.31  (312 img/s)
+```
+
+Check `img/s` against the [cost table](#cost) on the first epoch — that is when
+a wrong estimate is still cheap to act on. `cuda True` and the `224x224 -> 768-d`
+probe are the two lines that mean the ViT was built correctly; without
+`--img-size` the job aborts here rather than an epoch later.
+
+### 4. Confirm it shut itself down
 
 ```sh
 gcloud compute instances list --filter="name=pitvis-ft"
 ```
 
-Then pull the results back:
+Expect `TERMINATED`, or no rows. The shutdown fires from a `trap`, so it also
+runs on failure — but confirm anyway. An idle accelerator left running over a
+weekend costs more than the whole experiment.
+
+### 5. Pull the results back and score
 
 ```sh
 gsutil -m rsync -r "$BUCKET/out/backbone" data/backbone
 uv run pitvis-extract --space dinov2_ft        # or rsync features down instead
 uv run pitvis-verify  --space dinov2_ft
 
-# then the comparison the job exists to enable — VAL, scored once
 uv run pitvis-train arst-v2        --variant best --space dinov2_ft
 uv run pitvis-train instruments-v2 --variant best --space dinov2_ft
 ```
 
+Those land in `v2/best@dinov2_ft/` and leave the current winners alone.
+
+## Reading the result honestly
+
+**The bar to beat**, VAL, frozen DINOv2 with the `best` recipe:
+
+| | frozen DINOv2 |
+|---|---|
+| steps · challenge metric | **0.4610** ± 0.043 |
+| instruments · official | **0.5572** ± 0.225 |
+| instruments · macro | 0.3792 |
+
+Four things to hold on to when the numbers come back:
+
+1. **It is one measurement per arm, not a ranking.** Five videos, per-video std
+   around 0.05 on steps and 0.23 on the instruments headline. A gap smaller
+   than that spread is not a result. This is precisely what the CV protocol
+   exists to avoid, and `STAGE=full` cannot give you a CV — only the six-fold
+   run can, and only via the harness change described below.
+2. **Expect the metrics to disagree, and decide in advance which one rules.**
+   The fine-tuned ResNet-50 raised instrument macro by 0.099 while dropping the
+   official number by 0.177: better on the rare classes macro weights equally,
+   worse on the four carrying ~91% of positives. The pre-registered rule is
+   **primary `macro_f1`, guarded on the official metric** — apply it rather than
+   picking the flattering column afterwards.
+3. **Watch the edit score on steps, not just macro.** Fine-tuning is frame-wise
+   with no temporal term, and on ResNet-50 it bought +0.024 macro for −0.061
+   edit — better at naming a second, worse at holding a segment together. If
+   DINOv2 repeats that shape, the fix is a temporal objective, not more epochs.
+4. **VAL is not the test set.** Das et al. measure a −47-point val→test collapse
+   for instruments against −7 for steps. Nothing here is comparable to the
+   leaderboard.
+
 ## After it lands
 
-The per-fold backbones make an honest cross-validation possible for the first
-time on fine-tuned features. Each fold's temporal model must read features from
-*its own* encoder — the one that never saw its held-out videos — which is a
-change to the harness beyond what a single `--space` expresses, and is the next
-piece of work rather than something this job completes.
+`STAGE=full` gives you a headline number and a shippable encoder. It does
+**not** give you an honest cross-validation: the full-TRAIN backbone has seen
+every fold's held-out videos, and `crossval.check_no_leak` will refuse to
+pretend otherwise.
 
-The full-TRAIN backbone is immediately usable for the single VAL scoring, since
-VAL is disjoint from TRAIN.
+The six-fold run makes that possible for the first time, but the harness is not
+there yet. Each fold's temporal model has to read features from *its own*
+encoder — the one that never saw its held-out videos — which is more than a
+single `--space` can express. That is the next piece of work, and it is a
+change to `crossval.py`, not something this job completes.
