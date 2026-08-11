@@ -22,6 +22,7 @@ pitvis-models = "pitvis.models.run:main"
 pitvis-train = "pitvis.training.run:main"
 pitvis-eval = "pitvis.evaluation.run:main"
 pitvis-predict = "pitvis.inference.run:main"
+pitvis-export = "pitvis.inference.export:main"
 pitvis-app = "pitvis.app.run:main"
 # Individual data stages. The runners above call these same main()s, never a
 # copy. Models are NOT listed here — they live in training/registry.py and are
@@ -55,6 +56,9 @@ packages = ["src/pitvis"]
 
 [dependency-groups]
 dev = [
+    "onnx>=1.22.0",
+    "onnxruntime>=1.28.0",
+    "onnxscript>=0.7.1",
     "pytest>=9.1.1",
 ]
 
