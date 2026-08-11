@@ -14,9 +14,11 @@
 # Metadata expected on the instance:
 #   BUCKET   gs://your-bucket        required
 #   EPOCHS   50                      optional
-#   BACKBONE resnet50                optional
+#   BACKBONE vit_base_patch14_dinov2.lvd142m   optional; `resnet50` for the
+#            cheaper arm. run_job.sh maps it to a tag, a space and an input
+#            size, and refuses a backbone it has no mapping for.
 #   REPO     https://github.com/...  optional, defaults to origin
-#   BRANCH   feat/instrument-variants
+#   BRANCH   main
 
 set -uo pipefail
 exec > >(tee -a /var/log/pitvis-job.log) 2>&1
@@ -26,7 +28,7 @@ meta() { curl -fsH "Metadata-Flavor: Google" \
 
 BUCKET="$(meta BUCKET)"
 EPOCHS="$(meta EPOCHS)"; EPOCHS="${EPOCHS:-50}"
-BACKBONE="$(meta BACKBONE)"; BACKBONE="${BACKBONE:-resnet50}"
+BACKBONE="$(meta BACKBONE)"; BACKBONE="${BACKBONE:-vit_base_patch14_dinov2.lvd142m}"
 REPO="$(meta REPO)"; REPO="${REPO:-https://github.com/wylliamunlimited/pitvis-phase-recognition.git}"
 BRANCH="$(meta BRANCH)"; BRANCH="${BRANCH:-main}"
 

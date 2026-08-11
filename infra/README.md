@@ -16,22 +16,56 @@ trained with that fold's videos excluded, plus **one trained on all of TRAIN**
 for the single VAL scoring — VAL being the one split no TRAIN-fitted encoder
 has ever seen.
 
-That is 6 fine-tunes. On MPS at 11.3 min/epoch it is ~57 h at 50 epochs. That
-is the entire reason this directory exists.
+That is 6 fine-tunes, and on this laptop the cheapest of them is ~57 h. That is
+the entire reason this directory exists. Costs per backbone are below.
+
+## Which backbone, and why it is now the default
+
+`BACKBONE` defaults to **DINOv2 ViT-B/14**, not ResNet-50.
+
+The pilot fine-tuned ResNet-50, because it trains ~3x faster and could answer
+"does fine-tuning help at all" cheaply. It answered yes — mean AP 0.271 → 0.445
+with 19/19 classes improving. But end to end it does not beat a **frozen**
+DINOv2:
+
+| VAL, `best` recipe | frozen DINOv2 | fine-tuned ResNet-50 |
+|---|---|---|
+| steps · challenge metric | **0.4610** | 0.4425 |
+| instruments · official | **0.5572** | 0.3805 |
+| instruments · macro | 0.3792 | **0.4783** |
+
+So the untested combination — and the one worth GPU money — is fine-tuning the
+encoder that already wins frozen. `BACKBONE=resnet50` still runs the cheaper
+arm; the script maps each backbone to its tag, space, frozen counterpart and
+input size, and refuses one it has no mapping for rather than guessing.
 
 ## Cost
 
-Measured locally: ResNet-50 trains at **96 img/s on MPS**, 11.3 min/epoch over
-84,666 frames. The table below scales that by rough GPU throughput — **verify
-against current pricing and your own first run**, because both rates and prices
-move, and the job prints its actual img/s in the log.
+Measured locally on MPS over the 84,666 training frames: **ResNet-50 at 96
+img/s** (11.3 min/epoch), **DINOv2 ViT-B/14 at 29 img/s** (~49 min/epoch). The
+table scales those by rough GPU throughput — **verify against current pricing
+and your own first run**, because both rates and prices move, and the job
+prints its actual img/s in the log.
 
-| | approx img/s | 6 × 50 epochs | at spot | at on-demand |
-|---|---|---|---|---|
-| MPS (this laptop) | 96 | ~57 h | — | — |
-| T4 | ~300 | ~18 h | low | low-ish |
-| L4 | ~800 | ~7 h | moderate | moderate |
-| A100 40GB | ~2000 | ~3 h | higher | highest |
+| | ResNet-50, 6 × 50 ep | DINOv2 ViT-B, 6 × 50 ep |
+|---|---|---|
+| MPS (this laptop) | ~57 h | ~7 days — not viable |
+| T4 | ~18 h | ~60 h |
+| L4 | ~7 h | ~23 h |
+| A100 40GB | ~3 h | ~10 h |
+
+ViT-B is ~3.3x the cost of ResNet-50 at equal epochs, and 85.7M parameters
+against 23.5M. Two ways to cut it before committing to the full run:
+
+- **`EPOCHS=10`.** The 5-epoch ResNet-50 pilot already moved mean AP by 0.174,
+  so the curve is steep early and 50 may be well past diminishing returns.
+  Note the tag/space guard: `dinov2_ft` loads `backbone/dinov2-50ep/`, so a
+  different EPOCHS needs the space's path updated. The job checks this in its
+  first second rather than after the last hour.
+- **Run stage 2 only first.** Comment out the per-fold loop, fine-tune once on
+  all of TRAIN, and score VAL. That is 1 run instead of 6, and it answers "does
+  a fine-tuned DINOv2 beat a frozen one" — which is the question. The other
+  five exist only to make an honest *ranking* possible.
 
 Two things dominate the bill more than the card choice:
 
@@ -42,16 +76,14 @@ Two things dominate the bill more than the card choice:
   work already on disk and `startup.sh` re-syncs finished backbones before
   starting — so a preemption costs the current fold, not the run.
 
-A cheaper first pass: `EPOCHS=10`. Our 5-epoch pilot already moved mean AP from
-0.271 to 0.445 with 19/19 classes improving, so the curve is steep early and
-50 epochs may be well past the point of diminishing returns.
-
 ## What moves
 
 ```
 up    frames/     ~3.6 GB    the 1 fps JPEG cache
-down  backbone/   ~600 MB    6 fine-tuned encoders
-down  features/   ~940 MB    the re-extracted space (or re-extract locally)
+down  backbone/   ~2.1 GB    6 fine-tuned ViT-B encoders (~350 MB each;
+                              ~600 MB total if BACKBONE=resnet50)
+down  features/   ~350 MB    the re-extracted space, 768-d (or re-extract
+                              locally from the backbone, which is smaller)
 ```
 
 **Not the 40 GB of video.** The job never decodes — it reads JPEGs. That is
@@ -83,7 +115,7 @@ gcloud compute instances create pitvis-ft \
   --maintenance-policy=TERMINATE \
   --provisioning-model=SPOT \
   --scopes=storage-rw \
-  --metadata=BUCKET="$BUCKET",EPOCHS=50,BACKBONE=resnet50,BRANCH=main \
+  --metadata=BUCKET="$BUCKET",EPOCHS=50,BACKBONE=vit_base_patch14_dinov2.lvd142m,BRANCH=main \
   --metadata-from-file=startup-script=infra/startup.sh
 ```
 
@@ -103,8 +135,12 @@ Then pull the results back:
 
 ```sh
 gsutil -m rsync -r "$BUCKET/out/backbone" data/backbone
-uv run pitvis-extract --space resnet50_ft      # or rsync features down instead
-uv run pitvis-verify  --space resnet50_ft
+uv run pitvis-extract --space dinov2_ft        # or rsync features down instead
+uv run pitvis-verify  --space dinov2_ft
+
+# then the comparison the job exists to enable — VAL, scored once
+uv run pitvis-train arst-v2        --variant best --space dinov2_ft
+uv run pitvis-train instruments-v2 --variant best --space dinov2_ft
 ```
 
 ## After it lands
