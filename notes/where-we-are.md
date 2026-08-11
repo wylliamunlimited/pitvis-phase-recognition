@@ -48,9 +48,26 @@ the whole reason `infra/` exists.
 |---|---|---|---|
 | start | published reproductions | 0.3425 | 0.2321 |
 | iter 1+2 | loss, decision rule, DINOv2 | **0.4610** | **0.5572** |
-| iter 3 | fine-tune the encoder | *no valid number* | *no valid number* |
+| iter 3 | fine-tuned ResNet-50 encoder | 0.4425 | 0.3805 |
 
 Steps are the challenge metric, instruments the official one, both on VAL.
+
+**Iteration 3 did not win, and the reason is interesting rather than
+disappointing.** On the *primary* metric it does win instruments — macro F1
+0.3792 → **0.4783** — while the support-dominated official number falls. It is
+better on the rare classes and worse on the four carrying 91% of positives. On
+steps it is a wash overall but trades edit score (−0.061) for macro (+0.024):
+the encoder was fine-tuned frame-by-frame with no temporal term, so it names
+seconds slightly better and holds segments together worse.
+
+Both arms are **single VAL measurements**, not a ranking — a CV over
+`resnet50_ft` is unavailable because one encoder trained on all of TRAIN leaks
+into every fold. Treat it as a reason to fine-tune DINOv2 and cross-validate
+properly, not as a verdict.
+
+Note the fine-tune is **ResNet-50, not DINOv2** — ViT-B trains at 29 img/s
+against ResNet-50's 96, so the pilot went to the cheap backbone to find out
+whether fine-tuning helps at all. Nothing has fine-tuned DINOv2 yet.
 
 - what was tried, what each variant tested, per-class movement —
   [`step-variants.md`](step-variants.md),
