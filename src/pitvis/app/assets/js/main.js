@@ -6,6 +6,7 @@ import * as tray from './tray.js';
 import * as worklist from './worklist.js';
 import { follow, phaseOf } from './jobs.js';
 import { CanvasHost } from './overlay.js';
+import { Panels } from './panels.js';
 import { VideoTimeSource } from './player.js';
 import { renderStatus, thresholdPhrase } from './status.js';
 import { laneSet, renderTimeline } from './timeline.js';
@@ -33,6 +34,7 @@ const state = {
 
 let clock = null;
 let overlay = null;
+let panels = null;
 let tlCtx = null;
 
 // -- boot -------------------------------------------------------------------
@@ -54,6 +56,8 @@ async function boot() {
     overlay.resize();
     burn.place(overlay.geometry());
   }).observe($('video'));
+
+  panels = new Panels($('panels'));
 
   const listing = await api.listCases();
   state.cases = listing.cases;
@@ -373,6 +377,7 @@ function drawTimeline() {
 
 function onResize() {
   drawTimeline();       // the video's own rect is handled by the ResizeObserver
+  panels?.reflow();     // re-clamp anything a shrinking window pushed off
 }
 
 // -- controls ---------------------------------------------------------------
@@ -389,7 +394,11 @@ function wireControls() {
       renderTiles(state.doc, Math.max(0, state.t));
       if (state.detail) renderTray();
     }
+    // The analyst panels only acquire a box once DETAIL is on, so their
+    // default placement cannot be computed until after this point.
+    panels?.reflow();
   });
+  $('layout-reset').addEventListener('click', () => panels?.reset());
   $('play').addEventListener('click', () => clock?.toggle());
   $('back10').addEventListener('click', () => clock?.nudge(-10));
   $('fwd10').addEventListener('click', () => clock?.nudge(10));

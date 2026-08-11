@@ -445,3 +445,53 @@ rewriting for either.
   `pointer-events: none`. The fix is both halves: explicit `width`/`height` in
   CSS so layout sizes the element, and measuring the *parent* in `resize()` so
   the bitmap can never size what sizes it.
+
+## 9. Why the rail became floating panels
+
+The rail was one column holding five categories, and it scrolled. Scrolling is
+the one interaction that guarantees you cannot see two things at once, and the
+pairing that matters here is exactly the one it broke: which step the model
+thinks it is in, and which instruments it can see. Those are two halves of a
+single judgement, and a column asks you to hold one in memory while you scroll
+to the other.
+
+Each category is now an independently collapsible, draggable panel
+(`js/panels.js`). Collapsed, a panel costs one header row, so five categories
+fit in the height of one old card and any two can be open together.
+
+**Panels may sit over the image, and that is measured.** The endoscope's circle
+does not fill the 16:9 frame. Over the 5 validation videos at 3 timestamps
+each, with an optical-black threshold of 24/255:
+
+| | worst case over 15 frames |
+|---|---|
+| left gutter dead | **217 px of 1280 (17.0%)** |
+| right gutter dead | 103 px (8.0%) |
+
+The left gutter is free in every frame sampled. The right is **not** — video_01
+is off-centre and runs out to x=1176. That asymmetry is why the defaults park
+the taller stack on the left.
+
+Three things the implementation must keep:
+
+- **`_bounds()` reserves the transport strip.** A panel takes pointer events,
+  so one covering PLAY does not just hide the control, it eats the click. The
+  strip is measured, not a constant, so it tracks the button metrics.
+- **`_place()` caps a panel's height to the space below its own top edge.**
+  Without it a tall panel is clipped by the timeline with its last rows
+  unreachable — strictly worse than the column it replaced.
+- **Coordinates are saved only for panels the reader actually dragged.**
+  Pinning an untouched panel to wherever it happened to sit would freeze the
+  auto-stack, so collapsing its neighbour would leave a hole instead of closing
+  up. `collapsed` is always saved; `x`/`y` only after a drag.
+
+STATUS is collapsed by default. Expanded it largely repeats the burn-in, which
+already carries step and elapsed time; folded, it hands the left column to
+PROCEDURE STEPS, and all fourteen rows fit with nothing to scroll.
+
+**Known cost, not yet resolved.** At 1440x900 the video is height-constrained
+and 1011 px wide, so the left column overlaps its first ~91 px — which is
+where the burn-in's identity block sits. The disclaimer line is long enough to
+stay legible, but "a screenshot cropped to the frame carries the disclaimer" is
+weaker than it was. Reserving a gutter would fix it and would also undo the
+point of floating panels; the reader can drag them clear meanwhile.

@@ -508,6 +508,23 @@ Reasoning and measured numbers live in `notes/app.md`. These are the rules.
   threshold, because SANO has no out-of-patient class. 26% of video_19. The
   collision is resolved once in `case._instrument_state` and the wire format
   carries a `state` string, never the raw pair.
+- **Categories float; they never stack in a scrolling column.** A fixed rail
+  puts every category in one column, and the moment it overflows it scrolls —
+  the one interaction that guarantees you cannot see two things at once. Steps
+  and instruments are two halves of one judgement. `panels.js` gives each
+  category an independently collapsible, draggable panel; `_bounds()` reserves
+  the transport strip, because a panel takes pointer events and one covering
+  PLAY eats the click rather than merely hiding it. STATUS is collapsed by
+  default — its live values are already burned into the frame — which is what
+  lets all fourteen worklist rows fit with nothing to scroll.
+- **Panels may sit over the image, and that is measured, not assumed.** Across
+  the 5 validation videos at 3 timestamps each, the left gutter is optical
+  black for at least 217 of 1280 px (17.0%) in every frame. The right is **not**
+  reliably dead — `video_01` runs out to x=1176, leaving 8%. Re-measure before
+  trusting either number for a new default.
+- **No `backdrop-filter` on a panel.** A blur behind an element overlapping the
+  video makes the compositor re-read the video layer every frame, and this
+  surface has already lost the video once to a compositing bug. Flat alpha.
 - **The default view hides the analyst layer.** Confidence, ground truth,
   agreement, scores and per-class probabilities are behind `[ + DETAIL ]`. The
   visible layer answers "what is happening now"; the hidden one answers "how
