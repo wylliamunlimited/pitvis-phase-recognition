@@ -119,6 +119,68 @@ def export(spec: str, out: Path) -> dict:
     return info
 
 
+class Windows(nn.Module):
+    """SANO over pre-built causal windows: (N, W, D) -> (N, 19) logits.
+
+    The windowing itself is a slice-and-stack over the feature array, not a
+    learned op, so it stays in the host language — same reasoning as the phase
+    table. Exporting it would bake the window length into the graph.
+    """
+
+    def __init__(self, model):
+        super().__init__()
+        self.m = model
+
+    def forward(self, win):
+        h = self.m.drop(self.m.lstm(win)[0][:, -1])
+        return self.m.instruments(h)
+
+
+def export_instruments(spec: str, out: Path) -> dict:
+    """Write instruments.onnx + instruments.npz (stats, thresholds)."""
+    from pitvis.inference.predict import load_instrument_checkpoint
+
+    ck = checkpoints.resolve(spec)
+    mean = np.load(ck.stats)["mean"]
+    model, mean, std, trained, meta = load_instrument_checkpoint(
+        ck.path, ck.stats, feature_dim=len(mean), device=torch.device("cpu"))
+    mod = Windows(model).eval()
+    out.mkdir(parents=True, exist_ok=True)
+
+    win = torch.zeros(4, model.window, len(mean))
+    N = torch.export.Dim("N", min=1, max=65536)
+    torch.onnx.export(mod, (win,), dynamo=True,
+                      dynamic_shapes={"win": {0: N}}
+                      ).save(str(out / "instruments.onnx"))
+
+    th = meta.get("thresholds")
+    np.savez(out / "instruments.npz", mean=mean, std=std,
+             thresholds=np.array(th, np.float32) if th is not None
+             else np.full(19, np.nan, np.float32))
+    return {"spec": spec, "space": meta["space"], "feature_dim": int(len(mean)),
+            "window": int(model.window), "num_instruments": 19,
+            "per_class_thresholds": th is not None,
+            "threshold": float(trained.get("threshold", 0.5))}
+
+
+def export_backbone(space_name: str, out: Path) -> dict:
+    """Write backbone.onnx: (N, 3, 224, 224) preprocessed pixels -> (N, D)."""
+    from pitvis.data import spaces
+    from pitvis.data.extract_features import build_model
+
+    space = spaces.get(space_name)
+    model, _tf, sd = build_model(torch.device("cpu"), space)
+    out.mkdir(parents=True, exist_ok=True)
+    px = sd["transform"]["input_size"][1]
+    dummy = torch.zeros(2, 3, px, px)
+    N = torch.export.Dim("N", min=1, max=4096)
+    torch.onnx.export(model, (dummy,), dynamo=True,
+                      dynamic_shapes={"x": {0: N}}
+                      ).save(str(out / "backbone.onnx"))
+    return {"space": space_name, "backbone": space.backbone,
+            "feature_dim": int(sd["feature_dim"]), "transform": sd["transform"]}
+
+
 def rollout(s_dec, mem, tables, info) -> np.ndarray:
     """The reference host-language decode: CCI + masking over decode.onnx.
 
@@ -189,20 +251,73 @@ def verify(out: Path, vid: int, spec: str) -> bool:
                       mask_excluded=meta["mask_excluded"])
 
     differ = int((p_onnx != p_torch).sum())
-    print(f"video_{vid:02d}: memory max|Δ| {np.abs(mem - ref_mem).max():.3e}")
-    print(f"video_{vid:02d}: {len(p_torch) - differ}/{len(p_torch)} seconds agree "
+    print(f"video_{vid:02d} steps:       memory max|Δ| {np.abs(mem - ref_mem).max():.3e}, "
+          f"{len(p_torch) - differ}/{len(p_torch)} seconds agree "
           f"({100 * (1 - differ / len(p_torch)):.4f}%)")
+
+    ok_inst = _verify_instruments(out, vid, feats)
     if differ:
-        print(f"  FAIL — {differ} second(s) differ. A prediction feeds a surface "
-              f"that reads as clinical; float drift in the activations is fine, "
-              f"a changed decision is not.")
-    return differ == 0
+        print(f"  FAIL — {differ} step second(s) differ. A prediction feeds a "
+              f"surface that reads as clinical; float drift in the activations "
+              f"is fine, a changed decision is not.")
+    return differ == 0 and ok_inst
+
+
+def _verify_instruments(out: Path, vid: int, feats: np.ndarray) -> bool:
+    """Same gate for task 2: pairs must agree second for second."""
+    import onnxruntime as ort
+    from pitvis.evaluation.instruments import multihot_to_pairs
+    from pitvis.inference.predict import (load_instrument_checkpoint,
+                                          predict_instruments)
+    from pitvis.models.lstm import decide, decide_per_class
+
+    info = json.loads((out / "pipeline.json").read_text())["instruments"]
+    z = np.load(out / "instruments.npz")
+    mean, std = z["mean"], z["std"]
+    th = None if np.isnan(z["thresholds"]).all() else z["thresholds"]
+
+    x = ((feats - mean) / std).astype(np.float32)
+    W = info["window"]
+    # Left-clamped causal windows, exactly as models.lstm.causal_windows does:
+    # frame 0 sees itself W times rather than zeros, so the model is never fed
+    # a context it was not trained on.
+    pad = np.concatenate([np.repeat(x[:1], W - 1, 0), x])
+    win = np.stack([pad[i:i + W] for i in range(len(x))]).astype(np.float32)
+
+    so = ort.SessionOptions()
+    so.log_severity_level = 3
+    sess = ort.InferenceSession(str(out / "instruments.onnx"), so)
+    lg = np.concatenate([sess.run(None, {"win": win[s:s + 2048]})[0]
+                         for s in range(0, len(win), 2048)])
+    t = torch.from_numpy(lg)
+    keep = (decide_per_class(t, torch.from_numpy(th)) if th is not None
+            else decide(t, info["threshold"])).numpy()
+    p_onnx = multihot_to_pairs(keep)
+
+    ck = checkpoints.resolve(info["spec"])
+    model, m2, s2, trained, meta = load_instrument_checkpoint(
+        ck.path, ck.stats, feature_dim=len(mean), device=torch.device("cpu"))
+    tt = meta.get("thresholds")
+    p_torch = predict_instruments(
+        feats, model, m2, s2, torch.device("cpu"), threshold=info["threshold"],
+        chunk=trained["chunk"],
+        thresholds=np.array(tt, np.float32) if tt is not None else None)
+
+    d = int((p_onnx != p_torch).any(1).sum())
+    print(f"video_{vid:02d} instruments: "
+          f"{len(p_torch) - d}/{len(p_torch)} seconds agree "
+          f"({100 * (1 - d / len(p_torch)):.4f}%)")
+    if d:
+        print(f"  FAIL — {d} instrument second(s) differ.")
+    return d == 0
 
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--steps-model", default=checkpoints.default("steps"),
+    ap.add_argument("--steps-model", default=checkpoints.default("steps").name,
                     metavar="SPEC", help="checkpoint to export")
+    ap.add_argument("--instruments-model",
+                    default=checkpoints.default("instruments").name, metavar="SPEC")
     ap.add_argument("--out", type=Path, default=OUT_DEFAULT)
     ap.add_argument("--verify", type=int, nargs="?", const=25, metavar="VIDEO",
                     help="after exporting, roll out and compare against torch "
@@ -210,9 +325,22 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(argv)
 
     info = export(args.steps_model, args.out)
-    print(f"exported {args.steps_model} -> {args.out}")
-    print(f"  space={info['space']} dim={info['feature_dim']} "
-          f"width={info['width']} mask_excluded={info['mask_excluded']}")
+    inst = export_instruments(args.instruments_model, args.out)
+    back = export_backbone(info["space"], args.out)
+    (args.out / "pipeline.json").write_text(json.dumps(
+        {"steps": info, "instruments": inst, "backbone": back}, indent=2) + "\n")
+    print(f"exported -> {args.out}")
+    print(f"  backbone    {back['backbone']} -> {back['feature_dim']}-d "
+          f"@{back['transform']['input_size'][1]}px")
+    print(f"  steps       {args.steps_model} width={info['width']} "
+          f"mask_excluded={info['mask_excluded']}")
+    print(f"  instruments {args.instruments_model} window={inst['window']} "
+          f"per-class-tau={inst['per_class_thresholds']}")
+    if inst["space"] != info["space"]:
+        raise SystemExit(
+            f"space mismatch: steps reads {info['space']}, instruments "
+            f"{inst['space']}. One pipeline embeds each frame ONCE, so both "
+            f"heads must read the same space.")
     for f in sorted(args.out.iterdir()):
         print(f"  {f.name:14s} {f.stat().st_size / 1e6:8.2f} MB")
 
