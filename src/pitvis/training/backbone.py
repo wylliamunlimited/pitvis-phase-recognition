@@ -122,12 +122,22 @@ class Frames(Dataset):
 
 
 class MultiTask(nn.Module):
-    """Backbone plus two heads. `backbone` alone is what extraction reuses."""
+    """Backbone plus two heads. `backbone` alone is what extraction reuses.
 
-    def __init__(self, name: str, pretrained: bool = True):
+    `model_kwargs` reaches `timm.create_model` untouched, and for a ViT it is
+    not optional. DINOv2's weights ship at 518x518, so without `img_size=224`
+    the model is built for a 37x37 patch grid and rejects the 224 tensor this
+    dataset produces — "Input height (518) doesn't match model (224)", the same
+    trap extraction hit. It must also match the `img_size` of the space that
+    will later read this checkpoint, or the encoder is fine-tuned at one
+    resolution and inferred at another.
+    """
+
+    def __init__(self, name: str, pretrained: bool = True, **model_kwargs):
         super().__init__()
         import timm
-        self.backbone = timm.create_model(name, pretrained=pretrained, num_classes=0)
+        self.backbone = timm.create_model(name, pretrained=pretrained,
+                                          num_classes=0, **model_kwargs)
         d = self.backbone.num_features
         self.steps = nn.Linear(d, NUM_CLASSES)
         self.instruments = nn.Linear(d, NUM_INSTRUMENTS)
@@ -165,6 +175,11 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--backbone", default="resnet50",
                     help="timm model to fine-tune (default: resnet50 — 4x "
                          "cheaper to train than ViT-B and what both papers used)")
+    ap.add_argument("--img-size", type=int, default=None, metavar="PX",
+                    help="build the backbone for this input size. REQUIRED for "
+                         "a ViT — DINOv2 ships at 518 and rejects the 224 crop "
+                         "this dataset produces unless told otherwise. Leave "
+                         "unset for a CNN, which infers its size from the input")
     ap.add_argument("--epochs", type=int, default=5,
                     help="5 is the pilot; the papers use 50")
     ap.add_argument("--lr", type=float, default=1e-4)
@@ -207,7 +222,14 @@ def main(argv: list[str] | None = None) -> None:
                         num_workers=args.workers, pin_memory=(dev.type == "cuda"),
                         persistent_workers=args.workers > 0, drop_last=True)
 
-    model = MultiTask(args.backbone).to(dev)
+    # Fail here, loudly, rather than after an epoch of training: a ViT built at
+    # its native 518 accepts nothing this dataset produces, and the error is
+    # far less obvious once it surfaces inside a DataLoader worker.
+    kwargs = {"img_size": args.img_size} if args.img_size else {}
+    model = MultiTask(args.backbone, **kwargs).to(dev)
+    with torch.no_grad():
+        probe = model.backbone(torch.zeros(1, 3, CROP, CROP, device=dev))
+    print(f"backbone accepts {CROP}x{CROP} -> {probe.shape[1]}-d")
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
     ce = nn.CrossEntropyLoss(weight=class_weights(train_ds, args.weight_cap).to(dev))
