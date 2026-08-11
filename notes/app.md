@@ -431,3 +431,17 @@ rewriting for either.
 - **One inference worker, permanently.** `redirect_stdout` swaps a
   process-global `sys.stdout`, so two jobs would interleave their logs, and two
   torch rollouts would contend for one MPS device.
+- **The overlay canvas must never be measured against itself.** A canvas is a
+  *replaced* element, so `position: absolute; inset: 0` does not stretch it:
+  with `width: auto` the used width is the intrinsic width — the bitmap
+  attribute — and the over-constrained inset is dropped. `resize()` originally
+  read `canvas.getBoundingClientRect()` and wrote `width * devicePixelRatio`
+  back, which on a 2x display doubles the element on every resize. Ten window
+  resizes reached 1228800x614400 CSS px, past the ~268M-pixel bitmap Chrome
+  will allocate; the canvas then painted as an opaque white box directly over
+  the video, and `.burn` — later in the DOM — kept rendering on top of it, so
+  the failure looked like "the video is white but the burn-in still works".
+  It is invisible at dpr 1 and invisible to `elementFromPoint`, which skips
+  `pointer-events: none`. The fix is both halves: explicit `width`/`height` in
+  CSS so layout sizes the element, and measuring the *parent* in `resize()` so
+  the bitmap can never size what sizes it.
