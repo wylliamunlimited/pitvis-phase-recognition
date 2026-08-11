@@ -31,6 +31,14 @@
  * video is the loudest temptation to break this, because every PACS overlay
  * on earth is monospace. Tabular figures already hold those columns.
  *
+ * CATEGORIES FLOAT, THEY DO NOT STACK. A fixed rail puts every category in
+ * one column, so the moment it overflows it scrolls — and scrolling is the one
+ * interaction that guarantees you cannot see two things at once. Steps and
+ * instruments are two halves of one judgement and must be readable together.
+ * Panels are independently collapsible and draggable instead, and may sit over
+ * the image: the endoscope's circle leaves at least 17% of the frame width as
+ * optical black on the left in every validation frame measured.
+ *
  * DENSITY IS THE DESIGN. The default view answers one question — what is
  * happening now — and hides everything that answers "how did the model do".
  * That second layer lives behind the + DETAIL toggle, revealed by `.more`
@@ -42,7 +50,7 @@
  * current step and the instruments in view are burned into the corners of the
  * frame the way a PACS viewer burns them into pixels. That is not decoration:
  * it collapses four saccades into the fixation the eye is already holding, and
- * it is what lets the rail drop two cards and still say more than before.
+ * it is what lets the panels stay folded and still say more than before.
  */
 
 :root {
@@ -79,7 +87,6 @@
 
   --head: 54px;
   --tl:   44px;        /* one 16px strip. JS raises this when detail is on. */
-  --rail: 340px;
 
   --row:     30px;     /* worklist row */
   --row-cur: 48px;     /* the one you are on */
@@ -145,9 +152,18 @@ button.ghost { font-size: 10px; letter-spacing: .1em; padding: 5px 10px; }
 /* -- progressive disclosure ------------------------------------------------ */
 
 .more { display: none; }
+/* `.tile` and `.panel` set `display` themselves further down the sheet, and at
+   equal specificity the later rule wins — so the plain `.more` above lost and
+   the CONFIDENCE tile was visible with the analyst layer off. These two raise
+   the specificity rather than relying on source order. */
+.tile.more, .panel.more { display: none; }
 #app[data-detail] .more { display: revert; }
 #app[data-detail] .card.more { display: block; }
 #app[data-detail] .tile.more { display: flex; }
+/* A hidden panel must stay hidden: `hidden` marks "this case has nothing to
+   show here", which outranks "the analyst layer is on". */
+#app[data-detail] .panel.more { display: flex; }
+#app[data-detail] .panel.more[hidden] { display: none; }
 
 /* `display` cannot be transitioned, so the reveal is an animation instead —
    it runs once, on the frame the element starts being displayed. Each piece
@@ -158,15 +174,15 @@ button.ghost { font-size: 10px; letter-spacing: .1em; padding: 5px 10px; }
   to   { opacity: 1; transform: none; }
 }
 #app[data-detail] .more { animation: reveal var(--d2) var(--ease) backwards; }
-#app[data-detail] #inst-card { animation-delay: .05s; }
-#app[data-detail] #ref-card  { animation-delay: .10s; }
-#app[data-detail] #alt-card  { animation-delay: .15s; }
+#app[data-detail] .panel[data-panel="instruments"] { animation-delay: .05s; }
+#app[data-detail] .panel[data-panel="truth"]       { animation-delay: .10s; }
+#app[data-detail] .panel[data-panel="post"]        { animation-delay: .15s; }
 
 /* The footer grows to fit the extra lanes; --tl is set from JS. Without this
    the timeline snapped to its new height while the cards were still fading. */
 #app { transition: grid-template-rows var(--d2) var(--ease); }
 
-/* -- a rail value replacing another --------------------------------------- */
+/* -- a panel value replacing another -------------------------------------- */
 
 /* A step boundary changes the numeral and the name at the same instant, and
    swapping both in place reads as a glitch rather than as an event. The rise
@@ -245,19 +261,21 @@ button.ghost { font-size: 10px; letter-spacing: .1em; padding: 5px 10px; }
   white-space: nowrap; padding-left: 4px;
 }
 
+/* One column now, and the positioning context for the floating panel layer.
+   The video gets the full width; the panels sit over the pillarbox paper it
+   leaves either side. */
 main {
-  display: grid; grid-template-columns: 1fr var(--rail);
-  min-height: 0; border-bottom: 1px solid var(--rule);
-  /* Without this the rail's cards and the video spill downward over the
-     timeline when the footer grows — the grid row shrinks, its contents don't. */
+  position: relative; min-height: 0; border-bottom: 1px solid var(--rule);
+  /* Without this the video spills downward over the timeline when the footer
+     grows — the grid row shrinks, its contents don't. */
   overflow: hidden;
 }
 
 /* -- video ---------------------------------------------------------------- */
 
 .stage {
-  display: flex; flex-direction: column; min-width: 0; min-height: 0;
-  border-right: 1px solid var(--rule); padding: 20px; overflow: hidden;
+  display: flex; flex-direction: column; height: 100%;
+  min-width: 0; min-height: 0; padding: 20px; overflow: hidden;
 }
 .frame {
   position: relative; flex: 1; min-height: 0;
@@ -328,12 +346,67 @@ main {
 .transport .wide { min-width: 68px; color: var(--text); }
 .tsep { width: 1px; height: 12px; background: var(--rule); margin: 0 8px; }
 
-/* -- rail ----------------------------------------------------------------- */
+/* -- floating panels ------------------------------------------------------- */
 
-.rail {
-  display: flex; flex-direction: column; gap: 14px; padding: 20px;
-  overflow-y: auto; min-width: 0; background: var(--bg);
+/* The layer is pointer-transparent so the video keeps every event that is not
+   aimed at a panel; each panel opts back in. */
+.panels { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+
+/* Translucent, NOT backdrop-filtered. A blur behind a panel that overlaps the
+   video forces the compositor to re-read the video layer every frame, and this
+   surface has already been bitten once by video compositing. A flat alpha
+   costs nothing and is legible over both bright mucosa and optical black. */
+/* Column flex so the header keeps its height and the body absorbs the
+   JS-applied max-height, which is what lets the body scroll instead of the
+   panel overflowing. */
+.panel {
+  position: absolute; pointer-events: auto; width: var(--pw, 268px);
+  display: flex; flex-direction: column;
+  background-color: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: 0 1px 16px rgb(0 0 0 / .07);
+  transition: box-shadow var(--d1) var(--ease);
 }
+.panel[data-panel="steps"] { --pw: 292px; }
+.panel[data-dragging] {
+  box-shadow: 0 4px 26px rgb(0 0 0 / .16);
+  background-color: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+.panel[hidden] { display: none; }
+
+/* The header is the drag handle, so it gets the grab cursor and nothing inside
+   it may start a text selection — a half-selected caption during a drag reads
+   as a broken control. */
+.phead {
+  display: flex; align-items: center; gap: 8px; padding: 9px 12px 8px;
+  cursor: grab; user-select: none; touch-action: none;
+}
+.panel[data-dragging] .phead { cursor: grabbing; }
+.phead .cap { margin: 0; }
+
+.fold {
+  margin-left: auto; width: 16px; height: 16px; padding: 0; flex: none;
+  background: none; border: 0; cursor: pointer; position: relative;
+  color: var(--dim);
+}
+.fold::before, .fold::after {
+  content: ''; position: absolute; left: 3px; top: 50%; width: 10px; height: 1px;
+  background: currentColor; transition: transform var(--d1) var(--ease);
+}
+.fold::after { transform: rotate(90deg); }
+/* Expanded shows a minus, collapsed a plus — the mark states what the click
+   does next, which is the convention every file tree uses. */
+.panel:not([data-collapsed]) .fold::after { transform: rotate(0deg); }
+.fold:hover { color: var(--text); }
+
+/* A panel is capped to the space below its own top edge (set from JS), so it
+   can never be clipped by the timeline with content unreachable. At an ordinary
+   window height nothing here scrolls — this only engages when the reader has
+   pulled a tall panel low, and it scrolls that one panel rather than a column
+   holding every category at once. */
+.pbody { padding: 0 14px 14px; overflow-y: auto; }
+.panel[data-collapsed] .pbody { display: none; }
+
+/* Kept for the veil's copyable command block, which is still a card. */
 .card { position: relative; padding: 16px 18px; background: var(--surface); }
 
 /* -- value tiles ---------------------------------------------------------- */
@@ -342,13 +415,18 @@ main {
    it. These are a treatment of numbers the interface already showed, not new
    numbers — the 64px step numeral that used to live here moved onto the image
    and into the worklist's current row. */
-.tiles { display: flex; gap: 10px; }
+/* Wrapping, not squeezing. Inside a 268px panel three tiles in one row cut
+   "STEPS SEEN" off; letting them wrap keeps every caption whole at any panel
+   width. The default view carries two tiles (CONFIDENCE is analyst-layer), so
+   the common case is still a single row. */
+.tiles { display: flex; flex-wrap: wrap; gap: 10px; }
 .tile {
-  flex: 1; min-width: 0; background: var(--surface); padding: 10px 12px 12px;
+  flex: 1 1 40%; min-width: 92px; padding: 8px 10px 10px;
   display: flex; flex-direction: column; gap: 2px;
+  background-color: color-mix(in srgb, var(--raised) 55%, transparent);
 }
 .tile .v {
-  font-size: 30px; font-weight: 200; line-height: 1; letter-spacing: -.02em;
+  font-size: 28px; font-weight: 200; line-height: 1; letter-spacing: -.02em;
   color: var(--text);
 }
 .tile .u { font-size: 10px; color: var(--dim); }
@@ -537,7 +615,7 @@ main {
 #app:not([data-state="loading"]) .boot { display: none; }
 
 @media (max-width: 1280px) {
-  :root { --rail: 300px; --row: 28px; --row-cur: 44px; }
+  :root { --row: 28px; --row-cur: 44px; }
   .tile .v { font-size: 26px; }
   .burn .step { font-size: 13px; }
 }
