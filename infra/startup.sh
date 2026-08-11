@@ -17,6 +17,11 @@
 #   BACKBONE vit_base_patch14_dinov2.lvd142m   optional; `resnet50` for the
 #            cheaper arm. run_job.sh maps it to a tag, a space and an input
 #            size, and refuses a backbone it has no mapping for.
+#   STAGE    all | full             optional. `full` runs ONE fine-tune instead
+#            of six — the ~1/6 cost pass that answers whether a fine-tuned
+#            encoder beats the frozen one. Start here.
+#   BATCH    64                     optional; lower it if a ViT runs out of
+#            VRAM on a smaller card.
 #   REPO     https://github.com/...  optional, defaults to origin
 #   BRANCH   main
 
@@ -29,6 +34,8 @@ meta() { curl -fsH "Metadata-Flavor: Google" \
 BUCKET="$(meta BUCKET)"
 EPOCHS="$(meta EPOCHS)"; EPOCHS="${EPOCHS:-50}"
 BACKBONE="$(meta BACKBONE)"; BACKBONE="${BACKBONE:-vit_base_patch14_dinov2.lvd142m}"
+STAGE="$(meta STAGE)"; STAGE="${STAGE:-all}"
+BATCH="$(meta BATCH)"; BATCH="${BATCH:-64}"
 REPO="$(meta REPO)"; REPO="${REPO:-https://github.com/wylliamunlimited/pitvis-phase-recognition.git}"
 BRANCH="$(meta BRANCH)"; BRANCH="${BRANCH:-main}"
 
@@ -81,5 +88,5 @@ gsutil -m rsync -r "$BUCKET/frames" data/frames
 # Resume anything a previous (possibly preempted) run finished.
 gsutil -m rsync -r "$BUCKET/out/backbone" data/backbone || true
 
-export EPOCHS BACKBONE
+export EPOCHS BACKBONE STAGE BATCH
 exec uv run bash infra/run_job.sh

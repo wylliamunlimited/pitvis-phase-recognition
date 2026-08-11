@@ -30,6 +30,17 @@ BATCH="${BATCH:-64}"
 WORKERS="${WORKERS:-8}"
 SIZE="${SIZE:-384}"
 
+# STAGE=full runs ONE fine-tune (all of TRAIN) instead of six, then extracts
+# and scores. That is the ~1/6 cost pass that answers the actual question —
+# "does a fine-tuned encoder beat the frozen one on VAL" — and it is the right
+# first spend. The five per-fold encoders exist only to make an honest RANKING
+# possible later, and there is no point ranking until the headline moves.
+STAGE="${STAGE:-all}"
+case "$STAGE" in
+  all|full) ;;
+  *) echo "STAGE must be 'all' (6 fine-tunes) or 'full' (1)" >&2; exit 1 ;;
+esac
+
 # One choice drives the tag, the space and the input size, so they cannot
 # drift. They MUST agree: a space names the checkpoint path it loads, and a
 # fine-tuned encoder inferred at a resolution it was not tuned at measures the
@@ -68,26 +79,29 @@ if [ "$WANT" != "backbone/${FULL_TAG}/backbone.pt" ]; then
   exit 1
 fi
 
-FOLDS=$(python -c "from pitvis.data.folds import FOLDS_5; print('|'.join(' '.join(map(str,f)) for f in FOLDS_5))")
-
 # ---- 1. one backbone per fold, each blind to that fold's held-out videos ----
 # Tags carry the backbone: two backbones' folds are different encoders and must
 # not land on the same directory. (A variant/space collision of exactly this
 # shape overwrote a winning checkpoint once already.)
-i=0
-IFS='|' read -ra ARR <<< "$FOLDS"
-for fold in "${ARR[@]}"; do
-  tag="${FT_TAG}-fold${i}"
-  if [ -f "data/backbone/${tag}/backbone.pt" ]; then
-    echo "--- ${tag}: exists, skipping"
-  else
-    echo "--- ${tag}: fine-tuning, holding out ${fold}"
-    pitvis-finetune --backbone "$BACKBONE" "${IMG[@]}" --epochs "$EPOCHS" \
-      --batch "$BATCH" --workers "$WORKERS" --size "$SIZE" --device cuda \
-      --exclude $fold --tag "$tag"
-  fi
-  i=$((i+1))
-done
+if [ "$STAGE" = all ]; then
+  FOLDS=$(python -c "from pitvis.data.folds import FOLDS_5; print('|'.join(' '.join(map(str,f)) for f in FOLDS_5))")
+  i=0
+  IFS='|' read -ra ARR <<< "$FOLDS"
+  for fold in "${ARR[@]}"; do
+    tag="${FT_TAG}-fold${i}"
+    if [ -f "data/backbone/${tag}/backbone.pt" ]; then
+      echo "--- ${tag}: exists, skipping"
+    else
+      echo "--- ${tag}: fine-tuning, holding out ${fold}"
+      pitvis-finetune --backbone "$BACKBONE" "${IMG[@]}" --epochs "$EPOCHS" \
+        --batch "$BATCH" --workers "$WORKERS" --size "$SIZE" --device cuda \
+        --exclude $fold --tag "$tag"
+    fi
+    i=$((i+1))
+  done
+else
+  echo "--- STAGE=full: skipping the 5 per-fold encoders (no honest CV from this run)"
+fi
 
 # ---- 2. one trained on all of TRAIN, for the single VAL scoring -------------
 if [ -f "data/backbone/${FULL_TAG}/backbone.pt" ]; then
