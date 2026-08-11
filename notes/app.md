@@ -495,3 +495,27 @@ where the burn-in's identity block sits. The disclaimer line is long enough to
 stay legible, but "a screenshot cropped to the frame carries the disclaimer" is
 weaker than it was. Reserving a gutter would fix it and would also undo the
 point of floating panels; the reader can drag them clear meanwhile.
+
+### The burn-in must track the frame, not only the video
+
+`ResizeObserver` fires on **size**, never on position. The video is letterboxed
+inside `.frame` with `align-items: center`, so whenever it is *width*-constrained
+— frame aspect narrower than 16:9, which a tall window gives you — changing the
+frame's height moves the video without altering its box at all. Measured at
+900x820:
+
+| | frame | video | video top | burn top |
+|---|---|---|---|---|
+| DETAIL off | 860x635 | 832x468 | 157 | 157 |
+| DETAIL on | 860x517 | **832x468** | 98 | **157** |
+
+The footer grows 118 px, the video slides up 59 px at an unchanged size, and
+the observer never fires — so the burn-in sat half the footer's growth out of
+place, and the overlay canvas kept a stale bitmap height for the same reason.
+Observing `.frame` alongside the video is what catches it. It is invisible on a
+wide window, where the video is height-constrained and its box does change.
+
+`CanvasHost.resize()` is guarded against a no-op call because two observed
+elements means most transition frames arrive twice, and assigning
+`canvas.width` **clears** the bitmap — unguarded, that would blank a registered
+layer on every duplicate frame rather than merely costing a reallocation.
