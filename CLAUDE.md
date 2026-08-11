@@ -532,21 +532,22 @@ Reasoning and measured numbers live in `notes/app.md`. These are the rules.
   agreement, scores and per-class probabilities are behind `[ + DETAIL ]`. The
   visible layer answers "what is happening now"; the hidden one answers "how
   well is the model doing". Six stacked timeline lanes reads as a video editor.
-- **Honesty elements are load-bearing, but stated once.** The research
-  disclaimer, the stated absence of ground truth, and always-numeric confidence
-  exist because a composed surface makes any number on it read as authority.
-  **The disclaimer lives in the header and nowhere else** — it used to be
-  burned into the image as well, and a claim repeated twice on one screen reads
-  as decoration rather than a warning. Do not trim the remaining copy for
-  cleanliness, and do not reintroduce a second one.
-- **Split vocabulary is analyst-layer.** `[ VAL SPLIT ]` / `[ TRAIN SPLIT ]`,
-  in both the header and the burn-in, carry `.more`. A viewer of the image is
-  asking what is happening; whether a score is honest or memorised is a
-  different question at a different moment, and that is what DETAIL is for.
-  The amber `trained` styling is retained and must stay — it is the warning
-  that a number measures fit, not generalisation. Note `renderProvenance`
-  writes that chip with `classList`, never `className`, or `.more` is dropped
-  and the vocabulary leaks back into the default view.
+- **A caveat sits with the number it qualifies, never in the chrome.** This is
+  the rule that replaced the header chips, and it is the one to apply when the
+  next caveat needs a home.
+  - The **train/val caveat** is printed by `status.renderReference`, directly
+    under the score block: *"This video was TRAINED ON — these measure fit, not
+    generalisation."* That sentence must not be removed; video_02 reads 0.89
+    frame accuracy against video_25's 0.41, so scores shown without it flatter
+    the model by a wide margin. The `[ VAL SPLIT ]` / `[ TRAIN SPLIT ]` header
+    chip was deleted as redundant with it — do not reintroduce it.
+  - The **absence of ground truth**, the **pre-CCI meaning of confidence**, and
+    **always-numeric confidence** are unchanged and still load-bearing.
+- **The research disclaimer is not in the UI.** It was removed from both the
+  header and the burn-in at the user's explicit request, twice asked. It lives
+  in `README.md` and `NOTICE`. This is a deliberate, recorded decision rather
+  than an oversight: do not re-add it to the app without being asked, and do
+  not quietly reintroduce it as a tooltip or page title either.
 - **One inference worker, permanently.** `redirect_stdout` swaps a
   process-global `sys.stdout`.
 - `renderTimeline(ctx, doc, geom, opts)` **is pure**. That is what makes

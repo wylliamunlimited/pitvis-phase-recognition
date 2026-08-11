@@ -247,19 +247,12 @@ button.ghost { font-size: 10px; letter-spacing: .1em; padding: 5px 10px; }
 .mark { font-size: 11.5px; letter-spacing: .24em; font-weight: 400; color: var(--faint); }
 .picker { display: inline-flex; align-items: center; }
 .picker select { color: var(--text); letter-spacing: .1em; font-size: 12px; }
-.split { font-size: 9.5px; letter-spacing: .12em; color: var(--faint); }
-.split.trained { color: var(--warn); }
-/* Which model produced what is on screen. A credential, not a headline —
-   same size and colour as the split it sits beside. */
+/* Which model produced what is on screen. A credential, not a headline. */
 .prov {
   font-size: 9.5px; letter-spacing: .1em; color: var(--faint);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34ch;
 }
 .prov.unrecorded { color: var(--warn); }
-.chip {
-  font-size: 9.5px; letter-spacing: .1em; color: var(--warn);
-  white-space: nowrap; padding-left: 4px;
-}
 
 /* One column now, and the positioning context for the floating panel layer.
    The video gets the full width; the panels sit over the pillarbox paper it

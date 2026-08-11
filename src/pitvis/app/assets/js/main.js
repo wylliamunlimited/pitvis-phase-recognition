@@ -125,21 +125,12 @@ async function open(id) {
   state.caseId = id;
   $('case-select').value = id;
   const ref = state.cases.find((c) => c.case_id === id);
-  // A training video scores far better than a held-out one — video_02 reads
-  // 0.89 frame accuracy against video_25's 0.41 — so showing its numbers
-  // without saying why would flatter the model by a wide margin. The split is
-  // the single most important caveat on any score in this interface.
-  const split = $('split');
-  split.textContent = ref?.split ? `[ ${ref.split.toUpperCase()} SPLIT ]` : '';
-  // classList, not className: the chip also carries `more`, which puts it in
-  // the analyst layer, and assigning the whole attribute would drop it and
-  // leak split vocabulary back into the default view.
-  split.classList.toggle('trained', ref?.split === 'train');
-  split.title = ref?.split === 'train'
-    ? 'This video was TRAINED ON. Its scores measure fit, not generalisation, '
-      + 'and are not comparable to the validation numbers.'
-    : ref?.split === 'val'
-      ? 'Held out from training. These scores are honest.' : '';
+  // No split chip. A training video scores far better than a held-out one —
+  // video_02 reads 0.89 frame accuracy against video_25's 0.41 — so that
+  // caveat still has to be stated, but it belongs beside the numbers it
+  // qualifies, not in the global header. `status.renderReference` prints it
+  // directly under the score block. Nothing is lost by dropping the chip;
+  // putting it back would restate it in a second place.
 
   state.doc = null;
   state.iprobs = null;
@@ -186,7 +177,7 @@ async function open(id) {
   $('wl-foot').textContent = worklist.footnote(state.wl, doc);
   $('t-seen').textContent = String(state.wl.seen);
   renderProvenance(doc);
-  burn.identity(doc, ref);
+  burn.identity(doc);
   burn.show(true);
 
   clock = new VideoTimeSource(video, doc.video.seconds)
