@@ -137,7 +137,7 @@ gcloud compute instances create pitvis-ft \
   --boot-disk-size=200GB \
   --maintenance-policy=TERMINATE \
   --provisioning-model=SPOT \
-  --instance-termination-action=DELETE \
+  --instance-termination-action=STOP \
   --max-run-duration=8h \
   --scopes=storage-rw \
   --metadata=BUCKET="$BUCKET",STAGE=full,EPOCHS=50,BACKBONE=vit_base_patch14_dinov2.lvd142m,BRANCH=main \
@@ -153,11 +153,17 @@ Three flags carry the cost discipline, and none is optional:
 - `--scopes=storage-rw` — without it every upload fails and the instance shuts
   down having thrown away hours of GPU time. The job now says so loudly rather
   than exiting quietly, but the flag is what prevents it.
-- `--max-run-duration=8h --instance-termination-action=DELETE` — the backstop
-  that does not depend on our code. `startup.sh` shuts itself down from a trap,
-  but a trap cannot fire if the script wedges before reaching it (a hung
-  `uv sync`, a stuck `gsutil`). This one is enforced by GCE. Raise it above your
-  expected runtime — 8h suits `STAGE=full` on an L4; a six-fold run needs more.
+- `--max-run-duration=8h` — the backstop that does not depend on our code.
+  `startup.sh` shuts itself down from a trap, but a trap cannot fire if the
+  script wedges before reaching it (a hung `uv sync`, a stuck `gsutil`). GCE
+  enforces this one. Raise it above your expected runtime — 8h suits
+  `STAGE=full` on an L4; a six-fold run needs more.
+- `--instance-termination-action=STOP`, **not DELETE**. This is what makes
+  preemption cheap: STOP keeps the boot disk, so the half-finished encoder's
+  `resume.pt` and the 3.6 GB frame cache are still there when you start the
+  instance again. DELETE would throw both away and re-download the frames on
+  every restart. The cost is a stopped instance and its disk sitting there
+  until you delete it — see [after a preemption](#after-a-preemption).
 
 `BRANCH` must name a branch that is **pushed**; the instance clones from the
 remote and cannot see your working tree.
@@ -206,6 +212,43 @@ uv run pitvis-train instruments-v2 --variant best --space dinov2_ft
 ```
 
 Those land in `v2/best@dinov2_ft/` and leave the current winners alone.
+
+## After a preemption
+
+Spot capacity is reclaimed with about 30 seconds' notice, and on a multi-hour
+ViT run you should expect it to happen. Recovery is a restart, not a rerun:
+
+```sh
+gcloud compute instances start pitvis-ft --zone=us-central1-a
+```
+
+The startup script runs again from the top and three things make that cheap
+rather than a fresh start:
+
+| | what survives | why |
+|---|---|---|
+| finished encoders | uploaded as each one completes | `save_now` in run_job.sh |
+| the encoder in flight | `resume.pt`, written after **every epoch** | the boot disk (hence STOP) |
+| the frame cache | already on the disk | the boot disk |
+
+So the worst case is the epoch in flight — minutes, not the four hours a
+whole ViT encoder costs. `pitvis-finetune` prints `resuming from ... at epoch
+N/50` when it picks the state up; if you do not see that line, it is starting
+from scratch and something above did not survive.
+
+The resume state carries the optimiser and scheduler, not just the weights.
+AdamW holds per-parameter moments and cosine decay holds its position;
+restoring weights alone would silently resume at the wrong learning rate with
+the moments zeroed — a different training run that happens to start from the
+same numbers. It also records `trained_on` and refuses to resume into a run
+that holds out a different set of videos.
+
+**When the job is genuinely finished, delete the instance** — STOP leaves the
+disk billing:
+
+```sh
+gcloud compute instances delete pitvis-ft --zone=us-central1-a
+```
 
 ## Reading the result honestly
 

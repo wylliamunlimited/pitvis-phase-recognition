@@ -236,8 +236,36 @@ def main(argv: list[str] | None = None) -> None:
     bce = nn.BCEWithLogitsLoss(
         pos_weight=pos_weight(train_ds, args.pos_weight_cap).to(dev))
 
+    # Resume state, written after every epoch.
+    #
+    # WHY EPOCH GRANULARITY. On spot capacity the unit of loss should be the
+    # unit of work you can afford to repeat. Without this the unit is a whole
+    # encoder — preempted at epoch 45 of 50 and four hours are gone — and no
+    # amount of bucket plumbing helps, because the thing that was lost was
+    # never written down. With it, the worst case is the epoch in flight.
+    #
+    # The optimiser and scheduler are saved with the weights on purpose.
+    # AdamW carries first and second moments per parameter, and cosine decay
+    # carries its position; restoring weights alone would resume at the wrong
+    # learning rate with the moments zeroed, which is a different training run
+    # that happens to start from the same numbers.
+    resume_path = out / "resume.pt"
+    start_ep = 0
+    if resume_path.exists():
+        r = torch.load(resume_path, map_location=dev, weights_only=False)
+        model.load_state_dict(r["model"])
+        opt.load_state_dict(r["opt"])
+        sched.load_state_dict(r["sched"])
+        start_ep = r["epoch"]
+        print(f"resuming from {resume_path} at epoch {start_ep + 1}/{args.epochs}")
+        if r.get("trained_on") != sorted(videos):
+            raise SystemExit(
+                f"resume state was trained on {r.get('trained_on')}, this run "
+                f"holds out a different set. Delete {resume_path} to start over "
+                f"— resuming would silently mix two different encoders.")
+
     t0 = time.time()
-    for ep in range(args.epochs):
+    for ep in range(start_ep, args.epochs):
         model.train()
         run = correct = seen = 0.0
         te = time.time()
@@ -259,6 +287,16 @@ def main(argv: list[str] | None = None) -> None:
         print(f"epoch {ep + 1}/{args.epochs}: loss {run / seen:.4f}  "
               f"step-acc {correct / seen:.3f}  [{time.time() - te:.0f}s]")
 
+        # Write to a temp file and rename. A preemption lands mid-write often
+        # enough to matter over 50 epochs, and a half-written resume file is
+        # worse than none: it fails to load at the start of the NEXT run,
+        # after the instance has already been paid for.
+        tmp = resume_path.with_suffix(".tmp")
+        torch.save({"epoch": ep + 1, "model": model.state_dict(),
+                    "opt": opt.state_dict(), "sched": sched.state_dict(),
+                    "trained_on": sorted(videos)}, tmp)
+        tmp.replace(resume_path)
+
     # Only the backbone matters downstream — the heads exist to shape it.
     # `trained_on` is what lets crossval refuse to hold out a video this
     # encoder has already memorised. Without it the leak is invisible.
@@ -270,6 +308,10 @@ def main(argv: list[str] | None = None) -> None:
          "train_frames": len(train_ds), "trained_on": sorted(videos),
          "seconds": round(time.time() - t0, 1), "args": vars(args)},
         indent=2) + "\n")
+    # The run finished, so the resume state is now dead weight — and it is
+    # optimiser-sized, ~3x the encoder. Leaving it would upload a gigabyte of
+    # scratch per fold and make a completed encoder look like an interrupted one.
+    resume_path.unlink(missing_ok=True)
     print(f"\nwrote {out / 'backbone.pt'}  [{(time.time() - t0) / 60:.1f} min]")
     print(f"next: add a space pointing at it, then `uv run pitvis-extract "
           f"--space <name>`")
