@@ -117,6 +117,19 @@ done. See `NOTICE` at the repo root.
       you are about to use. Quota denial is the most common way this fails, and
       it fails *after* the instance create call appears to succeed.
 
+### The short version
+
+`infra/launch.sh` does steps 1 and 2 below, with every preflight this file
+argues for, and is idempotent:
+
+```sh
+BUCKET=gs://your-private-bucket infra/launch.sh
+BUCKET=gs://your-private-bucket infra/babysit.sh    # in a second terminal
+```
+
+The rest of this section is what those two scripts do, and why — read it before
+trusting them with an accelerator.
+
 ### 1. Upload the frames — once, ~3.6 GB
 
 ```sh
@@ -215,12 +228,26 @@ Those land in `v2/best@dinov2_ft/` and leave the current winners alone.
 
 ## After a preemption
 
-Spot capacity is reclaimed with about 30 seconds' notice, and on a multi-hour
-ViT run you should expect it to happen. Recovery is a restart, not a rerun:
+**A preempted spot VM is STOPPED, and nothing in GCE restarts it.**
+`--provisioning-model=SPOT` buys the discount and the eviction, not the
+recovery. Left alone, the instance sits at TERMINATED with a half-finished
+encoder on its disk.
+
+So either restart it yourself:
 
 ```sh
 gcloud compute instances start pitvis-ft --zone=us-central1-a
 ```
+
+or leave `infra/babysit.sh` running, which polls for exactly that state and
+restarts it until the `DONE` marker appears in the bucket:
+
+```sh
+BUCKET=gs://your-private-bucket infra/babysit.sh
+```
+
+Stopping the watcher does not stop the job — it holds no state; everything
+lives in the bucket and on the instance's boot disk.
 
 The startup script runs again from the top and three things make that cheap
 rather than a fresh start:

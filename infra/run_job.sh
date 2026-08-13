@@ -145,6 +145,14 @@ pitvis-probe --space "$FROZEN" --space "$SPACE" \
   | tee "data/backbone/probe-${FULL_TAG}.txt"
 save_now "probe report"
 
+# A marker, so "is it finished?" is answerable without reading logs — which is
+# what infra/babysit.sh polls to decide whether a stopped instance was preempted
+# or simply done.
+if [ -n "${BUCKET:-}" ]; then
+  date -u +"%Y-%m-%dT%H:%M:%SZ job complete: backbone=$BACKBONE epochs=$EPOCHS stage=$STAGE" \
+    | gsutil cp - "$BUCKET/out/DONE" || echo "!!! could not write the DONE marker"
+fi
+
 echo "=== job complete ==="
 echo "next, on a machine with the features: uv run pitvis-train arst-v2 \\"
 echo "        --variant best --space $SPACE      # lands in v2/best@${SPACE}/"
