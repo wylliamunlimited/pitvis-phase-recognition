@@ -23,7 +23,11 @@ async function get(url) {
 }
 
 export async function listCases() {
-  return (await get('/api/cases')).cases;
+  const r = await get('/api/cases');
+  // `legacy` means the features are on disk but in the pre-space layout, so
+  // nothing can find them — a different problem from having none, and a
+  // different instruction.
+  return { cases: r.cases, cacheState: r.cache_state || 'ok' };
 }
 
 export async function loadCase(id) {
@@ -94,7 +98,11 @@ export function parseCase(j) {
       hasConfidence: !!p.confidence_meta?.available,
       heldFrac: p.confidence_meta?.held_frac ?? 0,
       caveat: p.confidence_meta?.caveat || '',
-      model: p.model?.task1 || {},
+      // Mapped key by key rather than passed through. `p.model?.task1 || {}`
+      // handed a raw sub-object downstream, so every renderer reading
+      // `.mask_excluded` was touching a response key outside this function —
+      // the one discipline that stands in for type checking here.
+      model: mapModel(p.model?.task1),
       stale: !!p.stale,
       computedAt: p.computed_at,
     },
@@ -107,6 +115,29 @@ export function parseCase(j) {
     live: j.live,
   };
   return doc;
+}
+
+/**
+ * The task-1 model card.
+ *
+ * `name`, `variant` and `space` are null for anything predicted before the
+ * variant work landed, which is most of what exists. That is reported, not
+ * hidden — with four checkpoint families and three feature spaces, and every
+ * v2 checkpoint named `model.pt`, a bare filename cannot say what produced the
+ * numbers on screen.
+ */
+function mapModel(m) {
+  m = m || {};
+  return {
+    name: m.name || null,
+    variant: m.variant || null,
+    space: m.space || null,
+    checkpoint: m.checkpoint || null,
+    width: m.width ?? null,
+    cci: m.cci ?? null,
+    maskExcluded: m.mask_excluded ?? null,
+    recorded: !!(m.name || m.variant || m.space),
+  };
 }
 
 function indexSegments(segments, seconds) {
@@ -129,6 +160,11 @@ function parseInstruments(inst, seconds) {
     // null unless the checkpoint carries one bar per class, in which case
     // there is no single number to quote to the viewer.
     perClassThresholds: inst.per_class_thresholds || null,
+    checkpoint: inst.checkpoint || null,
+    variant: inst.variant || null,
+    space: inst.space || null,
+    classesPredicted: inst.classes_predicted ?? null,
+    recorded: !!(inst.variant || inst.space),
     note: inst.note,
     lanes: inst.lanes || [],
     // 'none' means nothing cleared the threshold. It is NOT out-of-patient —

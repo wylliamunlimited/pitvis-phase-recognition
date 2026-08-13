@@ -169,3 +169,32 @@ short — the frozen backbone remains the untested lever (roadmap 1.7/3.6).
 - **Generalisation past the training split.** CV ranks on training videos; the
   paper reports −7 points val→test for steps, milder than instruments' −47 but
   not nothing.
+
+---
+
+## 6. The fine-tuned backbone, scored once on VAL
+
+The `best` recipe on `resnet50_ft` (5-epoch fine-tuned ResNet-50) instead of
+frozen DINOv2 — `data/arst/v2/best@resnet50_ft/`:
+
+| | frozen DINOv2 | fine-tuned ResNet-50 | Δ |
+|---|---|---|---|
+| **challenge metric** | **0.4610** ±0.043 | 0.4425 ±0.050 | −0.019 |
+| macro F1 | 0.4420 | **0.4658** | +0.024 |
+| edit score | **0.4801** | 0.4193 | −0.061 |
+
+Both deltas sit inside one std of the spread, so on steps this is a wash rather
+than a loss. The shape is worth noting though: macro goes up while **edit goes
+down by three times as much**. The fine-tuned encoder is fractionally better at
+naming the step in a given second and materially worse at holding a segment
+together, which is what the edit score measures — more, shorter runs.
+
+That fits what the encoder was trained to do: `backbone.py` fine-tunes on
+single frames with a per-frame cross-entropy and no temporal term at all, so
+nothing in its objective rewards a representation that is stable second to
+second. It is the same trade the AP probe predicts — better per-frame
+discrimination — arriving with a cost the probe cannot see.
+
+Same caveat as task 2: both arms are single VAL measurements, not a ranking. A
+CV over `resnet50_ft` is unavailable because one encoder trained on all of TRAIN
+leaks into every fold.

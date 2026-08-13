@@ -61,7 +61,8 @@ def handle(req: Request):
         return _json(names.payload())
 
     if path == "/api/cases":
-        return _json({"cases": [c.to_json() for c in catalogue.cases().values()]})
+        return _json({"cases": [c.to_json() for c in catalogue.cases().values()],
+                      "cache_state": catalogue.cache_state()})
 
     m = re.fullmatch(r"/api/cases/([^/]+)(/[^/]*)?", path)
     if m:
@@ -112,6 +113,16 @@ def _case_route(req: Request, case_id: str, sub: str):
     if sub == "/predict" and req.method == "POST":
         from pitvis.app import jobs
         if not ref.features_cached:
+            if catalogue.cache_state() == "legacy":
+                # The features exist; the cache just predates the per-space
+                # layout. Telling someone to sit through a 20-minute decode
+                # when a rename would do is the wrong instruction, not a
+                # rounding error.
+                return _err(409, "cache_not_migrated",
+                            "features for every case are on disk but still in "
+                            "the pre-space cache layout, so nothing can find "
+                            "them. Migrating is a rename, not a re-extraction.",
+                            hint="uv run pitvis-extract --migrate")
             return _err(409, "not_cached",
                         "this video has no cached features, so predicting it "
                         "means a full 1 fps decode (10-25 min). Run it yourself.",

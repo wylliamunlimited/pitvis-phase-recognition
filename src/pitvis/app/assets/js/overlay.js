@@ -44,11 +44,29 @@ export class CanvasHost {
     };
   }
 
+  /**
+   * The bitmap follows layout. Layout must never follow the bitmap.
+   *
+   * Measured from the PARENT, not from the canvas itself. A canvas is a
+   * replaced element, so its CSS box falls back to its bitmap attribute unless
+   * something else sizes it — measuring its own rect therefore closes a loop
+   * that multiplies by devicePixelRatio on every call. On a 2x display it
+   * doubled per resize until the bitmap passed what Chrome will allocate and
+   * the element painted opaque white over the video. `#overlay` also carries an
+   * explicit width/height in CSS; both halves are needed, because either one
+   * alone leaves the element sized by the thing it is supposed to size.
+   */
   resize() {
-    const r = this.canvas.getBoundingClientRect();
+    const r = (this.canvas.parentElement || this.canvas).getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = Math.round(r.width * dpr);
-    this.canvas.height = Math.round(r.height * dpr);
+    const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    // No-op when nothing moved. Two elements are observed for this callback, so
+    // most transition frames arrive twice — and assigning canvas.width CLEARS
+    // the bitmap, so an unguarded write would blank a registered layer on every
+    // duplicate frame rather than merely costing a reallocation.
+    if (w === this.canvas.width && h === this.canvas.height) return;
+    this.canvas.width = w;
+    this.canvas.height = h;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.invalidate();
   }

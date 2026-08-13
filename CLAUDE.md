@@ -201,7 +201,10 @@ A "cleaner" reimplementation would silently diverge from the challenge on all th
    label set from the union of cleaned trues *and* preds, so that class joins the macro
    average at F1 = 0 and drags the score down. `metric.report` counts these as `leaked`.
    Corollary worth exploiting: **masking classes 0/11/13 out of the argmax at inference can
-   only raise the official metric.** Not yet implemented in any model.
+   only raise the official metric.** Taken: the `masked` step variant does it,
+   and it was the largest single lever in that iteration (+0.062 macro out of
+   fold). It is a scoring-rule exploit rather than a modelling gain, so
+   checkpoints carry a `mask_excluded` tag and inference must honour it.
 2. **`zero_division=1`** in the `f1_score` call.
 3. **The edit score runs after exclusion**, so removed rows splice the sequence and the
    segments either side of a gap merge. `[1,1,bg,bg,1,1]` is ONE segment, not three.
@@ -508,14 +511,43 @@ Reasoning and measured numbers live in `notes/app.md`. These are the rules.
   threshold, because SANO has no out-of-patient class. 26% of video_19. The
   collision is resolved once in `case._instrument_state` and the wire format
   carries a `state` string, never the raw pair.
+- **Categories float; they never stack in a scrolling column.** A fixed rail
+  puts every category in one column, and the moment it overflows it scrolls —
+  the one interaction that guarantees you cannot see two things at once. Steps
+  and instruments are two halves of one judgement. `panels.js` gives each
+  category an independently collapsible, draggable panel; `_bounds()` reserves
+  the transport strip, because a panel takes pointer events and one covering
+  PLAY eats the click rather than merely hiding it. STATUS is collapsed by
+  default — its live values are already burned into the frame — which is what
+  lets all fourteen worklist rows fit with nothing to scroll.
+- **Panels may sit over the image, and that is measured, not assumed.** Across
+  the 5 validation videos at 3 timestamps each, the left gutter is optical
+  black for at least 217 of 1280 px (17.0%) in every frame. The right is **not**
+  reliably dead — `video_01` runs out to x=1176, leaving 8%. Re-measure before
+  trusting either number for a new default.
+- **No `backdrop-filter` on a panel.** A blur behind an element overlapping the
+  video makes the compositor re-read the video layer every frame, and this
+  surface has already lost the video once to a compositing bug. Flat alpha.
 - **The default view hides the analyst layer.** Confidence, ground truth,
   agreement, scores and per-class probabilities are behind `[ + DETAIL ]`. The
   visible layer answers "what is happening now"; the hidden one answers "how
   well is the model doing". Six stacked timeline lanes reads as a video editor.
-- **Honesty elements are load-bearing.** The research banner, the amber
-  train-split chip, the stated absence of ground truth, and always-numeric
-  confidence exist because the model scores 0.331 and a composed surface makes
-  any number on it read as authority. Do not trim them for cleanliness.
+- **A caveat sits with the number it qualifies, never in the chrome.** This is
+  the rule that replaced the header chips, and it is the one to apply when the
+  next caveat needs a home.
+  - The **train/val caveat** is printed by `status.renderReference`, directly
+    under the score block: *"This video was TRAINED ON — these measure fit, not
+    generalisation."* That sentence must not be removed; video_02 reads 0.89
+    frame accuracy against video_25's 0.41, so scores shown without it flatter
+    the model by a wide margin. The `[ VAL SPLIT ]` / `[ TRAIN SPLIT ]` header
+    chip was deleted as redundant with it — do not reintroduce it.
+  - The **absence of ground truth**, the **pre-CCI meaning of confidence**, and
+    **always-numeric confidence** are unchanged and still load-bearing.
+- **The research disclaimer is not in the UI.** It was removed from both the
+  header and the burn-in at the user's explicit request, twice asked. It lives
+  in `README.md` and `NOTICE`. This is a deliberate, recorded decision rather
+  than an oversight: do not re-add it to the app without being asked, and do
+  not quietly reintroduce it as a tooltip or page title either.
 - **One inference worker, permanently.** `redirect_stdout` swaps a
   process-global `sys.stdout`.
 - `renderTimeline(ctx, doc, geom, opts)` **is pure**. That is what makes
@@ -587,3 +619,30 @@ Do not merge them. Each has a different reader in a different moment:
 `walkthrough.md` §8 and `embeddings.md` deliberately cover the same extraction stage
 at two depths. They are cross-linked, not deduplicated. When adding docs, pick the
 layer first.
+
+### Every fact has exactly one owner; everywhere else links
+
+Layering is not licence to restate. The failure mode is specific and it has
+already happened once: an iteration ships, a note is written, and the same
+scoreboard ends up maintained in four files — so a number changes in one and
+goes stale in three. Two stale claims (`masking … not yet implemented`) survived
+in `CLAUDE.md` and `walkthrough.md` for exactly this reason.
+
+The owners:
+
+| fact | owner |
+|---|---|
+| what a variant tried, and every result | `step-variants.md`, `instrument-variants.md` |
+| the reproduction baselines | `citi-baseline.md`, `instruments.md` |
+| the CV protocol and fold caveats | `instrument-variants.md` §2 |
+| what the AP probe measures and found | `instrument-variants.md` §6 |
+| the label leak, and what honest CV costs | `infra/README.md` |
+| the cross-task "backbone last" finding | `roadmap.md` |
+| the command surface | `README.md` §Usage |
+| rules that must not change | this file |
+| vocabulary, current status, what to run next | `where-we-are.md` |
+
+`where-we-are.md` is the index, not a summary — if it restates a result rather
+than linking to one, it has drifted back into being a fifth scoreboard. It is
+also a **dated snapshot**: re-date it when it goes stale rather than leaving old
+numbers standing.

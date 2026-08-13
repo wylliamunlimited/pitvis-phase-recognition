@@ -94,14 +94,15 @@ loader.
       optional labels. Required by `predict.py` in Phase 2 — an app cannot only
       work on the 25 videos we happen to have.
 
-- [ ] **1.7 (D) Frame access for end-to-end fine-tuning.** Extraction saves
-      features *only*, never frames, so fine-tuning the backbone — the single
-      largest accuracy lever, given ImageNet ResNet-50 against endoscopic video
-      is a severe domain gap — has no data path at all today. Two options:
-      decode 1 fps frames to disk as JPEGs (≈4 GB at 256 px shorter side, ≈25 GB
-      at native 720p), or an on-the-fly decoding `Dataset` (no storage cost,
-      much slower per epoch). **Decision needed**, but it can wait until Phase 3
-      proves frozen features are the ceiling.
+- [x] **1.7 (D) Frame access for end-to-end fine-tuning.** Resolved in favour
+      of a JPEG cache on disk: `pitvis-frames` writes 1 fps centre-square 384 px
+      JPEGs to `data/frames/384/`. Measured **120,018 frames, 3.6 GB,
+      33.7 KB/frame, ~19 min** — the on-the-fly decoding `Dataset` was rejected
+      because it pays the decode cost once per epoch rather than once. A space
+      with `source="frames"` reads it, which is mandatory for a fine-tuned
+      encoder: it was tuned on those exact crops, and feeding it differently
+      framed pixels would measure the preprocessing mismatch as much as the
+      model.
 
 ---
 
@@ -178,13 +179,33 @@ before the next one starts, so we always know what an idea actually bought.
       "step (just for training)" design. `--no-aux-step` ablates it. The
       reverse — instruments supervising the *step* model — is still untested.
 
-- [ ] **3.6 (D) End-to-end fine-tuned backbone.** Gated on 1.7. Still the
-      largest untested lever, and the evidence for it firmed up: swapping the
-      *frozen* encoder to DINOv2 gains +0.055 macro once the loss is fixed
-      (`notes/instrument-variants.md`), which says the representation genuinely
-      binds — but only after the imbalance defect stops masking it. Fine-tuning
-      is the version of that lever we cannot pull until extraction keeps
-      pixels.
+- [x] **3.6 (D) End-to-end fine-tuned backbone — pulled, on ResNet-50.**
+      `pitvis-finetune` trains one backbone with two heads (15-way CE steps,
+      19-way BCE instruments) on the frame cache, and augments — random crop,
+      flip, colour jitter, three rows the faithfulness tables had marked "we
+      cannot" purely for want of pixels. A 5-epoch pilot moved **mean AP
+      0.271 → 0.445 with 19/19 classes improving**.
+
+      **End to end it does not win the headline, and how it loses is the
+      finding.** VAL scored once per arm, `best` recipe, frozen DINOv2 vs
+      fine-tuned ResNet-50: steps metric 0.4610 → 0.4425 (macro 0.4420 →
+      0.4658, **edit 0.4801 → 0.4193**); instruments official 0.5572 → 0.3805
+      (**macro 0.3792 → 0.4783**). It is better on the rare classes macro
+      weights equally and worse on the four carrying ~91% of positives, and on
+      steps it trades segment stability for per-frame accuracy — which is what
+      a frame-wise objective with no temporal term should be expected to do.
+      Numbers in [`step-variants.md` §6](step-variants.md) and
+      [`instrument-variants.md` §6](instrument-variants.md).
+
+- [ ] **3.6b Fine-tune DINOv2, and cross-validate it honestly.** The pilot went
+      to ResNet-50 because ViT-B trains at 29 img/s against 96 — the cheap
+      backbone answers "does fine-tuning help at all" for a quarter of the
+      cost. It does. But it was applied to the backbone that *loses* frozen, so
+      the obvious next move is the one that wins frozen. Needs the `dinov2_ft`
+      space and a GPU: `BACKBONE=vit_base_patch14_dinov2.lvd142m` in
+      [`infra/`](../infra/README.md). Honest ranking additionally needs one
+      encoder per fold — six fine-tunes — because a single encoder trained on
+      all of TRAIN leaks into every fold (measured: steps macro read 0.917).
 
 ---
 
@@ -311,9 +332,9 @@ Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
       `67912d3efc6852e7`.
 - [x] **6.2 Cross-validation harness.** See 4.4.
 - [x] **6.3 Variants tested.** control / weighted / thresholds / dinov2 /
-      composed. Winner is pos_weight + per-class thresholds on DINOv2:
-      **macro 0.2556 → 0.3792 on val, official 0.2321 → 0.5572, and 9/19
-      classes never predicted → 0/19.**
+      composed. Winner is pos_weight + per-class thresholds on DINOv2, and it
+      took classes never predicted from **9/19 to 0/19**. Numbers in
+      [`instrument-variants.md` §4](instrument-variants.md).
 - [x] **6.4 Wired into the product.** `pitvis-predict` and the app dispatch on
       the checkpoint's arch/space tags and embed per space. `sano.pt` is
       untouched and still reproduces byte for byte.
@@ -323,10 +344,9 @@ Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
       without becoming useful, and that is the next honest target.
 - [x] **6.6 The same treatment for task 1.** `training/arst_v2.py`, same
       protocol and the same folds. Winner is argmax masking + class weights on
-      DINOv2: **challenge metric 0.3425 → 0.4610 on val**, macro 0.3083 →
-      0.4420, edit 0.3767 → 0.4801. Masking alone was the largest single lever
-      (+0.062 macro out of fold) and had been sitting unclaimed as an ablation
-      flag. See [`notes/step-variants.md`](step-variants.md).
+      DINOv2. Masking alone was the largest single lever (+0.062 macro out of
+      fold) and had been sitting unclaimed as an ablation flag. Numbers in
+      [`step-variants.md` §4](step-variants.md).
 - [x] **6.7 The CV harness is task-agnostic.** `crossval.Task` holds the
       loader, scorer and ranking metric, so both tasks share the fold logic and
       the leaderboard instead of a second copy.

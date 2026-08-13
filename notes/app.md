@@ -195,12 +195,76 @@ working, and the detail panel names it:
 
 ---
 
+## 4b. Why it stopped looking like a video editor
+
+The first version put a six-lane timeline along the bottom, a transport row
+under the video and an asset picker in the header. That is a non-linear editor,
+and `timeline.js` had already said so in its own comment: *"six stacked channels
+is what a video editor looks like, and it invites reading the timeline as a
+workspace rather than as an answer."*
+
+The fix was not to restyle it. It was to move **what is happening now onto the
+image**, PACS-fashion, and give the rail to a question a timeline cannot
+answer.
+
+**Four saccades became one fixation.** Case identity, elapsed time, current
+step and instruments in view were four separate places to look — header, header,
+rail card, rail card. They are now burned into the corners of the frame, where
+the eye already is. That is what let the rail drop two cards while saying more
+than before, and it is the whole argument for the burn-in.
+
+It is DOM above the `#overlay` canvas, never painted into it. The canvas works
+in video pixels and belongs to the agentic layer (5.4); corner text wants screen
+pixels at a fixed size, and mixing the two conventions would have ruined the
+layer registry before it had a layer. It shares the *geometry* — at 1440×900 the
+video renders 1031×580 inside a 1031×688 frame, so ~54px of paper sits above and
+below it, and corners pinned to the frame would float off the image.
+
+Legibility over both a bright mucosa frame and a near-black out-of-patient frame
+is a white glyph with a tight hard halo, which is how broadcast and DICOM solve
+it. Not a translucent scrim box: that is a lower-third, which is the register
+being removed.
+
+**The worklist answers the question the timeline could not.** Fourteen steps in
+canonical order, always all of them. Measured on the predictions: first-visit
+order is near-monotonic — two inversions per case — so a fixed order is measured
+rather than imposed. But a step is not one block: steps are revisited 13-26
+times per case, so a row aggregates across visits, and *haemostasis ×7* is a
+fact the app previously could not express anywhere.
+
+The decisive argument is absence. video_25 never predicts steps 3, 5, 6, 11, 12
+or 13. "Durotomy was never detected" is arguably the most clinically interesting
+fact about that case, and a log of what happened **cannot state it** — there is
+no row for a thing that did not happen. Same principle as the dotted absent lane.
+
+The status column *is* the phase ramp, so the list reads top-to-bottom as the
+same single-hue deepening the progress bar reads left-to-right — one colour
+system, two projections, no new colours. Deliberately not a checkmark: a tick
+asserts verification.
+
+**The instrument tray is a record, not a chart.** The obvious thing to do with
+`instruments.lanes` is draw the intervals, and that is the trap: suction alone
+has **201 intervals on video_25 and 319 on video_01**. Nineteen rows of that is
+a barcode, and a barcode with labels is the multitrack timeline again. So the
+tray carries no horizontal geometry mapped to time — name, share, total, and the
+interval count, which is the part that matters. A tool picked up 38 times is a
+different story from one held for 41 minutes.
+
+The interval geometry does exist, in one place: selecting a row lights that
+class on the timeline's existing TOOLS lane. Nineteen lanes become one lane plus
+a selection, which honours the identity/density split the timeline already
+documented instead of contradicting it.
+
+---
+
 ## 5. Honesty is load-bearing, not decoration
 
-ARST scores **0.331** on the challenge metric and gets **40.5%** of seconds
-right on video_25. A composed, clinical-looking surface makes any number on it
-read as authority. Four things exist specifically to resist that, and none of
-them should be trimmed for cleanliness:
+The best step model scores **0.461 ± 0.043** on the challenge metric — and the
+predictions this app is usually shown with are the earlier reproduction, which
+scores 0.340 across the val split and gets **40.5%** of seconds right on
+video_25. A composed, clinical-looking surface makes any number on it read as
+authority. Five things exist specifically to resist that, and none of them
+should be trimmed for cleanliness:
 
 1. **`RESEARCH — NOT FOR CLINICAL USE`** in the header, non-dismissible.
 2. **The split chip turns amber on a training video.** video_02 reads 0.891
@@ -211,6 +275,12 @@ them should be trimmed for cleanliness:
 3. **Missing ground truth is stated, never blank.** video_19 has no
    `annotations_19.csv` — a gap in the download, not an exclusion. Its truth
    lane says so in words. An empty lane would read as "all background".
+5. **The provenance chip says `MODEL NOT RECORDED`** when it is. Four
+   checkpoint families and three feature spaces now exist, and every v2
+   checkpoint is called `model.pt` — so a filename cannot answer "what am I
+   looking at". Predictions made before the tags existed carry none, which is
+   the common case rather than the edge one, and the chip says so in amber
+   rather than rendering a confident blank.
 4. **Confidence is always a number**, never a bar alone, and scores are
    labelled *this video alone — NOT the 5-video mean±std* that the paper and
    the README quote.
@@ -361,3 +431,91 @@ rewriting for either.
 - **One inference worker, permanently.** `redirect_stdout` swaps a
   process-global `sys.stdout`, so two jobs would interleave their logs, and two
   torch rollouts would contend for one MPS device.
+- **The overlay canvas must never be measured against itself.** A canvas is a
+  *replaced* element, so `position: absolute; inset: 0` does not stretch it:
+  with `width: auto` the used width is the intrinsic width — the bitmap
+  attribute — and the over-constrained inset is dropped. `resize()` originally
+  read `canvas.getBoundingClientRect()` and wrote `width * devicePixelRatio`
+  back, which on a 2x display doubles the element on every resize. Ten window
+  resizes reached 1228800x614400 CSS px, past the ~268M-pixel bitmap Chrome
+  will allocate; the canvas then painted as an opaque white box directly over
+  the video, and `.burn` — later in the DOM — kept rendering on top of it, so
+  the failure looked like "the video is white but the burn-in still works".
+  It is invisible at dpr 1 and invisible to `elementFromPoint`, which skips
+  `pointer-events: none`. The fix is both halves: explicit `width`/`height` in
+  CSS so layout sizes the element, and measuring the *parent* in `resize()` so
+  the bitmap can never size what sizes it.
+
+## 9. Why the rail became floating panels
+
+The rail was one column holding five categories, and it scrolled. Scrolling is
+the one interaction that guarantees you cannot see two things at once, and the
+pairing that matters here is exactly the one it broke: which step the model
+thinks it is in, and which instruments it can see. Those are two halves of a
+single judgement, and a column asks you to hold one in memory while you scroll
+to the other.
+
+Each category is now an independently collapsible, draggable panel
+(`js/panels.js`). Collapsed, a panel costs one header row, so five categories
+fit in the height of one old card and any two can be open together.
+
+**Panels may sit over the image, and that is measured.** The endoscope's circle
+does not fill the 16:9 frame. Over the 5 validation videos at 3 timestamps
+each, with an optical-black threshold of 24/255:
+
+| | worst case over 15 frames |
+|---|---|
+| left gutter dead | **217 px of 1280 (17.0%)** |
+| right gutter dead | 103 px (8.0%) |
+
+The left gutter is free in every frame sampled. The right is **not** — video_01
+is off-centre and runs out to x=1176. That asymmetry is why the defaults park
+the taller stack on the left.
+
+Three things the implementation must keep:
+
+- **`_bounds()` reserves the transport strip.** A panel takes pointer events,
+  so one covering PLAY does not just hide the control, it eats the click. The
+  strip is measured, not a constant, so it tracks the button metrics.
+- **`_place()` caps a panel's height to the space below its own top edge.**
+  Without it a tall panel is clipped by the timeline with its last rows
+  unreachable — strictly worse than the column it replaced.
+- **Coordinates are saved only for panels the reader actually dragged.**
+  Pinning an untouched panel to wherever it happened to sit would freeze the
+  auto-stack, so collapsing its neighbour would leave a hole instead of closing
+  up. `collapsed` is always saved; `x`/`y` only after a drag.
+
+STATUS is collapsed by default. Expanded it largely repeats the burn-in, which
+already carries step and elapsed time; folded, it hands the left column to
+PROCEDURE STEPS, and all fourteen rows fit with nothing to scroll.
+
+**Known cost, not yet resolved.** At 1440x900 the video is height-constrained
+and 1011 px wide, so the left column overlaps its first ~91 px — which is
+where the burn-in's identity block sits. The disclaimer line is long enough to
+stay legible, but "a screenshot cropped to the frame carries the disclaimer" is
+weaker than it was. Reserving a gutter would fix it and would also undo the
+point of floating panels; the reader can drag them clear meanwhile.
+
+### The burn-in must track the frame, not only the video
+
+`ResizeObserver` fires on **size**, never on position. The video is letterboxed
+inside `.frame` with `align-items: center`, so whenever it is *width*-constrained
+— frame aspect narrower than 16:9, which a tall window gives you — changing the
+frame's height moves the video without altering its box at all. Measured at
+900x820:
+
+| | frame | video | video top | burn top |
+|---|---|---|---|---|
+| DETAIL off | 860x635 | 832x468 | 157 | 157 |
+| DETAIL on | 860x517 | **832x468** | 98 | **157** |
+
+The footer grows 118 px, the video slides up 59 px at an unchanged size, and
+the observer never fires — so the burn-in sat half the footer's growth out of
+place, and the overlay canvas kept a stale bitmap height for the same reason.
+Observing `.frame` alongside the video is what catches it. It is invisible on a
+wide window, where the video is height-constrained and its box does change.
+
+`CanvasHost.resize()` is guarded against a no-op call because two observed
+elements means most transition frames arrive twice, and assigning
+`canvas.width` **clears** the bitmap — unguarded, that would blank a registered
+layer on every duplicate frame rather than merely costing a reallocation.

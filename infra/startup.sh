@@ -14,9 +14,16 @@
 # Metadata expected on the instance:
 #   BUCKET   gs://your-bucket        required
 #   EPOCHS   50                      optional
-#   BACKBONE resnet50                optional
+#   BACKBONE vit_base_patch14_dinov2.lvd142m   optional; `resnet50` for the
+#            cheaper arm. run_job.sh maps it to a tag, a space and an input
+#            size, and refuses a backbone it has no mapping for.
+#   STAGE    all | full             optional. `full` runs ONE fine-tune instead
+#            of six — the ~1/6 cost pass that answers whether a fine-tuned
+#            encoder beats the frozen one. Start here.
+#   BATCH    64                     optional; lower it if a ViT runs out of
+#            VRAM on a smaller card.
 #   REPO     https://github.com/...  optional, defaults to origin
-#   BRANCH   feat/instrument-variants
+#   BRANCH   main
 
 set -uo pipefail
 exec > >(tee -a /var/log/pitvis-job.log) 2>&1
@@ -26,24 +33,59 @@ meta() { curl -fsH "Metadata-Flavor: Google" \
 
 BUCKET="$(meta BUCKET)"
 EPOCHS="$(meta EPOCHS)"; EPOCHS="${EPOCHS:-50}"
-BACKBONE="$(meta BACKBONE)"; BACKBONE="${BACKBONE:-resnet50}"
+BACKBONE="$(meta BACKBONE)"; BACKBONE="${BACKBONE:-vit_base_patch14_dinov2.lvd142m}"
+STAGE="$(meta STAGE)"; STAGE="${STAGE:-all}"
+BATCH="$(meta BATCH)"; BATCH="${BATCH:-64}"
 REPO="$(meta REPO)"; REPO="${REPO:-https://github.com/wylliamunlimited/pitvis-phase-recognition.git}"
 BRANCH="$(meta BRANCH)"; BRANCH="${BRANCH:-main}"
 
 # Fires on success, failure, or signal. Results are pushed first so a crash
 # mid-job still surfaces whatever completed.
+#
+# TERM and INT are trapped as well as EXIT because a spot preemption arrives as
+# a signal with roughly 30 seconds of grace, not as a normal exit. That grace is
+# also why run_job.sh pushes each encoder as it finishes: 2 GB of backbones does
+# not reliably reach the bucket in 30 seconds, so the last-moment push is a
+# backstop, never the plan.
+_finished=0
 finish() {
-  code=$?
+  # JOB_STATUS if the job ran to completion, otherwise whatever killed us.
+  # Plain $? here reports the LAST COMMAND's status, which after the job is the
+  # echo — so a failed run logged "exit 0" and looked successful in the log
+  # someone reads to decide whether to trust the outputs.
+  code="${JOB_STATUS:-$?}"
+  [ "$_finished" = 1 ] && return          # EXIT still fires after TERM
+  _finished=1
   echo "=== finishing (exit $code), pushing results ==="
+  local failed=0
   if [ -n "$BUCKET" ] && [ -d /opt/pitvis/data ]; then
-    gsutil -m rsync -r /opt/pitvis/data/backbone  "$BUCKET/out/backbone"  || true
-    gsutil -m rsync -r /opt/pitvis/data/features  "$BUCKET/out/features"  || true
-    gsutil cp /var/log/pitvis-job.log "$BUCKET/out/" || true
+    push_dir backbone || failed=1
+    push_dir features || failed=1
+    gsutil cp /var/log/pitvis-job.log "$BUCKET/out/" || failed=1
+  else
+    echo "!!! no BUCKET or no data dir — NOTHING WAS SAVED"
+    failed=1
+  fi
+  # Say so loudly rather than shutting down looking successful. The whole point
+  # of the bucket is that an hour of GPU time survives the instance.
+  if [ "$failed" = 1 ]; then
+    echo "!!! ONE OR MORE UPLOADS FAILED — results may exist only on this disk."
+    echo "!!! Check $BUCKET/out/ BEFORE deleting the instance."
+  else
+    echo "=== all results uploaded to $BUCKET/out/ ==="
   fi
   echo "=== shutting down ==="
   shutdown -h now
 }
-trap finish EXIT
+trap finish EXIT INT TERM
+
+# Used by finish(). run_job.sh has its own save_now() for the per-fold pushes,
+# because it runs as a child and cannot see this function.
+push_dir() {
+  local d="$1"
+  [ -d "/opt/pitvis/data/$d" ] || return 0
+  gsutil -m rsync -r "/opt/pitvis/data/$d" "$BUCKET/out/$d"
+}
 
 [ -n "$BUCKET" ] || { echo "BUCKET metadata is required"; exit 1; }
 
@@ -79,5 +121,11 @@ gsutil -m rsync -r "$BUCKET/frames" data/frames
 # Resume anything a previous (possibly preempted) run finished.
 gsutil -m rsync -r "$BUCKET/out/backbone" data/backbone || true
 
-export EPOCHS BACKBONE
-exec uv run bash infra/run_job.sh
+export EPOCHS BACKBONE STAGE BATCH BUCKET
+
+# NOT `exec`. `exec` replaces this shell with the job, which DESTROYS the EXIT
+# trap above — so the instance would finish its work, push nothing, and then
+# bill until somebody noticed. Running it as a child keeps the trap, and the
+# job's exit status reaches finish() through $?.
+uv run bash infra/run_job.sh; JOB_STATUS=$?
+echo "=== job finished with status $JOB_STATUS ==="

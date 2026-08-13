@@ -122,12 +122,22 @@ class Frames(Dataset):
 
 
 class MultiTask(nn.Module):
-    """Backbone plus two heads. `backbone` alone is what extraction reuses."""
+    """Backbone plus two heads. `backbone` alone is what extraction reuses.
 
-    def __init__(self, name: str, pretrained: bool = True):
+    `model_kwargs` reaches `timm.create_model` untouched, and for a ViT it is
+    not optional. DINOv2's weights ship at 518x518, so without `img_size=224`
+    the model is built for a 37x37 patch grid and rejects the 224 tensor this
+    dataset produces — "Input height (518) doesn't match model (224)", the same
+    trap extraction hit. It must also match the `img_size` of the space that
+    will later read this checkpoint, or the encoder is fine-tuned at one
+    resolution and inferred at another.
+    """
+
+    def __init__(self, name: str, pretrained: bool = True, **model_kwargs):
         super().__init__()
         import timm
-        self.backbone = timm.create_model(name, pretrained=pretrained, num_classes=0)
+        self.backbone = timm.create_model(name, pretrained=pretrained,
+                                          num_classes=0, **model_kwargs)
         d = self.backbone.num_features
         self.steps = nn.Linear(d, NUM_CLASSES)
         self.instruments = nn.Linear(d, NUM_INSTRUMENTS)
@@ -165,6 +175,11 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--backbone", default="resnet50",
                     help="timm model to fine-tune (default: resnet50 — 4x "
                          "cheaper to train than ViT-B and what both papers used)")
+    ap.add_argument("--img-size", type=int, default=None, metavar="PX",
+                    help="build the backbone for this input size. REQUIRED for "
+                         "a ViT — DINOv2 ships at 518 and rejects the 224 crop "
+                         "this dataset produces unless told otherwise. Leave "
+                         "unset for a CNN, which infers its size from the input")
     ap.add_argument("--epochs", type=int, default=5,
                     help="5 is the pilot; the papers use 50")
     ap.add_argument("--lr", type=float, default=1e-4)
@@ -207,15 +222,50 @@ def main(argv: list[str] | None = None) -> None:
                         num_workers=args.workers, pin_memory=(dev.type == "cuda"),
                         persistent_workers=args.workers > 0, drop_last=True)
 
-    model = MultiTask(args.backbone).to(dev)
+    # Fail here, loudly, rather than after an epoch of training: a ViT built at
+    # its native 518 accepts nothing this dataset produces, and the error is
+    # far less obvious once it surfaces inside a DataLoader worker.
+    kwargs = {"img_size": args.img_size} if args.img_size else {}
+    model = MultiTask(args.backbone, **kwargs).to(dev)
+    with torch.no_grad():
+        probe = model.backbone(torch.zeros(1, 3, CROP, CROP, device=dev))
+    print(f"backbone accepts {CROP}x{CROP} -> {probe.shape[1]}-d")
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
     ce = nn.CrossEntropyLoss(weight=class_weights(train_ds, args.weight_cap).to(dev))
     bce = nn.BCEWithLogitsLoss(
         pos_weight=pos_weight(train_ds, args.pos_weight_cap).to(dev))
 
+    # Resume state, written after every epoch.
+    #
+    # WHY EPOCH GRANULARITY. On spot capacity the unit of loss should be the
+    # unit of work you can afford to repeat. Without this the unit is a whole
+    # encoder — preempted at epoch 45 of 50 and four hours are gone — and no
+    # amount of bucket plumbing helps, because the thing that was lost was
+    # never written down. With it, the worst case is the epoch in flight.
+    #
+    # The optimiser and scheduler are saved with the weights on purpose.
+    # AdamW carries first and second moments per parameter, and cosine decay
+    # carries its position; restoring weights alone would resume at the wrong
+    # learning rate with the moments zeroed, which is a different training run
+    # that happens to start from the same numbers.
+    resume_path = out / "resume.pt"
+    start_ep = 0
+    if resume_path.exists():
+        r = torch.load(resume_path, map_location=dev, weights_only=False)
+        model.load_state_dict(r["model"])
+        opt.load_state_dict(r["opt"])
+        sched.load_state_dict(r["sched"])
+        start_ep = r["epoch"]
+        print(f"resuming from {resume_path} at epoch {start_ep + 1}/{args.epochs}")
+        if r.get("trained_on") != sorted(videos):
+            raise SystemExit(
+                f"resume state was trained on {r.get('trained_on')}, this run "
+                f"holds out a different set. Delete {resume_path} to start over "
+                f"— resuming would silently mix two different encoders.")
+
     t0 = time.time()
-    for ep in range(args.epochs):
+    for ep in range(start_ep, args.epochs):
         model.train()
         run = correct = seen = 0.0
         te = time.time()
@@ -237,6 +287,16 @@ def main(argv: list[str] | None = None) -> None:
         print(f"epoch {ep + 1}/{args.epochs}: loss {run / seen:.4f}  "
               f"step-acc {correct / seen:.3f}  [{time.time() - te:.0f}s]")
 
+        # Write to a temp file and rename. A preemption lands mid-write often
+        # enough to matter over 50 epochs, and a half-written resume file is
+        # worse than none: it fails to load at the start of the NEXT run,
+        # after the instance has already been paid for.
+        tmp = resume_path.with_suffix(".tmp")
+        torch.save({"epoch": ep + 1, "model": model.state_dict(),
+                    "opt": opt.state_dict(), "sched": sched.state_dict(),
+                    "trained_on": sorted(videos)}, tmp)
+        tmp.replace(resume_path)
+
     # Only the backbone matters downstream — the heads exist to shape it.
     # `trained_on` is what lets crossval refuse to hold out a video this
     # encoder has already memorised. Without it the leak is invisible.
@@ -248,6 +308,10 @@ def main(argv: list[str] | None = None) -> None:
          "train_frames": len(train_ds), "trained_on": sorted(videos),
          "seconds": round(time.time() - t0, 1), "args": vars(args)},
         indent=2) + "\n")
+    # The run finished, so the resume state is now dead weight — and it is
+    # optimiser-sized, ~3x the encoder. Leaving it would upload a gigabyte of
+    # scratch per fold and make a completed encoder look like an interrupted one.
+    resume_path.unlink(missing_ok=True)
     print(f"\nwrote {out / 'backbone.pt'}  [{(time.time() - t0) / 60:.1f} min]")
     print(f"next: add a space pointing at it, then `uv run pitvis-extract "
           f"--space <name>`")

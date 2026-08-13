@@ -18,12 +18,26 @@
  * literal `[ ... ]` in their labels either — `[ VAL SPLIT ]` is a readout and
  * keeps them.
  *
+ * The worklist rows are the sharp edge of that rule: they are information you
+ * can click. They get NO bracket and NO fill — pressability is a hover ground
+ * and a cursor, nothing more. If a row ever acquires either, the rule is gone.
+ *
  * TYPE IS LIGHT SANS, NOT MONO. Monospace plus uppercase plus wide tracking
  * reads as tactical, which is the wrong register for a clinical research tool.
  * Mono survives in exactly two places — the inference console and the copyable
  * command in the veil — where column alignment is the point. Everything else
  * is a light sans with tabular figures, so numbers still align in a column
- * without the whole surface looking like a terminal.
+ * without the whole surface looking like a terminal. The burn-in over the
+ * video is the loudest temptation to break this, because every PACS overlay
+ * on earth is monospace. Tabular figures already hold those columns.
+ *
+ * CATEGORIES FLOAT, THEY DO NOT STACK. A fixed rail puts every category in
+ * one column, so the moment it overflows it scrolls — and scrolling is the one
+ * interaction that guarantees you cannot see two things at once. Steps and
+ * instruments are two halves of one judgement and must be readable together.
+ * Panels are independently collapsible and draggable instead, and may sit over
+ * the image: the endoscope's circle leaves at least 17% of the frame width as
+ * optical black on the left in every validation frame measured.
  *
  * DENSITY IS THE DESIGN. The default view answers one question — what is
  * happening now — and hides everything that answers "how did the model do".
@@ -31,6 +45,12 @@
  * elements, which are display:none until #app[data-detail]. A surgeon's first
  * decision is whether to look at all; winning that is worth more than showing
  * them everything at once.
+ *
+ * WHAT IS HAPPENING NOW LIVES ON THE IMAGE. Case identity, elapsed time, the
+ * current step and the instruments in view are burned into the corners of the
+ * frame the way a PACS viewer burns them into pixels. That is not decoration:
+ * it collapses four saccades into the fixation the eye is already holding, and
+ * it is what lets the panels stay folded and still say more than before.
  */
 
 :root {
@@ -45,6 +65,15 @@
   --warn:    #A9630B;
   --alarm:   #B42318;
 
+  /* Burn-in only. Appended, never substituted: readColors() in main.js reads
+     the ten names above by literal string to hand them to the canvas, so
+     renaming one silently breaks the timeline. Adding is safe; renaming is not.
+     These two are deliberately outside that set — they are a legibility
+     treatment over foreign pixels, not colours on this page's ground. */
+  --burn-ink:  #FFFFFF;
+  --burn-halo: 0 0 2px rgba(0,0,0,.95), 0 0 5px rgba(0,0,0,.7),
+               0 1px 1px rgba(0,0,0,.9);
+
   --ease: cubic-bezier(.4, 0, .2, 1);
   /* Two durations, as before: --d1 is state feedback the pointer causes,
      --d2 is structural change the layout causes. Nothing gets a third. */
@@ -57,8 +86,10 @@
           Consolas, monospace;
 
   --head: 54px;
-  --tl:   86px;        /* one lane. JS raises this when detail is on. */
-  --rail: 340px;
+  --tl:   44px;        /* one 16px strip. JS raises this when detail is on. */
+
+  --row:     30px;     /* worklist row */
+  --row-cur: 48px;     /* the one you are on */
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -121,9 +152,18 @@ button.ghost { font-size: 10px; letter-spacing: .1em; padding: 5px 10px; }
 /* -- progressive disclosure ------------------------------------------------ */
 
 .more { display: none; }
+/* `.tile` and `.panel` set `display` themselves further down the sheet, and at
+   equal specificity the later rule wins — so the plain `.more` above lost and
+   the CONFIDENCE tile was visible with the analyst layer off. These two raise
+   the specificity rather than relying on source order. */
+.tile.more, .panel.more { display: none; }
 #app[data-detail] .more { display: revert; }
 #app[data-detail] .card.more { display: block; }
-#app[data-detail] ul.probs.more { display: flex; }
+#app[data-detail] .tile.more { display: flex; }
+/* A hidden panel must stay hidden: `hidden` marks "this case has nothing to
+   show here", which outranks "the analyst layer is on". */
+#app[data-detail] .panel.more { display: flex; }
+#app[data-detail] .panel.more[hidden] { display: none; }
 
 /* `display` cannot be transitioned, so the reveal is an animation instead —
    it runs once, on the frame the element starts being displayed. Each piece
@@ -134,39 +174,29 @@ button.ghost { font-size: 10px; letter-spacing: .1em; padding: 5px 10px; }
   to   { opacity: 1; transform: none; }
 }
 #app[data-detail] .more { animation: reveal var(--d2) var(--ease) backwards; }
-#app[data-detail] #step-card .more { animation-delay: .03s; }
-#app[data-detail] #inst-probs     { animation-delay: .08s; }
-#app[data-detail] #ref-card       { animation-delay: .13s; }
+#app[data-detail] .panel[data-panel="instruments"] { animation-delay: .05s; }
+#app[data-detail] .panel[data-panel="truth"]       { animation-delay: .10s; }
+#app[data-detail] .panel[data-panel="post"]        { animation-delay: .15s; }
 
 /* The footer grows to fit the extra lanes; --tl is set from JS. Without this
    the timeline snapped to its new height while the cards were still fading. */
 #app { transition: grid-template-rows var(--d2) var(--ease); }
 
-/* -- a rail value replacing another --------------------------------------- */
+/* -- a panel value replacing another -------------------------------------- */
 
 /* A step boundary changes the numeral and the name at the same instant, and
    swapping both in place reads as a glitch rather than as an event. The rise
-   gives it a direction, and the numeral leading the name by a beat makes it
-   one event instead of two things blinking together.
+   gives it a direction.
    Applied by `setText` in status.js, which fires it on the value changing and
    never on the tick — elapsed and confidence deliberately do not come through
-   it, because a card that pulses once a second is worse than one that snaps. */
+   it, because a card that pulses once a second is worse than one that snaps.
+   The burn-in gets none of this: text over video that fades in is a broadcast
+   lower-third, which is the register being removed. */
 @keyframes swap {
   from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: none; }
 }
-/* `backwards` is for the delay, not for safety: `.name.swap` starts 50ms late,
-   and without it the new text renders at full opacity, blinks out, then rises.
-   (`both` would behave identically once running — its forwards half pins
-   `opacity: 1`, which is already the resting style — so neither fill mode can
-   strand a value. What keeps a paused animation from hiding text is the
-   `document.hidden` guard in status.js, nothing here.) */
 .swap { animation: swap var(--d2) var(--ease) backwards; }
-.name.swap { animation-delay: .05s; }
-
-/* Instruments can change any second, not only at a step boundary, so theirs
-   runs at the short duration — the same gesture, too brief to nag. */
-.slot .v.swap { animation-duration: var(--d1); }
 
 /* Motion here is affordance, not decoration, so it all reduces to nothing on
    request rather than being merely shortened. */
@@ -199,12 +229,6 @@ button.ghost { font-size: 10px; letter-spacing: .1em; padding: 5px 10px; }
 }
 @property --brk { syntax: '<color>'; inherits: false; initial-value: #E3E3DE; }
 
-/* A step boundary: the brackets pull to accent and release. This used to be a
-   JS `setProperty` plus a bare `setTimeout(…, 420)` against a CSS transition —
-   two numbers in two languages that had to be kept in step, and a duration the
-   `prefers-reduced-motion` reset below could not reach, so reduced-motion users
-   got a hard blink instead of the fade. As one keyframe it is a single token
-   and the reset covers it. Applied by `flashStepCard` in main.js. */
 @keyframes brk-flash {
   0%   { --brk: var(--rule); }
   40%  { --brk: var(--accent); }
@@ -221,32 +245,30 @@ button.ghost { font-size: 10px; letter-spacing: .1em; padding: 5px 10px; }
   border-bottom: 1px solid var(--rule); background: var(--surface);
 }
 .mark { font-size: 11.5px; letter-spacing: .24em; font-weight: 400; color: var(--faint); }
-/* Box and hover come from the shared control block above. The <select> inside
-   draws its own :focus-visible ring, so the label must NOT also draw one —
-   two rings 15px apart, once for the child and once for the padded parent. */
 .picker { display: inline-flex; align-items: center; }
 .picker select { color: var(--text); letter-spacing: .1em; font-size: 12px; }
-.split { font-size: 9.5px; letter-spacing: .12em; color: var(--faint); }
-.split.trained { color: var(--warn); }
-.clock { font-size: 12px; color: var(--dim); letter-spacing: .04em; }
-.chip {
-  font-size: 9.5px; letter-spacing: .1em; color: var(--warn);
-  white-space: nowrap; padding-left: 4px;
+/* Which model produced what is on screen. A credential, not a headline. */
+.prov {
+  font-size: 9.5px; letter-spacing: .1em; color: var(--faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34ch;
 }
+.prov.unrecorded { color: var(--warn); }
 
+/* One column now, and the positioning context for the floating panel layer.
+   The video gets the full width; the panels sit over the pillarbox paper it
+   leaves either side. */
 main {
-  display: grid; grid-template-columns: 1fr var(--rail);
-  min-height: 0; border-bottom: 1px solid var(--rule);
-  /* Without this the rail's cards and the video spill downward over the
-     timeline when the footer grows — the grid row shrinks, its contents don't. */
+  position: relative; min-height: 0; border-bottom: 1px solid var(--rule);
+  /* Without this the video spills downward over the timeline when the footer
+     grows — the grid row shrinks, its contents don't. */
   overflow: hidden;
 }
 
 /* -- video ---------------------------------------------------------------- */
 
 .stage {
-  display: flex; flex-direction: column; min-width: 0; min-height: 0;
-  border-right: 1px solid var(--rule); padding: 20px; overflow: hidden;
+  display: flex; flex-direction: column; height: 100%;
+  min-width: 0; min-height: 0; padding: 20px; overflow: hidden;
 }
 .frame {
   position: relative; flex: 1; min-height: 0;
@@ -254,13 +276,50 @@ main {
   --brk-len: 20px; padding: 14px;
 }
 #video { max-width: 100%; max-height: 100%; display: block; background: #0C0E10; }
-#overlay { position: absolute; inset: 0; pointer-events: none; }
+/* The explicit width/height are load-bearing, not belt-and-braces. A canvas is
+   a REPLACED element, so `inset: 0` does not stretch it: with `width: auto` the
+   used width is the INTRINSIC width — the bitmap attribute — and the
+   over-constrained inset is dropped (CSS 2.1 §10.3.8). Without these the
+   element is sized BY its bitmap while resize() sizes the bitmap FROM the
+   element, and every call multiplies by devicePixelRatio. On a 2x display that
+   doubles per resize: ten of them took the overlay to 1228800x614400 CSS px,
+   far past the ~268M-pixel bitmap Chrome will allocate, so the canvas failed to
+   allocate and painted as an opaque white box over the video. */
+#overlay {
+  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+}
+
+/* -- the burn-in ---------------------------------------------------------- */
+
+/* Sized and positioned from JS against the VIDEO rect, not the frame: the
+   video letterboxes inside .frame — at 1440x900 there are ~54px of paper above
+   and below it — so corners pinned to the frame would float onto the page.
+   overlay.geometry() already computes that rect for the canvas; this reuses it
+   rather than deriving it a second time. */
+.burn {
+  position: absolute; pointer-events: none;
+  font-size: 11px; font-weight: 400; letter-spacing: .07em;
+  color: var(--burn-ink); text-shadow: var(--burn-halo);
+}
+.corner { position: absolute; display: flex; flex-direction: column; gap: 3px; }
+.corner.tl { top: 10px;    left: 12px; }
+.corner.tr { top: 10px;    right: 12px; text-align: right; }
+.corner.bl { bottom: 10px; left: 12px; }
+.corner.br { bottom: 10px; right: 12px; text-align: right; }
+
+.burn .id   { font-size: 11px; letter-spacing: .1em; }
+.burn .sub  { font-size: 9px; letter-spacing: .1em; opacity: .82; }
+.burn .step { font-size: 15px; letter-spacing: .05em; text-transform: uppercase; }
+.burn .inst { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
+.burn .inst.empty { text-transform: none; letter-spacing: .02em; opacity: .8; }
+.burn[hidden] { display: none; }
 
 .veil {
   position: absolute; inset: 0; display: none;
   align-items: center; justify-content: center;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   font-size: 11px; letter-spacing: .06em; color: var(--dim); padding: 0 40px;
+  z-index: 2;
 }
 .veil[data-on] { display: flex; }
 .veil span { max-width: 62ch; line-height: 2; white-space: pre-line; }
@@ -277,71 +336,190 @@ main {
 .transport .wide { min-width: 68px; color: var(--text); }
 .tsep { width: 1px; height: 12px; background: var(--rule); margin: 0 8px; }
 
-/* -- rail ----------------------------------------------------------------- */
+/* -- floating panels ------------------------------------------------------- */
 
-.rail {
-  display: flex; flex-direction: column; gap: 14px; padding: 20px;
-  overflow-y: auto; min-width: 0; background: var(--bg);
+/* The layer is pointer-transparent so the video keeps every event that is not
+   aimed at a panel; each panel opts back in. */
+.panels { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+
+/* Translucent, NOT backdrop-filtered. A blur behind a panel that overlaps the
+   video forces the compositor to re-read the video layer every frame, and this
+   surface has already been bitten once by video compositing. A flat alpha
+   costs nothing and is legible over both bright mucosa and optical black. */
+/* Column flex so the header keeps its height and the body absorbs the
+   JS-applied max-height, which is what lets the body scroll instead of the
+   panel overflowing. */
+.panel {
+  position: absolute; pointer-events: auto; width: var(--pw, 268px);
+  display: flex; flex-direction: column;
+  background-color: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: 0 1px 16px rgb(0 0 0 / .07);
+  transition: box-shadow var(--d1) var(--ease);
 }
+.panel[data-panel="steps"] { --pw: 292px; }
+.panel[data-dragging] {
+  box-shadow: 0 4px 26px rgb(0 0 0 / .16);
+  background-color: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+.panel[hidden] { display: none; }
+
+/* The header is the drag handle, so it gets the grab cursor and nothing inside
+   it may start a text selection — a half-selected caption during a drag reads
+   as a broken control. */
+.phead {
+  display: flex; align-items: center; gap: 8px; padding: 9px 12px 8px;
+  cursor: grab; user-select: none; touch-action: none;
+}
+.panel[data-dragging] .phead { cursor: grabbing; }
+.phead .cap { margin: 0; }
+
+.fold {
+  margin-left: auto; width: 16px; height: 16px; padding: 0; flex: none;
+  background: none; border: 0; cursor: pointer; position: relative;
+  color: var(--dim);
+}
+.fold::before, .fold::after {
+  content: ''; position: absolute; left: 3px; top: 50%; width: 10px; height: 1px;
+  background: currentColor; transition: transform var(--d1) var(--ease);
+}
+.fold::after { transform: rotate(90deg); }
+/* Expanded shows a minus, collapsed a plus — the mark states what the click
+   does next, which is the convention every file tree uses. */
+.panel:not([data-collapsed]) .fold::after { transform: rotate(0deg); }
+.fold:hover { color: var(--text); }
+
+/* A panel is capped to the space below its own top edge (set from JS), so it
+   can never be clipped by the timeline with content unreachable. At an ordinary
+   window height nothing here scrolls — this only engages when the reader has
+   pulled a tall panel low, and it scrolls that one panel rather than a column
+   holding every category at once. */
+.pbody { padding: 0 14px 14px; overflow-y: auto; }
+.panel[data-collapsed] .pbody { display: none; }
+
+/* Kept for the veil's copyable command block, which is still a card. */
 .card { position: relative; padding: 16px 18px; background: var(--surface); }
 
-.step-body { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
-.tint {
-  width: 3px; align-self: stretch; min-height: 58px; background: var(--faint);
-  transition: background var(--d2) var(--ease);
+/* -- value tiles ---------------------------------------------------------- */
+
+/* The patient-monitor idiom: small caption, large light numeral, unit beside
+   it. These are a treatment of numbers the interface already showed, not new
+   numbers — the 64px step numeral that used to live here moved onto the image
+   and into the worklist's current row. */
+/* Wrapping, not squeezing. Inside a 268px panel three tiles in one row cut
+   "STEPS SEEN" off; letting them wrap keeps every caption whole at any panel
+   width. The default view carries two tiles (CONFIDENCE is analyst-layer), so
+   the common case is still a single row. */
+.tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+.tile {
+  flex: 1 1 40%; min-width: 92px; padding: 8px 10px 10px;
+  display: flex; flex-direction: column; gap: 2px;
+  background-color: color-mix(in srgb, var(--raised) 55%, transparent);
 }
-.num {
-  font-size: 64px; font-weight: 150; line-height: .82; letter-spacing: -.03em;
+.tile .v {
+  font-size: 28px; font-weight: 200; line-height: 1; letter-spacing: -.02em;
   color: var(--text);
 }
-.meta { min-width: 0; }
-.name {
-  font-size: 17px; font-weight: 300; letter-spacing: .02em; text-transform: uppercase;
-  line-height: 1.3; color: var(--text);
-}
-.sub { margin-top: 8px; font-size: 11px; color: var(--dim); }
-.sub .sep { color: var(--faint); margin: 0 5px; }
+.tile .u { font-size: 10px; color: var(--dim); }
+.tile .u.held { color: var(--warn); }
 
-.conf { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
-.conf .bar { flex: 1; height: 2px; background: var(--raised); position: relative; }
-.conf .bar i {
-  position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent);
-  transition: width var(--d1) var(--ease), background var(--d1) var(--ease);
-}
-.conf .val { font-size: 12px; color: var(--text); min-width: 4ch; text-align: right; }
-.alt {
-  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule);
-  font-size: 10.5px; color: var(--dim); line-height: 1.65;
-}
-.alt b { color: var(--warn); font-weight: 400; }
+/* -- the worklist --------------------------------------------------------- */
 
-.slots { display: flex; flex-direction: column; gap: 11px; margin-top: 16px; }
-.slot { display: grid; grid-template-columns: 66px 1fr; align-items: baseline; gap: 10px; }
-.slot .v {
-  font-size: 14px; font-weight: 300; letter-spacing: .01em; text-transform: uppercase;
-  color: var(--text); min-width: 0; overflow-wrap: anywhere; line-height: 1.35;
+.worklist { list-style: none; margin-top: 10px; }
+.wl-row {
+  display: grid; grid-template-columns: 3px 19px 1fr auto;
+  align-items: center; gap: 0 9px;
+  height: var(--row); font-size: 11.5px; color: var(--text);
+  border-radius: 2px; padding-right: 4px;
+  transition: height var(--d2) var(--ease), background var(--d1) var(--ease);
 }
-.slot .v.empty {
-  color: var(--faint); text-transform: none; letter-spacing: .01em;
-  font-size: 11.5px; line-height: 1.5;
+.wl-row.click { cursor: pointer; }
+.wl-row.click:hover { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+
+/* The status column IS the phase ramp. The worklist then reads top-to-bottom
+   as the same single-hue deepening the progress bar reads left-to-right — one
+   colour system, two projections, no new colours.
+   Deliberately not a checkmark: a tick asserts verification, and this model is
+   40.5% frame-accurate on the case it is most often shown with. */
+.wl-mark { width: 3px; height: 10px; background: var(--rule); border-radius: 1px; }
+.wl-row.seen .wl-mark { height: 12px; }
+.wl-row.cur  .wl-mark { height: 100%; background: var(--accent); }
+/* Never reached. The dotted mark is the same vocabulary the timeline uses for
+   an absent lane: missing data has to look different from data. */
+.wl-row.unseen .wl-mark {
+  background: none; height: 100%;
+  border-left: 1px dotted var(--rule); width: 1px; margin-left: 1px;
 }
 
-.probs {
-  list-style: none; flex-direction: column; gap: 6px;
-  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule);
+.wl-num  { font-size: 10.5px; color: var(--faint); text-align: right; }
+.wl-name {
+  /* Sentence case, not uppercase: at the 1280px breakpoint this column is
+     133px, and uppercase is ~12% wider. Fourteen uppercase rows is a wall. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: .01em;
 }
-.probs li {
-  display: grid; grid-template-columns: 8px 1fr 38px 3.6ch;
+.wl-meta { display: flex; align-items: baseline; gap: 8px; font-size: 10.5px; }
+.wl-time { color: var(--dim); font-variant-numeric: tabular-nums; }
+.wl-visits { color: var(--faint); font-size: 9.5px; }
+.wl-conf { color: var(--faint); min-width: 3.2ch; text-align: right; }
+
+.wl-row.unseen { color: var(--faint); }
+.wl-row.unseen .wl-num { color: var(--rule); }
+.wl-row.unseen .wl-time { color: var(--rule); }
+
+/* Out of order: the model returned to this step after a later one had begun.
+   Two or three rows per case, which is what keeps it meaningful. */
+.wl-row.regress .wl-num::after {
+  content: '·'; color: var(--warn); margin-left: 2px; font-size: 13px;
+}
+
+.wl-row.cur {
+  height: var(--row-cur);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  align-content: center;
+}
+.wl-row.cur .wl-name { font-size: 13px; color: var(--text); }
+.wl-row.cur .wl-num  { color: var(--accent); font-size: 12px; }
+.wl-sub {
+  grid-column: 3 / -1; font-size: 9.5px; color: var(--dim); margin-top: 1px;
+}
+.wl-row:not(.cur) .wl-sub { display: none; }
+
+.wl-foot {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule);
+  font-size: 10px; color: var(--faint); line-height: 1.6;
+}
+
+/* -- instrument use ------------------------------------------------------- */
+
+.tray { list-style: none; margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+.tray li {
+  display: grid; grid-template-columns: 8px 1fr 46px 40px 3.4ch;
   align-items: center; gap: 8px; font-size: 10.5px; color: var(--faint);
+  cursor: pointer; border-radius: 2px;
+  transition: background var(--d1) var(--ease), color var(--d1) var(--ease);
 }
-.probs li.on { color: var(--text); }
-.probs .tick { color: var(--accent); opacity: 0; }
-.probs li.on .tick { opacity: 1; }
-.probs .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.probs .mb { height: 2px; background: var(--raised); position: relative; }
-.probs .mb i { position: absolute; inset: 0 auto 0 0; background: var(--faint); }
-.probs li.on .mb i { background: var(--accent); }
-.probs .pv { text-align: right; }
+.tray li:hover { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.tray li.on { color: var(--text); }
+.tray li.sel { color: var(--accent); }
+.tray .tick { color: var(--accent); opacity: 0; }
+.tray li.on .tick { opacity: 1; }
+.tray .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tray .mb { height: 2px; background: var(--raised); position: relative; }
+.tray .mb i { position: absolute; inset: 0 auto 0 0; background: var(--faint); }
+.tray li.on .mb i, .tray li.sel .mb i { background: var(--accent); }
+.tray .tv { text-align: right; color: var(--dim); }
+.tray .xn { text-align: right; }
+.tray-foot {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule);
+  font-size: 10px; color: var(--faint); line-height: 1.6;
+}
+.tray-more {
+  font-size: 10px; letter-spacing: .1em; color: var(--faint);
+  background: none; padding: 4px 0; margin-top: 4px;
+}
+.tray-more:hover { background: none; }
+
+/* -- ground truth --------------------------------------------------------- */
 
 #ref-body { margin-top: 14px; font-size: 11px; line-height: 1.75; color: var(--dim); }
 #ref-body .row { display: flex; align-items: baseline; gap: 9px; }
@@ -354,19 +532,37 @@ main {
 #ref-body .scores div { display: flex; justify-content: space-between; gap: 12px; }
 #ref-body .scores span:last-child { color: var(--text); }
 
+.alt { font-size: 10.5px; color: var(--dim); line-height: 1.65; margin-top: 12px; }
+.alt b { color: var(--warn); font-weight: 400; }
+
 /* -- timeline ------------------------------------------------------------- */
 
-.timeline { display: grid; grid-template-columns: 92px 1fr; background: var(--surface); }
-.lane-labels { position: relative; padding: 14px 0 14px 20px; }
+.timeline {
+  display: grid; grid-template-columns: 92px 1fr; background: var(--surface);
+  transition: grid-template-columns var(--d2) var(--ease);
+}
+/* One unlabelled strip needs no label gutter, and absolute time is now an
+   exact numeral on the video rather than a tick to read off a scale. */
+#app:not([data-detail]) .timeline { grid-template-columns: 0 1fr; }
+
+.lane-labels { position: relative; padding: 14px 0 14px 20px; overflow: hidden; }
 .lane-labels span {
   position: absolute; left: 20px; font-size: 8.5px; letter-spacing: .12em;
   color: var(--faint); text-transform: uppercase;
 }
-.track { position: relative; padding: 14px 20px 14px 0; cursor: crosshair; }
-#tl-canvas { position: absolute; inset: 14px 20px 14px 0; }
+
+/* The canvas is IN the flow at width:100%, not absolutely positioned.
+   A canvas is a replaced element: with `width: auto` it takes its intrinsic
+   size from the width attribute rather than stretching between left and right
+   insets, so the absolutely-positioned version only ever worked because JS
+   also wrote an explicit style.width — which made its clientWidth a value we
+   had set rather than a value we could read. In the flow, clientWidth is the
+   track's content box, which is exactly the number every consumer wants. */
+.track { position: relative; padding: 14px 20px; cursor: crosshair; }
+#tl-canvas { display: block; width: 100%; }
 
 .playhead {
-  position: absolute; top: 14px; bottom: 14px; left: 0; width: 1px;
+  position: absolute; top: 14px; bottom: 14px; left: 20px; width: 1px;
   background: var(--accent); pointer-events: none; will-change: transform;
 }
 .playhead::before, .playhead::after {
@@ -409,6 +605,7 @@ main {
 #app:not([data-state="loading"]) .boot { display: none; }
 
 @media (max-width: 1280px) {
-  :root { --rail: 300px; }
-  .num { font-size: 50px; }
+  :root { --row: 28px; --row-cur: 44px; }
+  .tile .v { font-size: 26px; }
+  .burn .step { font-size: 13px; }
 }

@@ -18,11 +18,10 @@
     <label class="picker">
       <select id="case-select"></select>
     </label>
-    <span class="split" id="split"></span>
+    <span class="prov" id="prov"></span>
     <span class="grow"></span>
-    <span class="clock" id="clock">--:--:-- / --:--:--</span>
+    <button id="layout-reset" class="ghost" title="return every panel to its default position and open state">RESET LAYOUT</button>
     <button id="detail-toggle" class="ghost" aria-pressed="false">+ DETAIL</button>
-    <span class="chip warn" title="This renders research model output on recorded video. It is not a medical device and must not inform clinical decisions.">RESEARCH — NOT FOR CLINICAL USE</span>
   </header>
 
   <main>
@@ -30,8 +29,34 @@
       <div class="frame brk" id="frame">
         <video id="video" preload="metadata" playsinline></video>
         <!-- Seam (a): the agentic explanation layer draws here. Sized to the
-             video's displayed rect, empty until something registers a layer. -->
+             video's displayed rect, empty until something registers a layer.
+             The burn-in below sits ABOVE this canvas and never draws into it —
+             the canvas works in video pixels, burn-in text works in screen
+             pixels, and mixing the two would ruin the layer registry before it
+             has a layer. -->
         <canvas id="overlay"></canvas>
+
+        <!-- Burned into the image, PACS convention. Positioned against the
+             VIDEO rect, not the frame: the video letterboxes, so at 1440x900
+             there are ~54px of paper above and below it. -->
+        <div class="burn" id="burn">
+          <!-- Case identity only. The split caveat now sits under the score
+               block in GROUND TRUTH, beside the numbers it qualifies, and the
+               research disclaimer lives in the README rather than on screen. -->
+          <div class="corner tl">
+            <span class="id" id="b-case">--</span>
+          </div>
+          <div class="corner tr">
+            <span class="id" id="b-clock">--:--:-- / --:--:--</span>
+          </div>
+          <div class="corner bl">
+            <span class="step" id="b-step">--</span>
+          </div>
+          <div class="corner br">
+            <span class="inst" id="b-inst">--</span>
+          </div>
+        </div>
+
         <div class="veil" id="veil"><span></span></div>
       </div>
 
@@ -43,54 +68,88 @@
         <button id="prevseg" title="previous step ([)">&lsaquo; STEP</button>
         <button id="nextseg" title="next step (])">STEP &rsaquo;</button>
         <span class="grow"></span>
-        <button id="rerun" class="ghost">RE-RUN</button>
+        <button id="rerun" class="ghost more">RE-RUN</button>
       </div>
     </section>
 
-    <aside class="rail">
+    <!-- Floating panel layer. Each panel is independently collapsible and
+         draggable, so two categories can be open side by side instead of
+         stacked in a column that has to be scrolled. Defaults park them on the
+         pillarbox paper either side of the video. The layer itself is
+         pointer-transparent; only the panels take events. -->
+    <div class="panels" id="panels">
 
-      <section class="card brk" id="step-card">
-        <div class="cap">CURRENT STEP</div>
-        <div class="step-body">
-          <div class="tint" id="step-tint"></div>
-          <div class="num" id="step-num">--</div>
-          <div class="meta">
-            <div class="name" id="step-name">no prediction</div>
-            <div class="sub">
-              <span id="step-elapsed">--:--</span>
-              <span class="sep">of</span>
-              <span id="step-total">--:--</span>
+      <!-- Collapsed by default, and deliberately: STEP and elapsed time are
+           already burned into the frame corners, so expanded it mostly repeats
+           the image. Folding it hands the whole left column to PROCEDURE STEPS,
+           which is the panel that actually needs the height — all fourteen rows
+           fit with nothing to scroll. One click gets STEPS SEEN back. -->
+      <section class="panel brk" data-panel="status" data-side="left" data-top="0"
+               data-collapsed>
+        <header class="phead">
+          <span class="cap">STATUS</span>
+          <button class="fold" aria-expanded="false" title="expand (1)"></button>
+        </header>
+        <div class="pbody">
+          <div class="tiles" id="tiles">
+            <div class="tile">
+              <span class="cap">STEP</span>
+              <span class="v" id="t-step">--</span>
+              <span class="u" id="t-elapsed">--:--</span>
+            </div>
+            <div class="tile">
+              <span class="cap">STEPS SEEN</span>
+              <span class="v" id="t-seen">--</span>
+              <span class="u">of 14</span>
+            </div>
+            <div class="tile more">
+              <span class="cap">CONFIDENCE</span>
+              <span class="v" id="t-conf">--</span>
+              <span class="u" id="t-conf-note"></span>
             </div>
           </div>
         </div>
+      </section>
 
-        <div class="more">
-          <div class="conf" id="conf-row">
-            <span class="cap">CONFIDENCE</span>
-            <span class="bar"><i id="conf-fill"></i></span>
-            <span class="val" id="conf-val">--</span>
-          </div>
-          <div class="alt" id="step-alt" hidden></div>
+      <section class="panel brk" id="worklist-card" data-panel="steps" data-side="left" data-top="1">
+        <header class="phead">
+          <span class="cap">PROCEDURE STEPS</span>
+          <button class="fold" aria-expanded="true" title="collapse (2)"></button>
+        </header>
+        <div class="pbody">
+          <ol class="worklist" id="worklist"></ol>
+          <div class="wl-foot" id="wl-foot"></div>
         </div>
       </section>
 
-      <section class="card brk" id="inst-card">
-        <div class="cap">INSTRUMENTS</div>
-        <div class="slots">
-          <div class="slot"><span class="cap">PRIMARY</span>
-            <span class="v" id="inst1">--</span></div>
-          <div class="slot"><span class="cap">SECONDARY</span>
-            <span class="v" id="inst2">--</span></div>
+      <section class="panel brk more" data-panel="instruments" data-side="right" data-top="0">
+        <header class="phead">
+          <span class="cap">INSTRUMENT USE</span>
+          <button class="fold" aria-expanded="true" title="collapse (3)"></button>
+        </header>
+        <div class="pbody">
+          <ul class="tray" id="tray"></ul>
+          <div class="tray-foot" id="tray-foot"></div>
         </div>
-        <ul class="probs more" id="inst-probs"></ul>
       </section>
 
-      <section class="card brk more" id="ref-card">
-        <div class="cap">GROUND TRUTH</div>
-        <div id="ref-body"></div>
+      <section class="panel brk more" data-panel="truth" data-side="right" data-top="1">
+        <header class="phead">
+          <span class="cap">GROUND TRUTH</span>
+          <button class="fold" aria-expanded="true" title="collapse (4)"></button>
+        </header>
+        <div class="pbody"><div id="ref-body"></div></div>
       </section>
 
-    </aside>
+      <section class="panel brk more" id="alt-card" data-panel="post" data-side="right" data-top="2" hidden>
+        <header class="phead">
+          <span class="cap">POST-PROCESSING</span>
+          <button class="fold" aria-expanded="true" title="collapse (5)"></button>
+        </header>
+        <div class="pbody"><div class="alt" id="step-alt"></div></div>
+      </section>
+
+    </div>
   </main>
 
   <footer class="timeline" id="timeline">
