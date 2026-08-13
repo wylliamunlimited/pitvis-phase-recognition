@@ -137,6 +137,8 @@ gcloud compute instances create pitvis-ft \
   --boot-disk-size=200GB \
   --maintenance-policy=TERMINATE \
   --provisioning-model=SPOT \
+  --instance-termination-action=DELETE \
+  --max-run-duration=8h \
   --scopes=storage-rw \
   --metadata=BUCKET="$BUCKET",STAGE=full,EPOCHS=50,BACKBONE=vit_base_patch14_dinov2.lvd142m,BRANCH=main \
   --metadata-from-file=startup-script=infra/startup.sh
@@ -144,12 +146,18 @@ gcloud compute instances create pitvis-ft \
 
 Three flags carry the cost discipline, and none is optional:
 
-- `--provisioning-model=SPOT` — the job is idempotent and `startup.sh` re-syncs
-  finished backbones before starting, so a preemption costs the fold in flight,
-  not the run.
+- `--provisioning-model=SPOT` — the job is idempotent, `run_job.sh` uploads
+  each encoder the moment it finishes, and `startup.sh` re-syncs them on boot,
+  so a preemption costs the fold in flight and nothing else.
 - `--maintenance-policy=TERMINATE` — required with an accelerator.
-- `--scopes=storage-rw` — without it the final rsync fails and the instance
-  shuts down having thrown the results away.
+- `--scopes=storage-rw` — without it every upload fails and the instance shuts
+  down having thrown away hours of GPU time. The job now says so loudly rather
+  than exiting quietly, but the flag is what prevents it.
+- `--max-run-duration=8h --instance-termination-action=DELETE` — the backstop
+  that does not depend on our code. `startup.sh` shuts itself down from a trap,
+  but a trap cannot fire if the script wedges before reaching it (a hung
+  `uv sync`, a stuck `gsutil`). This one is enforced by GCE. Raise it above your
+  expected runtime — 8h suits `STAGE=full` on an L4; a six-fold run needs more.
 
 `BRANCH` must name a branch that is **pushed**; the instance clones from the
 remote and cannot see your working tree.

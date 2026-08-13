@@ -60,6 +60,22 @@ esac
 
 FULL_TAG="${FT_TAG}-${EPOCHS}ep"
 
+# Push what is finished, the moment it is finished.
+#
+# An encoder is the expensive thing here — an hour of GPU time each — and a spot
+# preemption gives about 30 seconds of warning, which is not enough to upload
+# 2 GB. Saving after each one means a preemption costs the fold in flight and
+# nothing else, and startup.sh re-syncs `out/backbone` on boot so the next
+# instance skips everything already done. Without this, "idempotent and
+# resumable" is a claim the job cannot actually honour.
+save_now() {                       # save_now <label> [dir=backbone]
+  [ -n "${BUCKET:-}" ] || return 0
+  local dir="${2:-backbone}"
+  echo "--- saving $1 -> $BUCKET/out/$dir"
+  gsutil -m rsync -r "data/$dir" "$BUCKET/out/$dir" \
+    || echo "!!! upload of $1 FAILED — it exists only on this disk"
+}
+
 cd "$(dirname "$0")/.."
 echo "=== pitvis GPU job ==="
 echo "backbone $BACKBONE   epochs $EPOCHS   space $SPACE   tag $FULL_TAG"
@@ -96,6 +112,7 @@ if [ "$STAGE" = all ]; then
       pitvis-finetune --backbone "$BACKBONE" "${IMG[@]}" --epochs "$EPOCHS" \
         --batch "$BATCH" --workers "$WORKERS" --size "$SIZE" --device cuda \
         --exclude $fold --tag "$tag"
+      save_now "$tag"
     fi
     i=$((i+1))
   done
@@ -111,17 +128,22 @@ else
   pitvis-finetune --backbone "$BACKBONE" "${IMG[@]}" --epochs "$EPOCHS" \
     --batch "$BATCH" --workers "$WORKERS" --size "$SIZE" --device cuda \
     --tag "$FULL_TAG"
+  save_now "$FULL_TAG"
 fi
 
 # ---- 3. features + the diagnostic that decided this was worth doing ---------
 echo "--- extracting features for $SPACE"
 pitvis-extract --space "$SPACE" --device cuda
 pitvis-verify  --space "$SPACE"
+# ~350 MB, and cheap to re-extract from the backbone — but only if the backbone
+# survived. Pushed here anyway so a laptop can skip the re-extraction entirely.
+save_now "features ($SPACE)" features
 
 # Frozen vs fine-tuned of the SAME backbone. Comparing a fine-tuned ViT against
 # a frozen ResNet-50 would confound the two changes we are trying to separate.
 pitvis-probe --space "$FROZEN" --space "$SPACE" \
   | tee "data/backbone/probe-${FULL_TAG}.txt"
+save_now "probe report"
 
 echo "=== job complete ==="
 echo "next, on a machine with the features: uv run pitvis-train arst-v2 \\"
