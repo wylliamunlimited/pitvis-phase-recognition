@@ -20,6 +20,13 @@ MACHINE="${MACHINE:-g2-standard-8}"
 ACCEL="${ACCEL:-type=nvidia-l4,count=1}"
 DISK="${DISK:-200GB}"
 MAX_RUN="${MAX_RUN:-8h}"
+# Deep Learning VM families are versioned and RETIRE. `pytorch-latest-gpu` was
+# the documented one and no longer resolves at all, which failed the create
+# call after the 3.7 GB upload had already been paid for. Pinned to a current
+# family, overridable, and checked in preflight so a retirement is a five-second
+# error instead of a late one.
+IMAGE_FAMILY="${IMAGE_FAMILY:-pytorch-2-9-cu129-ubuntu-2204-nvidia-580}"
+IMAGE_PROJECT="${IMAGE_PROJECT:-deeplearning-platform-release}"
 STAGE="${STAGE:-full}"
 EPOCHS="${EPOCHS:-50}"
 BACKBONE="${BACKBONE:-vit_base_patch14_dinov2.lvd142m}"
@@ -39,7 +46,11 @@ if [ "$SPOT" = 1 ]; then
   PROVISION=(--provisioning-model=SPOT --instance-termination-action=STOP)
   PROVISION_NOTE="SPOT (evictable — keep infra/babysit.sh running)"
 else
-  PROVISION=(--provisioning-model=STANDARD)
+  # STOP is required here too: GCE rejects --max-run-duration without a
+  # termination action on ANY provisioning model, not just SPOT. STOP rather
+  # than DELETE so the boot disk (and therefore any resume state) survives the
+  # backstop firing.
+  PROVISION=(--provisioning-model=STANDARD --instance-termination-action=STOP)
   PROVISION_NOTE="STANDARD (not evictable — no watcher needed)"
 fi
 
@@ -85,8 +96,16 @@ ok "frame cache present ($FRAME_DIRS videos, $(du -sh data/frames | cut -f1))"
 # one preflight that can take days to clear, so it is checked before anything
 # is uploaded.
 REGION="${ZONE%-*}"
-QUOTA=$(gcloud compute regions describe "$REGION" \
-  --format="value(quotas.filter(metric:NVIDIA_L4_GPUS).limit)" 2>/dev/null || echo "")
+# Read the quota out of JSON. The `--format="value(quotas.filter(...))"` form
+# looks right and silently yields nothing, which reported "no quota" on an
+# account that had it — a warning that cries wolf is worse than no warning.
+QUOTA=$(gcloud compute regions describe "$REGION" --format="json(quotas)" 2>/dev/null \
+  | python3 -c "import json,sys
+try:
+    q = json.load(sys.stdin).get('quotas', [])
+except Exception:
+    q = []
+print(next((str(x['limit']) for x in q if x['metric'] == 'NVIDIA_L4_GPUS'), ''))" 2>/dev/null || echo "")
 if [ -z "$QUOTA" ] || [ "${QUOTA%%.*}" = "0" ]; then
   echo "  WARN no NVIDIA_L4_GPUS quota in $REGION (reported: '${QUOTA:-none}')."
   echo "       Request it at IAM & Admin > Quotas before this can run."
@@ -94,6 +113,36 @@ if [ -z "$QUOTA" ] || [ "${QUOTA%%.*}" = "0" ]; then
 else
   ok "L4 quota in $REGION: $QUOTA"
 fi
+
+# GPUS_ALL_REGIONS is a SECOND, GLOBAL quota, separate from the per-region one
+# above, and a fresh project has it at zero even when the regional quota has
+# been granted. Missing it is why a create call fails with "Quota
+# 'GPUS_ALL_REGIONS' exceeded" after every regional check has passed — and it
+# fails after the 3.7 GB upload, which is the expensive place to learn it.
+GLOBAL_GPU=$(gcloud compute project-info describe --format="json(quotas)" 2>/dev/null \
+  | python3 -c "import json,sys
+try:
+    q = json.load(sys.stdin).get('quotas', [])
+except Exception:
+    q = []
+print(next((str(x['limit']) for x in q if x['metric'] == 'GPUS_ALL_REGIONS'), ''))" 2>/dev/null || echo "")
+if [ -z "$GLOBAL_GPU" ] || [ "${GLOBAL_GPU%%.*}" = "0" ]; then
+  echo "  WARN GPUS_ALL_REGIONS is ${GLOBAL_GPU:-unreadable} — this is a SEPARATE"
+  echo "       global quota from NVIDIA_L4_GPUS above, and BOTH must be non-zero."
+  echo "       Request it: IAM & Admin > Quotas > filter 'GPUS_ALL_REGIONS'."
+else
+  ok "GPUS_ALL_REGIONS: $GLOBAL_GPU"
+fi
+
+# The image family is checked here, not discovered at create time, because the
+# create call happens AFTER the upload.
+gcloud compute images describe-from-family "$IMAGE_FAMILY" \
+  --project="$IMAGE_PROJECT" --format="value(name)" >/dev/null 2>&1 \
+  || die "image family '$IMAGE_FAMILY' does not exist in $IMAGE_PROJECT.
+  These do:
+$(gcloud compute images list --project="$IMAGE_PROJECT" --filter='family~pytorch OR family~cu1' --format='value(family)' 2>/dev/null | sort -u | sed 's/^/    /')
+  Re-run with IMAGE_FAMILY=<one of those>."
+ok "image family $IMAGE_FAMILY"
 
 echo
 echo "=== bucket ==="
@@ -142,7 +191,7 @@ gcloud compute instances create "$NAME" \
   --zone="$ZONE" \
   --machine-type="$MACHINE" \
   --accelerator="$ACCEL" \
-  --image-family=pytorch-latest-gpu --image-project=deeplearning-platform-release \
+  --image-family="$IMAGE_FAMILY" --image-project="$IMAGE_PROJECT" \
   --boot-disk-size="$DISK" \
   --maintenance-policy=TERMINATE \
   "${PROVISION[@]}" \
