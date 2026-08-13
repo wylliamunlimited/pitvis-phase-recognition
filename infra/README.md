@@ -249,6 +249,47 @@ BUCKET=gs://your-private-bucket infra/babysit.sh
 Stopping the watcher does not stop the job — it holds no state; everything
 lives in the bucket and on the instance's boot disk.
 
+### Does my laptop have to stay awake?
+
+For `babysit.sh`, yes — it runs on your machine, so a sleeping laptop is a
+watcher that has stopped. That is a real constraint, and there are three honest
+ways out of it. Pick by arithmetic, not by habit:
+
+| | preemption | needs a watcher | when |
+|---|---|---|---|
+| **`SPOT=0`** (on-demand) | cannot happen | no | a single ~4 h encoder |
+| **spot + `babysit.sh`** | recovers | yes, on your machine | you are around anyway |
+| **spot + Cloud Scheduler** | recovers | no | the unattended six-fold run |
+
+**For `STAGE=full` I would just use on-demand.** Spot is meaningfully cheaper
+per hour, but on one L4 for about four hours the absolute saving is small, and
+"my laptop has to stay awake for four hours" is a poor thing to buy with it:
+
+```sh
+BUCKET=gs://your-private-bucket SPOT=0 infra/launch.sh
+```
+
+Nothing else changes — the resume checkpointing, the incremental uploads and
+the shutdown trap all still apply. They just stop being load-bearing.
+
+**For `STAGE=all`** — six encoders, roughly a day — the calculus flips. Eviction
+becomes near-certain rather than unlucky, so the saving is worth having and the
+watcher has to survive your laptop closing. Move it off your machine with a
+Cloud Scheduler job that starts the instance on a schedule; starting an already
+running instance is a no-op, so a blunt every-10-minutes is fine:
+
+```sh
+gcloud scheduler jobs create http pitvis-ft-resume \
+  --schedule="*/10 * * * *" --location=us-central1 \
+  --uri="https://compute.googleapis.com/compute/v1/projects/$(gcloud config get-value project)/zones/us-central1-a/instances/pitvis-ft/start" \
+  --http-method=POST --oauth-service-account-email=SA_EMAIL
+```
+
+The service account needs `roles/compute.instanceAdmin.v1`. **Delete the
+scheduler job when the run finishes**, or it will keep restarting an instance
+you thought you were done with — the exact failure this whole file exists to
+prevent, arriving from the other direction.
+
 The startup script runs again from the top and three things make that cheap
 rather than a fresh start:
 

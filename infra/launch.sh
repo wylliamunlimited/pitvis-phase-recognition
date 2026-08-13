@@ -25,6 +25,24 @@ EPOCHS="${EPOCHS:-50}"
 BACKBONE="${BACKBONE:-vit_base_patch14_dinov2.lvd142m}"
 BRANCH="${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
 
+# SPOT=1 is cheaper per hour and can be evicted at any moment; a preempted VM
+# is STOPPED and something must start it again (infra/babysit.sh, or a
+# scheduler — see the README). SPOT=0 cannot be preempted and therefore needs
+# no watcher at all.
+#
+# The trade is worth doing by arithmetic, not by habit. Spot is the obvious
+# choice for the six-fold run, where eviction over ~23 h is near-certain and
+# the saving is real. For a single ~4 h encoder the absolute saving is small,
+# and "my laptop has to stay awake" is a poor thing to buy with it.
+SPOT="${SPOT:-1}"
+if [ "$SPOT" = 1 ]; then
+  PROVISION=(--provisioning-model=SPOT --instance-termination-action=STOP)
+  PROVISION_NOTE="SPOT (evictable — keep infra/babysit.sh running)"
+else
+  PROVISION=(--provisioning-model=STANDARD)
+  PROVISION_NOTE="STANDARD (not evictable — no watcher needed)"
+fi
+
 die() { echo "ERROR: $*" >&2; exit 1; }
 ok()  { echo "  ok   $*"; }
 
@@ -110,8 +128,7 @@ gcloud compute instances create "$NAME" \
   --image-family=pytorch-latest-gpu --image-project=deeplearning-platform-release \
   --boot-disk-size="$DISK" \
   --maintenance-policy=TERMINATE \
-  --provisioning-model=SPOT \
-  --instance-termination-action=STOP \
+  "${PROVISION[@]}" \
   --max-run-duration="$MAX_RUN" \
   --scopes=storage-rw \
   --labels=exp=pitvis-ft \
@@ -122,12 +139,17 @@ cat <<EOF
 
 === running ===
   stage $STAGE   epochs $EPOCHS   backbone $BACKBONE   branch $BRANCH
+  provisioning: $PROVISION_NOTE
 
 Watch it:
   gcloud compute ssh $NAME --zone=$ZONE -- tail -f /var/log/pitvis-job.log
 
-Keep it alive across preemptions (spot VMs do NOT restart themselves):
+$( [ "$SPOT" = 1 ] && cat <<SPOTNOTE
+Keep it alive across preemptions — spot VMs do NOT restart themselves, and
+this runs on THIS machine, so it stops if the laptop sleeps:
   BUCKET=$BUCKET infra/babysit.sh
+SPOTNOTE
+)
 
 When the DONE marker appears, pull the results:
   gsutil -m rsync -r $BUCKET/out/backbone data/backbone
