@@ -108,8 +108,25 @@ else
 fi
 
 echo
-echo "=== frames -> bucket (~3.6 GB, skipped if already there) ==="
-gsutil -m rsync -r data/frames "$BUCKET/frames"
+echo "=== frames -> bucket ==="
+# ONE OBJECT, NOT 120,018.
+#
+# The frame cache is 3.6 GB in ~120k files of ~31 KB. Uploaded per-file that is
+# 120k HTTPS round trips, and the wall clock is set by request count, not by
+# bytes — it takes hours on a connection that would move 3.6 GB in minutes.
+# A tar is a single object, so the transfer becomes bandwidth-bound, and the
+# instance pulls it back the same way.
+#
+# Streamed through a pipe on both ends: no 3.6 GB temp copy on either disk.
+# Not gzipped — JPEG is already compressed, so it would buy nothing and cost
+# CPU on both sides.
+if gsutil -q stat "$BUCKET/frames.tar" 2>/dev/null; then
+  ok "frames.tar already uploaded"
+else
+  echo "  packing and streaming $(du -sh data/frames | cut -f1) as a single object..."
+  tar -cf - -C data frames | gsutil cp - "$BUCKET/frames.tar"
+  ok "uploaded $BUCKET/frames.tar"
+fi
 
 echo
 echo "=== instance ==="

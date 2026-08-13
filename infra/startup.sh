@@ -116,8 +116,16 @@ uv sync
 mkdir -p data
 
 # Only the frame cache. ~3.6 GB, versus 40 GB of video the job never touches.
+# Prefer the single-object tar: ~120k separate GETs is request-bound and slow,
+# and the instance is billing an accelerator while it waits. Falls back to the
+# per-file layout so a bucket populated by an older launch still works.
 echo "=== pulling frames from $BUCKET ==="
-gsutil -m rsync -r "$BUCKET/frames" data/frames
+if gsutil -q stat "$BUCKET/frames.tar" 2>/dev/null; then
+  gsutil cat "$BUCKET/frames.tar" | tar -xf - -C data
+else
+  echo "  no frames.tar — falling back to per-file rsync (slower)"
+  gsutil -m rsync -r "$BUCKET/frames" data/frames
+fi
 # Resume anything a previous (possibly preempted) run finished.
 gsutil -m rsync -r "$BUCKET/out/backbone" data/backbone || true
 
