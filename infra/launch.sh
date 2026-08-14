@@ -217,8 +217,17 @@ echo "=== instance ==="
 if gcloud compute instances describe "$NAME" --zone="$ZONE" >/dev/null 2>&1; then
   STATUS=$(gcloud compute instances describe "$NAME" --zone="$ZONE" --format="value(status)")
   echo "  $NAME already exists (status $STATUS)."
-  echo "  To resume it:  gcloud compute instances start $NAME --zone=$ZONE"
-  echo "  To start over: gcloud compute instances delete $NAME --zone=$ZONE"
+  # THE STARTUP SCRIPT LIVES IN INSTANCE METADATA, captured at create time.
+  # Restarting re-runs that frozen copy, so a fix landed in this repo never
+  # reaches an existing instance — it silently re-runs the old bug, which is
+  # exactly what happened after the clone fix. Refresh it here so "start" and
+  # "create" run the same code.
+  gcloud compute instances add-metadata "$NAME" --zone="$ZONE" \
+    --metadata=BUCKET="$BUCKET",STAGE="$STAGE",EPOCHS="$EPOCHS",BACKBONE="$BACKBONE",BRANCH="$BRANCH" \
+    --metadata-from-file=startup-script=infra/startup.sh >/dev/null
+  ok "refreshed its startup script and metadata from this checkout"
+  echo "  Start it:      gcloud compute instances start $NAME --zone=$ZONE"
+  echo "  Or start over: gcloud compute instances delete $NAME --zone=$ZONE"
   exit 0
 fi
 
