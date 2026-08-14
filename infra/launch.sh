@@ -96,6 +96,9 @@ git cat-file -e "origin/$BRANCH:infra/run_job.sh" 2>/dev/null \
   everything, and fail. Push the branch that carries infra/, or pass BRANCH=..."
 ok "branch $BRANCH is pushed and carries infra/"
 
+RAWDIR="${RAWDIR:-26531686}"
+[ -d "$RAWDIR" ] || die "no $RAWDIR/ — the annotation CSVs live there and the
+  instance needs them for labels. Set RAWDIR if yours is elsewhere."
 [ -d data/frames ] || die "no data/frames — run: uv run pitvis-frames"
 FRAME_DIRS=$(find data/frames -mindepth 2 -maxdepth 2 -type d | wc -l | tr -d ' ')
 [ "$FRAME_DIRS" -ge 20 ] || die "only $FRAME_DIRS video dirs under data/frames; expected ~25.
@@ -212,10 +215,31 @@ else
   ok "uploaded $BUCKET/frames.tar"
 fi
 
+# THE LABELS TRAVEL TOO. `Frames` reads the frame pixels from data/frames and
+# the labels from 26531686/annotations_NN.csv — both are gitignored, so neither
+# reaches the instance through the clone. Shipping 3.7 GB of pixels and not the
+# 1.8 MB that says what they are failed the job after boot, install, and a full
+# frame extract, with a FileNotFoundError several layers deep in pandas.
+echo
+echo "=== annotations -> bucket (1.8 MB) ==="
+CSVS=$(ls "$RAWDIR"/annotations_*.csv 2>/dev/null | wc -l | tr -d ' ')
+[ "$CSVS" -ge 20 ] || die "only $CSVS annotation CSVs in $RAWDIR — expected 24."
+gsutil -m -q cp "$RAWDIR"/annotations_*.csv "$RAWDIR"/map_*.csv "$BUCKET/annotations/"
+ok "uploaded $CSVS annotation CSVs + the map files"
+
 echo
 echo "=== instance ==="
-if gcloud compute instances describe "$NAME" --zone="$ZONE" >/dev/null 2>&1; then
+# Look for the instance in EVERY zone, not just the first candidate. The zone
+# fallback means it may live anywhere in $ZONES, and a zone-scoped describe
+# reported "does not exist" for an instance that was merely somewhere else —
+# so this created a SECOND instance, which then failed to start because the
+# first was holding the single GPU of quota.
+FOUND_ZONE=$(gcloud compute instances list --filter="name=$NAME" \
+  --format="value(zone.basename())" 2>/dev/null | head -1)
+if [ -n "$FOUND_ZONE" ]; then
+  ZONE="$FOUND_ZONE"
   STATUS=$(gcloud compute instances describe "$NAME" --zone="$ZONE" --format="value(status)")
+  echo "  found $NAME in $ZONE"
   echo "  $NAME already exists (status $STATUS)."
   # THE STARTUP SCRIPT LIVES IN INSTANCE METADATA, captured at create time.
   # Restarting re-runs that frozen copy, so a fix landed in this repo never

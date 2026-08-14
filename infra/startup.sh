@@ -156,6 +156,21 @@ fi
 #   * a tar built on macOS carried AppleDouble sidecars, and `._00001.jpg`
 #     matches the `*.jpg` glob, so every label would pair with the wrong image.
 # Ten seconds of counting turns both into an immediate, named failure.
+# The labels. Small, but the job is dead without them — and it dies deep inside
+# pandas, after the frames have already been extracted.
+echo "=== pulling annotations ==="
+mkdir -p 26531686
+gsutil -m -q cp "$BUCKET/annotations/*" 26531686/ || true
+CSVS=$(ls 26531686/annotations_*.csv 2>/dev/null | wc -l | tr -d ' ')
+if [ "${CSVS:-0}" -lt 20 ]; then
+  echo "!!! only ${CSVS:-0} annotation CSVs in 26531686/ — expected 24."
+  echo "!!! The frames are pixels; these are what says which step each one is."
+  echo "!!! They are gitignored, so they do NOT arrive with the clone —"
+  echo "!!! infra/launch.sh uploads them to $BUCKET/annotations/. Re-run it."
+  exit 1
+fi
+echo "=== annotations ready: $CSVS files ==="
+
 DIRS=$(find data/frames -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l | tr -d ' ')
 BAD=$(find data/frames -name '._*' 2>/dev/null | wc -l | tr -d ' ')
 echo "=== frames: ${DIRS} video dirs, ${BAD} AppleDouble sidecars ==="
