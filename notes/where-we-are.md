@@ -38,7 +38,7 @@ encoder included. That is the distinction that broke in iteration 3, and it is
 the whole reason `infra/` exists.
 
 → full protocol and the `zero_division=1` caveat:
-[`instrument-variants.md` §2](instrument-variants.md)
+[`instrument-variants.md` §2](models/instrument-variants.md)
 
 ---
 
@@ -70,15 +70,15 @@ against ResNet-50's 96, so the pilot went to the cheap backbone to find out
 whether fine-tuning helps at all. Nothing has fine-tuned DINOv2 yet.
 
 - what was tried, what each variant tested, per-class movement —
-  [`step-variants.md`](step-variants.md),
-  [`instrument-variants.md`](instrument-variants.md)
+  [`step-variants.md`](models/step-variants.md),
+  [`instrument-variants.md`](models/instrument-variants.md)
 - the reproductions those improve on —
-  [`citi-baseline.md`](citi-baseline.md), [`instruments.md`](instruments.md)
-- the architectures as shape traces — [`citi-dataflow.md`](citi-dataflow.md)
+  [`citi-baseline.md`](models/citi-baseline.md), [`instruments.md`](models/instruments.md)
+- the architectures as shape traces — [`citi-dataflow.md`](reference/citi-dataflow.md)
 - the cross-task finding worth carrying (**never test a backbone swap first**) —
   [`roadmap.md`](roadmap.md#the-finding-worth-carrying-forward)
 - the diagnostic that says the encoder is the next lever —
-  [`instrument-variants.md` §6](instrument-variants.md)
+  [`instrument-variants.md` §6](models/instrument-variants.md)
 
 ### Two things exist now that are not model work
 
@@ -89,12 +89,12 @@ the table above rather than in it.
 output — the step burned into the frame corners PACS-fashion, a fourteen-row
 procedure worklist, an instrument usage record, one progress strip. It reads as
 clinical software rather than a video editor, and the reasoning for every part
-of that is in [`app.md`](app.md). It is also the only thing here that needs the
+of that is in [`app.md`](surfaces/app.md). It is also the only thing here that needs the
 40 GB of video.
 
 **Serving without Python.** The step cascade exports to ONNX and runs from a
 Rust binary, verified **exactly per second** — 4337 of 4337 on video_25.
-[`deployment.md`](deployment.md) covers where the graph is cut and why, and is
+[`deployment.md`](surfaces/deployment.md) covers where the graph is cut and why, and is
 honest about what is not done: task 2 is exported but unserved, and the input is
 still a feature blob rather than pixels.
 

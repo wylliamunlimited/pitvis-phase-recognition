@@ -194,7 +194,7 @@ property). `--no-cci` gives the strictly causal number and both are reported.
 The three preserved official behaviours — exclusion by ground truth only,
 `zero_division=1`, and the edit score running after exclusion — are enumerated
 as rules in `CLAUDE.md` and traced to `file:line` with their pinning tests in
-[`walkthrough.md` §12](walkthrough.md). Not repeated here.
+[`walkthrough.md` §12](../walkthrough.md). Not repeated here.
 
 What belongs to *this* layer is what the first one is worth. Because a
 predicted-but-excluded class joins the macro average at F1 = 0, **masking
@@ -205,12 +205,12 @@ the `masked` step variant. TSO-NCT (2nd place) did the same thing.
 That is a scoring-rule exploit, not a modelling improvement, and the distinction
 is the point: it moves the number without the model having learnt anything. The
 faithful reproduction number stays the headline in
-[`citi-baseline.md`](citi-baseline.md); the masked number is reported as a
-variant in [`step-variants.md`](step-variants.md), never as a like-for-like
+[`citi-baseline.md`](../models/citi-baseline.md); the masked number is reported as a
+variant in [`step-variants.md`](../models/step-variants.md), never as a like-for-like
 comparison against the challenge table.
 
 Task 2's metric has a fourth behaviour that is genuinely broken rather than
-merely surprising — see [`instruments.md` §3](instruments.md).
+merely surprising — see [`instruments.md` §3](../models/instruments.md).
 
 ---
 

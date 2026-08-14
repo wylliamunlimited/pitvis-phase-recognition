@@ -354,5 +354,5 @@ into every fold. Note also that the official column's std (±0.23) is larger tha
 the gap; video_25 alone scores 0.836 against 0.20–0.32 for the others.
 
 So it is a reason to fine-tune DINOv2 and cross-validate properly, not a reason
-to switch. See [`infra/README.md`](../infra/README.md) for why an honest version
+to switch. See [`infra/README.md`](../../infra/README.md) for why an honest version
 costs six fine-tunes rather than one.

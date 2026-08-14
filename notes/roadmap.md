@@ -20,7 +20,7 @@ decision from us before it can be built.
 What already exists and has been verified by running it, not just by reading it.
 
 - [x] Raw data inventoried and invariants verified — `src/pitvis/data/inventory.py`,
-      `notes/inventory.md`. Resolution uniform, fps *not* uniform (video 24),
+      `notes/reference/inventory.md`. Resolution uniform, fps *not* uniform (video 24),
       annotation off-by-one confirmed on all 24 labeled videos.
 - [x] Annotation semantics pinned down — no step 0, `-1` is a collapsed
       three-way background, map files are not uniquely keyed. See `CLAUDE.md`.
@@ -170,7 +170,7 @@ before the next one starts, so we always know what an idea actually bought.
       (frozen ResNet-50 -> causal 5-window LSTM -> 19 sigmoid outputs, BCE),
       `uv run pitvis-train instruments`. The official metric is vendored
       alongside, including a column-ordering defect that is preserved but
-      surfaced. Results and the val->test caveat in `notes/instruments.md`.
+      surfaced. Results and the val->test caveat in `notes/models/instruments.md`.
       Note this is the *standalone* task-2 model; 3.5 below is still open.
 
 - [x] **3.5 (D) Instruments as an auxiliary task.** Done in the other
@@ -194,8 +194,8 @@ before the next one starts, so we always know what an idea actually bought.
       weights equally and worse on the four carrying ~91% of positives, and on
       steps it trades segment stability for per-frame accuracy — which is what
       a frame-wise objective with no temporal term should be expected to do.
-      Numbers in [`step-variants.md` §6](step-variants.md) and
-      [`instrument-variants.md` §6](instrument-variants.md).
+      Numbers in [`step-variants.md` §6](models/step-variants.md) and
+      [`instrument-variants.md` §6](models/instrument-variants.md).
 
 - [ ] **3.6b Fine-tune DINOv2, and cross-validate it honestly.** The pilot went
       to ResNet-50 because ViT-B trains at 29 img/s against 96 — the cheap
@@ -218,7 +218,7 @@ before the next one starts, so we always know what an idea actually bought.
 
 The metric itself is done and tested; what is missing is everything *around* it.
 
-- [ ] **4.1 Results table.** One row per run in `notes/results.md`: config, macro
+- [ ] **4.1 Results table.** One row per run in `notes/models/results.md`: config, macro
       F1, edit score, official metric ± std, date, commit. Append-only.
 - [ ] **4.2 Error analysis.** Which steps get confused (the confusion matrix
       exists but has never been looked at on real predictions), where segment
@@ -250,7 +250,7 @@ the *where*.
 - [x] **5.1 (D) Surface — DECIDED: a local web UI.** `uv run pitvis-app`,
       stdlib HTTP server, no build step, zero new dependencies. A `<canvas>`
       sits over the video with a `Layer` registry, sized in video pixels, so
-      5.4 is a layer rather than a refactor. See `notes/app.md`.
+      5.4 is a layer rather than a refactor. See `notes/surfaces/app.md`.
 - [~] **5.2 Inference service.** The cheap half is done: a case with cached
       features can be predicted from the page (~45 s), one worker, stdout
       streamed to the browser as SSE. Still missing: videos OUTSIDE the feature
@@ -324,7 +324,7 @@ the *where*.
 
 ## Phase 6 — Task-2 iteration (done)
 
-Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
+Recorded in full in [`notes/models/instrument-variants.md`](models/instrument-variants.md).
 
 - [x] **6.1 Multi-space feature cache.** `data/features/<space>/`, named in
       `data/spaces.py`. The hashed payload is frozen, so the existing cache
@@ -334,7 +334,7 @@ Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
 - [x] **6.3 Variants tested.** control / weighted / thresholds / dinov2 /
       composed. Winner is pos_weight + per-class thresholds on DINOv2, and it
       took classes never predicted from **9/19 to 0/19**. Numbers in
-      [`instrument-variants.md` §4](instrument-variants.md).
+      [`instrument-variants.md` §4](models/instrument-variants.md).
 - [x] **6.4 Wired into the product.** `pitvis-predict` and the app dispatch on
       the checkpoint's arch/space tags and embed per space. `sano.pt` is
       untouched and still reproduces byte for byte.
@@ -346,7 +346,7 @@ Recorded in full in [`notes/instrument-variants.md`](instrument-variants.md).
       protocol and the same folds. Winner is argmax masking + class weights on
       DINOv2. Masking alone was the largest single lever (+0.062 macro out of
       fold) and had been sitting unclaimed as an ablation flag. Numbers in
-      [`step-variants.md` §4](step-variants.md).
+      [`step-variants.md` §4](models/step-variants.md).
 - [x] **6.7 The CV harness is task-agnostic.** `crossval.Task` holds the
       loader, scorer and ranking metric, so both tasks share the fold logic and
       the leaderboard instead of a second copy.
@@ -371,7 +371,7 @@ hypothesis, twice.
 
 Not planned; it happened because the question "could this run where a device
 vendor's runtime is the only runtime" turned out to be answerable in an evening.
-Reasoning and the fidelity result: [`deployment.md`](deployment.md).
+Reasoning and the fidelity result: [`deployment.md`](surfaces/deployment.md).
 
 - [x] **7.1 Export the step cascade to ONNX.** Cut at the seam the decoder
       already has — `front.onnx` for the memory, `decode.onnx` for one position

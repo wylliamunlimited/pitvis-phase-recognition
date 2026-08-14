@@ -1,7 +1,7 @@
 # The app — `uv run pitvis-app`
 
-The counterpart to [`citi-baseline.md`](citi-baseline.md) and
-[`instruments.md`](instruments.md): what was built, why it is shaped this way,
+The counterpart to [`citi-baseline.md`](../models/citi-baseline.md) and
+[`instruments.md`](../models/instruments.md): what was built, why it is shaped this way,
 and the three places where showing the truth took real work.
 
 Everything the repo produced before this was a CSV. `pitvis-predict` writes

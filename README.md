@@ -36,7 +36,7 @@ Everything else needs the dataset — see [Getting started](#getting-started).
 **New here?** [`notes/walkthrough.md`](notes/walkthrough.md) is the guided tour of
 the *ideas*: what the surgery is, what every annotation column means, how the data
 flows, and which line of which file to read next.
-[`notes/app.md`](notes/app.md) covers the review surface — why HTTP Range is
+[`notes/surfaces/app.md`](notes/surfaces/app.md) covers the review surface — why HTTP Range is
 load-bearing, what pre-CCI confidence means, and why the default view hides most
 of what the repo can measure.
 
@@ -120,16 +120,14 @@ tests/test_eval.py          pins the task-1 metric to the official code
 tests/test_eval_instruments.py  pins the task-2 metric, incl. its upstream defect
 tests/test_app_range.py     pins HTTP Range — whether a case plays at all
 tests/test_app_case.py      pins the case document and the probability outputs
+notes/README.md             the map — which layer each document belongs to
+notes/where-we-are.md       dated snapshot: where the numbers got to, what to run next
 notes/walkthrough.md        the domain, the data, and the pipeline — start here
 notes/embeddings.md         what the feature cache is and how embeddings are made
-notes/citi-baseline.md      the CITI reproduction: architecture, faithfulness, results
-notes/citi-dataflow.md      the same cascade traced with real tensor dimensions
-notes/instruments.md        the SANO task-2 reproduction, and a metric defect
-notes/app.md                the review surface: Range, confidence, honesty rules
-notes/data-dictionary.md    every annotation column and what each integer means
-notes/metrics.md            what each evaluation metric measures, and why
 notes/roadmap.md            phased plan of remaining work
-notes/inventory.md          generated dataset inventory
+notes/reference/            look-up layer: the data, the metrics, the shape trace
+notes/models/               reproductions, and the iterations that beat them
+notes/surfaces/             the review app, and serving without Python
 data/features/              cached per-video features.npy + labels.npy (gitignored)
 data/arst/                  CITI task-1 checkpoints + result.json (gitignored)
 data/instruments/           SANO task-2 checkpoint + result.json (gitignored)
@@ -185,7 +183,7 @@ uv run pitvis-inventory
 ```
 
 Probes all 25 videos, asserts the annotation invariants, and writes
-`notes/inventory.md`. Step 4 runs this first anyway — do it separately if you
+`notes/reference/inventory.md`. Step 4 runs this first anyway — do it separately if you
 want to see the dataset before committing to the decode.
 
 ### 4. Build the feature cache — the long one
@@ -280,10 +278,10 @@ a 20-minute decode from a click. `--case video_25` opens a specific case,
 ### Then read, in this order
 
 1. [`notes/walkthrough.md`](notes/walkthrough.md) — the surgery, the data, the pipeline
-2. [`notes/data-dictionary.md`](notes/data-dictionary.md) — what every annotation integer means
+2. [`notes/reference/data-dictionary.md`](notes/reference/data-dictionary.md) — what every annotation integer means
 3. [`notes/embeddings.md`](notes/embeddings.md) — what the feature cache *is*
-4. [`notes/citi-baseline.md`](notes/citi-baseline.md) — why the model is what it is, and results
-5. [`notes/citi-dataflow.md`](notes/citi-dataflow.md) — the same model as a shape trace
+4. [`notes/models/citi-baseline.md`](notes/models/citi-baseline.md) — why the model is what it is, and results
+5. [`notes/reference/citi-dataflow.md`](notes/reference/citi-dataflow.md) — the same model as a shape trace
 6. [`CLAUDE.md`](CLAUDE.md) — decisions and constraints; terse, read it when something surprises you
 
 ## Usage
@@ -315,7 +313,7 @@ uv run pitvis-export     # the step cascade to ONNX, with per-second verificatio
 `pitvis-frames` and `pitvis-finetune` are the only commands that need the raw
 video and a GPU respectively — everything else runs off the feature cache. See
 [`infra/README.md`](infra/README.md) for running the fine-tune on a rented GPU,
-and [`notes/deployment.md`](notes/deployment.md) for what the ONNX export does
+and [`notes/surfaces/deployment.md`](notes/surfaces/deployment.md) for what the ONNX export does
 and does not cover.
 
 Every runner takes `--dry-run` to print the plan without executing, and

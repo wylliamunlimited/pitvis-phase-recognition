@@ -339,7 +339,7 @@ experiment loop for the temporal models, which are the actual point.
 `src/pitvis/data/inventory.py` — run this first, it touches nothing and verifies everything.
 
 It is not really a data-processing script; it is **a set of executable assertions about the
-dataset**, plus a generated report at `notes/inventory.md`.
+dataset**, plus a generated report at `notes/reference/inventory.md`.
 
 - `probe()` at `inventory.py:30` shells out to `ffprobe` for width, height, `r_frame_rate`,
   packet count and duration. Note `-count_packets` — it counts actual packets rather than
@@ -579,7 +579,7 @@ win: **masking classes 0/11/13 out of the argmax at inference can only raise thi
 `test_leaking_costs_more_than_an_equally_wrong_scored_prediction` shows one wrong frame costing
 0.667 when it leaks versus 0.822 when it is an equally-wrong guess at a scored class. It has since
 been taken — the `masked` step variant, and the largest single lever in that iteration
-(see [`step-variants.md`](step-variants.md)).
+(see [`step-variants.md`](models/step-variants.md)).
 
 **2. `zero_division=1`.** In the F1 call. Affects classes with an empty denominator.
 
@@ -679,7 +679,7 @@ cat 26531686/map_steps.csv
 cat notes/inventory.md
 ```
 
-**B. Verify the invariants.** No side effects beyond rewriting `notes/inventory.md`.
+**B. Verify the invariants.** No side effects beyond rewriting `notes/reference/inventory.md`.
 
 ```sh
 uv run pitvis-inventory

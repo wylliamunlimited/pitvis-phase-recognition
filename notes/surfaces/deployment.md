@@ -1,7 +1,7 @@
 # Serving the model without Python
 
 The component-layer note for `pitvis-export` and `rust/pitvis-serve`, sibling to
-[`citi-baseline.md`](citi-baseline.md), [`instruments.md`](instruments.md) and
+[`citi-baseline.md`](../models/citi-baseline.md), [`instruments.md`](../models/instruments.md) and
 [`app.md`](app.md): what was built, why it is shaped this way, and what it does
 **not** yet cover.
 
@@ -113,7 +113,7 @@ one. Regenerating it is seconds given a checkpoint and a cached video.
 
 ## 5. Roadmap
 
-Tracked as **Phase 7** in [`roadmap.md`](roadmap.md). The open ends are the two
+Tracked as **Phase 7** in [`roadmap.md`](../roadmap.md). The open ends are the two
 in §3 — serving task 2, and exporting the encoder so the input is pixels rather
 than a feature blob — plus the question of whether any of it is worth doing
 before the model itself is better than 0.461.

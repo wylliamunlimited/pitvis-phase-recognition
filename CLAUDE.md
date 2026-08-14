@@ -75,7 +75,7 @@ int_video,int_time,int_step,int_instrument1,int_instrument2
   anomaly (0 = "nothing visible", but the unused-slot sentinel is -2), not an ordering
   violation. Slot 2 only ever takes 6 of the 18 ids, and 98.6% of two-instrument rows have
   suction as the secondary — the pair is "working instrument + suction", not two co-equal
-  tools. Full breakdown in `notes/data-dictionary.md`.
+  tools. Full breakdown in `notes/reference/data-dictionary.md`.
 
 `int_step == -1` and `int_instrument1 == -1` coincide exactly (10,476 rows, zero
 disagreement in either direction). Background is one consistent state.
@@ -107,7 +107,7 @@ dropping rows from training.
 
 This section records the **rules that must not change**. For what each metric
 actually measures, why the challenge picked it and what it catches that the others
-miss, see `notes/metrics.md`.
+miss, see `notes/reference/metrics.md`.
 
 The challenge metric is `(macro F1 + normalised edit score) / 2`, excluding classes
 `[-1, 11, 13]`. That exclusion is a **rarity** exclusion, not an index offset:
@@ -507,7 +507,7 @@ and a blocking server would never reach.
 
 ## App (`pitvis-app`) — decisions
 
-Reasoning and measured numbers live in `notes/app.md`. These are the rules.
+Reasoning and measured numbers live in `notes/surfaces/app.md`. These are the rules.
 
 - **No web framework, and no build step.** `http.server` + hand-written Range,
   native ES modules, no npm. The only thing starlette would have added is a
@@ -614,6 +614,14 @@ Three structural rules:
 
 ### The docs are layered by depth, on purpose
 
+**The layer is now the directory.** `notes/` holds only the documents you read
+front to back — the snapshot, the roadmap, the tour — and the other three
+layers are subdirectories: `reference/` (consulted, not read), `models/`
+(reproductions and the iterations on top of them), `surfaces/` (how the model
+reaches a person). `notes/README.md` is the map and is what GitHub renders when
+you click into the directory; adding a document means picking its layer first,
+and the directory makes that choice visible instead of conventional.
+
 Do not merge them. Each has a different reader in a different moment:
 
 - **`CLAUDE.md`** — decisions only, terse. What we chose and what must not change.
@@ -626,23 +634,23 @@ Do not merge them. Each has a different reader in a different moment:
 - **`notes/walkthrough.md`** — reasoning and domain, with `file.py:NN` pointers.
   A code tour; assumes ML fluency.
 - **`notes/roadmap.md`** — what is left to build, phased.
-- **`notes/citi-baseline.md`** — the CITI reproduction: *why* the architecture is what
+- **`notes/models/citi-baseline.md`** — the CITI reproduction: *why* the architecture is what
   it is, faithfulness, results.
-- **`notes/citi-dataflow.md`** — the same model as a shape trace: *what shape the data
+- **`notes/reference/citi-dataflow.md`** — the same model as a shape trace: *what shape the data
   is* at every hop. Reference layer; read alongside `citi-baseline.md`, not instead.
-- **`notes/data-dictionary.md`** — every annotation column and what each integer means,
+- **`notes/reference/data-dictionary.md`** — every annotation column and what each integer means,
   with real distributions. The reference layer for the *data*, as `citi-dataflow.md` is
   for the model. `CLAUDE.md` keeps only the decisions; look things up there.
-- **`notes/metrics.md`** — what macro F1, the edit score and weighted F1 each measure,
+- **`notes/reference/metrics.md`** — what macro F1, the edit score and weighted F1 each measure,
   why the challenge picked them, and what each catches that the others miss. The
   reference layer for *scoring*. `CLAUDE.md` keeps the rules that must not change;
   the reasoning lives there.
-- **`notes/instruments.md`** — the SANO task-2 reproduction: why not the rank-1 model,
+- **`notes/models/instruments.md`** — the SANO task-2 reproduction: why not the rank-1 model,
   the metric's column-ordering defect, results.
-- **`notes/app.md`** — the review surface: why Range is load-bearing, the
+- **`notes/surfaces/app.md`** — the review surface: why Range is load-bearing, the
   `(-1, -2)` collision, what pre-CCI confidence means, and why the default view
   hides most of what the repo can measure. Same layer as the two above.
-- **`notes/deployment.md`** — serving without Python: where the ONNX cut falls
+- **`notes/surfaces/deployment.md`** — serving without Python: where the ONNX cut falls
   and why (the rollout is control flow, not graph), the per-second fidelity bar,
   and what the Rust binary does *not* do yet. Same layer again.
 - **`infra/README.md`** — the cloud fine-tuning job. It lives beside the scripts
