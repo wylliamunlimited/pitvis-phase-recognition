@@ -14,7 +14,17 @@
 
 set -euo pipefail
 
-ZONE="${ZONE:-us-central1-a}"
+# Zones are tried in order until one has capacity. A GPU stockout
+# (ZONE_RESOURCE_POOL_EXHAUSTED) is not a quota problem and not a permanent
+# one — it means that zone has no L4 free at this moment — so the useful
+# response is to try the next zone, not to give up or to wait blindly.
+#
+# Same-region zones come first: the bucket is regional, and pulling 3.7 GB
+# from us-central1 into another region is a cross-region egress charge plus a
+# slower boot. Setting ZONE pins a single zone and disables the fallback.
+ZONES="${ZONES:-us-central1-a us-central1-b us-central1-c us-east1-b us-east1-c us-east1-d us-west1-a us-west1-b}"
+[ -n "${ZONE:-}" ] && ZONES="$ZONE"
+ZONE="${ZONES%% *}"          # first zone, used by preflight
 NAME="${NAME:-pitvis-ft}"
 MACHINE="${MACHINE:-g2-standard-8}"
 ACCEL="${ACCEL:-type=nvidia-l4,count=1}"
@@ -156,6 +166,24 @@ else
   ok "created $BUCKET (region $REGION, public access prevented)"
 fi
 
+# --scopes=storage-rw grants the instance an OAUTH SCOPE. It does not grant the
+# service account an IAM ROLE, and they are different things: the scope says
+# "this VM may present storage credentials", the role says "those credentials
+# may touch this bucket". Older projects hid the gap because the default compute
+# SA came with project Editor; newer ones grant it nothing at all — so the VM
+# boots, authenticates cleanly, then 403s on the first read, which surfaces
+# inside the trainer as "no frames at .../video_02" several minutes later.
+echo
+echo "=== bucket access for the instance ==="
+SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+if gcloud storage buckets get-iam-policy "$BUCKET" --format=json 2>/dev/null | grep -q "$SA"; then
+  ok "$SA can already reach $BUCKET"
+else
+  gcloud storage buckets add-iam-policy-binding "$BUCKET" \
+    --member="serviceAccount:$SA" --role=roles/storage.objectAdmin >/dev/null
+  ok "granted roles/storage.objectAdmin on $BUCKET to $SA"
+fi
+
 echo
 echo "=== frames -> bucket ==="
 # ONE OBJECT, NOT 120,018.
@@ -173,7 +201,14 @@ if gsutil -q stat "$BUCKET/frames.tar" 2>/dev/null; then
   ok "frames.tar already uploaded"
 else
   echo "  packing and streaming $(du -sh data/frames | cut -f1) as a single object..."
-  tar -cf - -C data frames | gsutil cp - "$BUCKET/frames.tar"
+  # COPYFILE_DISABLE=1 stops macOS tar emitting AppleDouble entries. Measured:
+  # it changes nothing for this cache — the archive is clean either way, with
+  # or without it — because the frames carry only `com.apple.provenance`, which
+  # bsdtar stores as a PAX header rather than as a `._` entry. Kept as hygiene,
+  # NOT as the fix: the `._*.jpg` files that broke the first run appear when
+  # LINUX extracts those PAX headers, so the repair belongs on the instance and
+  # lives in startup.sh.
+  COPYFILE_DISABLE=1 tar -cf - -C data frames | gsutil cp - "$BUCKET/frames.tar"
   ok "uploaded $BUCKET/frames.tar"
 fi
 
@@ -187,8 +222,17 @@ if gcloud compute instances describe "$NAME" --zone="$ZONE" >/dev/null 2>&1; the
   exit 0
 fi
 
-gcloud compute instances create "$NAME" \
-  --zone="$ZONE" \
+BUCKET_REGION=$(gcloud storage buckets describe "$BUCKET" --format="value(location)" 2>/dev/null | tr 'A-Z' 'a-z')
+CREATED=""
+for Z in $ZONES; do
+  case "$Z" in
+    "$BUCKET_REGION"-*) ;;
+    *) echo "  note: $Z is outside the bucket's region ($BUCKET_REGION) — the"
+       echo "        instance will pull frames.tar cross-region (egress + slower boot)" ;;
+  esac
+  echo "  trying $Z ..."
+  if gcloud compute instances create "$NAME" \
+  --zone="$Z" \
   --machine-type="$MACHINE" \
   --accelerator="$ACCEL" \
   --image-family="$IMAGE_FAMILY" --image-project="$IMAGE_PROJECT" \
@@ -199,7 +243,19 @@ gcloud compute instances create "$NAME" \
   --scopes=storage-rw \
   --labels=exp=pitvis-ft \
   --metadata=BUCKET="$BUCKET",STAGE="$STAGE",EPOCHS="$EPOCHS",BACKBONE="$BACKBONE",BRANCH="$BRANCH" \
-  --metadata-from-file=startup-script=infra/startup.sh
+  --metadata-from-file=startup-script=infra/startup.sh 2>&1 | sed 's/^/    /'; then
+    CREATED="$Z"; break
+  fi
+  echo "    no capacity in $Z, trying the next zone"
+done
+
+[ -n "$CREATED" ] || die "no zone in the list had capacity for $MACHINE + $ACCEL.
+  This is a STOCKOUT, not a quota problem — capacity comes back. Options:
+    * wait and re-run; stockouts usually clear within hours
+    * widen the search:  ZONES='\''us-east4-a us-east4-c europe-west4-a'\'' $0
+    * try a different accelerator, e.g. ACCEL=type=nvidia-tesla-t4,count=1
+      MACHINE=n1-standard-8 (slower, but T4 capacity is usually easier)"
+ZONE="$CREATED"
 
 cat <<EOF
 

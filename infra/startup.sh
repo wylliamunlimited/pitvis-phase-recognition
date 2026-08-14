@@ -92,8 +92,19 @@ push_dir() {
 apt-get update -qq && apt-get install -y -qq git ffmpeg
 curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
-git clone --branch "$BRANCH" --depth 1 "$REPO" /opt/pitvis
+# A plain clone FAILS on every restart — "destination path '/opt/pitvis'
+# already exists" — and because this script runs without `set -e`, it carried
+# on and ran whatever code the FIRST boot happened to clone. So fixing a bug
+# here and restarting the instance would silently re-run the old bug. Fetch and
+# hard-reset instead, so a restart always lands on the branch tip.
+if [ -d /opt/pitvis/.git ]; then
+  git -C /opt/pitvis fetch --depth 1 origin "$BRANCH"
+  git -C /opt/pitvis reset --hard FETCH_HEAD
+else
+  git clone --branch "$BRANCH" --depth 1 "$REPO" /opt/pitvis
+fi
 cd /opt/pitvis
+echo "=== code at $(git rev-parse --short HEAD) on $BRANCH ==="
 
 # Swap the default (CPU + MPS) torch for the CUDA build. pyproject ships these
 # blocks commented out so the Mac build stays the default; here we want them.
@@ -121,10 +132,46 @@ mkdir -p data
 # per-file layout so a bucket populated by an older launch still works.
 echo "=== pulling frames from $BUCKET ==="
 if gsutil -q stat "$BUCKET/frames.tar" 2>/dev/null; then
-  gsutil cat "$BUCKET/frames.tar" | tar -xf - -C data
+  # --no-xattrs is the actual fix for the AppleDouble problem. The archive is
+  # clean — verified by listing it — but it carries PAX
+  # `LIBARCHIVE.xattr.com.apple.provenance` headers from macOS, and extracting
+  # those here materialises a `._00001.jpg` beside every `00001.jpg`. Those
+  # match the `*.jpg` glob the Frames dataset uses and sort BEFORE the real
+  # frames, so every label would pair with the wrong image. Measured on the
+  # first run: 59,658 sidecars. Dropping the xattrs on extract avoids creating
+  # them at all; the sweep below catches any that slip through an older tar.
+  gsutil cat "$BUCKET/frames.tar" | tar --no-xattrs -xf - -C data 2>/dev/null \
+    || gsutil cat "$BUCKET/frames.tar" | tar -xf - -C data
+  find data/frames -name '._*' -delete 2>/dev/null || true
 else
   echo "  no frames.tar — falling back to per-file rsync (slower)"
   gsutil -m rsync -r "$BUCKET/frames" data/frames
+fi
+
+# CHECK THE FRAMES BEFORE SPENDING GPU TIME. Both of this job's real failures
+# were invisible here and became confusing errors minutes later:
+#   * a 403 on the bucket left data/frames empty, and the trainer reported
+#     "no frames at .../video_02" — which points at the frame cache on a laptop
+#     that has one, rather than at the instance's access to the bucket;
+#   * a tar built on macOS carried AppleDouble sidecars, and `._00001.jpg`
+#     matches the `*.jpg` glob, so every label would pair with the wrong image.
+# Ten seconds of counting turns both into an immediate, named failure.
+DIRS=$(find data/frames -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l | tr -d ' ')
+BAD=$(find data/frames -name '._*' 2>/dev/null | wc -l | tr -d ' ')
+echo "=== frames: ${DIRS} video dirs, ${BAD} AppleDouble sidecars ==="
+if [ "${DIRS:-0}" -lt 20 ]; then
+  echo "!!! only ${DIRS:-0} video directories — expected ~25. The frames did not"
+  echo "!!! arrive, so there is nothing to train on. Most likely the instance's"
+  echo "!!! service account cannot read $BUCKET: --scopes=storage-rw is an OAuth"
+  echo "!!! scope, NOT an IAM role. infra/launch.sh grants the role; re-run it."
+  exit 1
+fi
+if [ "${BAD:-0}" -gt 0 ]; then
+  echo "!!! ${BAD} AppleDouble (._*) files in the frame cache. These match the"
+  echo "!!! *.jpg glob and would misalign every label. The tar was built on macOS"
+  echo "!!! without COPYFILE_DISABLE=1. Rebuild and re-upload it:"
+  echo "!!!   COPYFILE_DISABLE=1 tar -cf - -C data frames | gsutil cp - $BUCKET/frames.tar"
+  exit 1
 fi
 # Resume anything a previous (possibly preempted) run finished.
 gsutil -m rsync -r "$BUCKET/out/backbone" data/backbone || true
