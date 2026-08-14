@@ -148,14 +148,6 @@ else
   gsutil -m rsync -r "$BUCKET/frames" data/frames
 fi
 
-# CHECK THE FRAMES BEFORE SPENDING GPU TIME. Both of this job's real failures
-# were invisible here and became confusing errors minutes later:
-#   * a 403 on the bucket left data/frames empty, and the trainer reported
-#     "no frames at .../video_02" — which points at the frame cache on a laptop
-#     that has one, rather than at the instance's access to the bucket;
-#   * a tar built on macOS carried AppleDouble sidecars, and `._00001.jpg`
-#     matches the `*.jpg` glob, so every label would pair with the wrong image.
-# Ten seconds of counting turns both into an immediate, named failure.
 # The labels. Small, but the job is dead without them — and it dies deep inside
 # pandas, after the frames have already been extracted.
 echo "=== pulling annotations ==="
@@ -171,6 +163,14 @@ if [ "${CSVS:-0}" -lt 20 ]; then
 fi
 echo "=== annotations ready: $CSVS files ==="
 
+# CHECK THE FRAMES BEFORE SPENDING GPU TIME. Both of this job's real failures
+# were invisible here and became confusing errors minutes later:
+#   * a 403 on the bucket left data/frames empty, and the trainer reported
+#     "no frames at .../video_02" — which points at the frame cache on a laptop
+#     that has one, rather than at the instance's access to the bucket;
+#   * a tar built on macOS carried AppleDouble sidecars, and `._00001.jpg`
+#     matches the `*.jpg` glob, so every label would pair with the wrong image.
+# Ten seconds of counting turns both into an immediate, named failure.
 DIRS=$(find data/frames -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l | tr -d ' ')
 BAD=$(find data/frames -name '._*' 2>/dev/null | wc -l | tr -d ' ')
 echo "=== frames: ${DIRS} video dirs, ${BAD} AppleDouble sidecars ==="

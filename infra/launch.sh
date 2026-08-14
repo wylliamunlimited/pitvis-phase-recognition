@@ -61,8 +61,16 @@ else
   # than DELETE so the boot disk (and therefore any resume state) survives the
   # backstop firing.
   PROVISION=(--provisioning-model=STANDARD --instance-termination-action=STOP)
-  PROVISION_NOTE="STANDARD (not evictable — no watcher needed)"
+  PROVISION_NOTE="STANDARD (not evictable)"
 fi
+
+# Not evictable is not the same as not interrupted. --max-run-duration applies
+# to STANDARD too, so a job that outlives MAX_RUN stops either way and needs
+# something to start it again. STAGE=all is ~23 h of L4 against an 8 h default,
+# which is three stops; STAGE=full is ~4 h and fits.
+WATCH=0
+[ "$SPOT" = 1 ] && WATCH=1
+[ "$STAGE" = all ] && WATCH=1
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 ok()  { echo "  ok   $*"; }
@@ -299,14 +307,18 @@ cat <<EOF
 Watch it:
   gcloud compute ssh $NAME --zone=$ZONE -- tail -f /var/log/pitvis-job.log
 
-$( [ "$SPOT" = 1 ] && cat <<SPOTNOTE
-Keep it alive across preemptions — spot VMs do NOT restart themselves, and
-this runs on THIS machine, so it stops if the laptop sleeps:
-  BUCKET=$BUCKET infra/babysit.sh
-SPOTNOTE
+$( [ "$WATCH" = 1 ] && cat <<WATCHNOTE
+Keep it going — nothing in GCE restarts it, and this watcher runs on THIS
+machine, so it stops if the laptop sleeps:
+  BUCKET=$BUCKET ZONE=$ZONE infra/babysit.sh
+$( [ "$SPOT" = 1 ] \
+     && echo "  (spot VMs are stopped on eviction, not restarted)" \
+     || echo "  (STAGE=all outlives MAX_RUN=$MAX_RUN, so it stops even on-demand)" )
+WATCHNOTE
 )
 
-When the DONE marker appears, pull the results:
+When the DONE marker appears, pull the results and DELETE THE INSTANCE — a
+stopped instance still bills for its $DISK boot disk:
   gsutil -m rsync -r $BUCKET/out/backbone data/backbone
   gcloud compute instances delete $NAME --zone=$ZONE
 EOF
