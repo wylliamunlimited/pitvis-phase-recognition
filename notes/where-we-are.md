@@ -1,6 +1,6 @@
 # Where we are — orientation snapshot
 
-*Snapshot: 2026-08-10. Read this first after time away, then follow the links.*
+*Snapshot: 2026-08-14. Read this first after time away, then follow the links.*
 
 **This note owns two things and nothing else: the vocabulary, and what to do
 next.** Everything else here is a pointer. Results live in the iteration notes,
@@ -80,6 +80,24 @@ whether fine-tuning helps at all. Nothing has fine-tuned DINOv2 yet.
 - the diagnostic that says the encoder is the next lever —
   [`instrument-variants.md` §6](instrument-variants.md)
 
+### Two things exist now that are not model work
+
+Both are finished enough to use and neither moves a number, so they sit outside
+the table above rather than in it.
+
+**The review surface.** `uv run pitvis-app` plays a case beside the model's
+output — the step burned into the frame corners PACS-fashion, a fourteen-row
+procedure worklist, an instrument usage record, one progress strip. It reads as
+clinical software rather than a video editor, and the reasoning for every part
+of that is in [`app.md`](app.md). It is also the only thing here that needs the
+40 GB of video.
+
+**Serving without Python.** The step cascade exports to ONNX and runs from a
+Rust binary, verified **exactly per second** — 4337 of 4337 on video_25.
+[`deployment.md`](deployment.md) covers where the graph is cut and why, and is
+honest about what is not done: task 2 is exported but unserved, and the input is
+still a feature blob rather than pixels.
+
 ### Why iteration 3 has no number
 
 The backbone was fine-tuned on all 19 TRAIN videos **with their labels**,
@@ -106,10 +124,17 @@ redistributed.
 | artifact | size | cost to regenerate |
 |---|---|---|
 | `data/backbone/` | 96 MB | **62 min** |
-| `data/features/` (3 spaces) | 2.2 GB | ~75 min |
+| `data/features/<space>/` | ~350 MB–940 MB each | ~25 min each |
 | `data/arst/` + `data/instruments/` | 461 MB | ~15 min |
 | `data/frames/384/` | 3.6 GB | 19 min |
+| `data/onnx/` | small | seconds — a build artifact, never carry it |
 | `26531686/` raw video | **40 GB** | hours to re-download |
+
+Four spaces are *defined* (`resnet50`, `resnet50_ft`, `dinov2_vitb14`,
+`dinov2_ft`); how many are *extracted* is per machine — `ls data/features/`.
+A machine with the ResNet-50 cache only will train and score, but reproduces
+the 0.34 / 0.23 reproductions rather than the current bests, which live in
+`dinov2_vitb14`.
 
 **The fine-tuned backbone is the one worth carrying** — 96 MB for an hour of
 training. Copy `data/` (6.3 GB) to a private bucket or an external drive.
@@ -132,25 +157,51 @@ uv run pytest
 
 ## 4. What to do next
 
-**Option A — an honest number today, ~10 min.** The pilot backbone was trained
-on TRAIN only and VAL is disjoint from TRAIN, so scoring it on VAL is
-legitimate. It spends our one clean VAL touch for this backbone.
+**Option A is done.** The pilot backbone was scored on VAL — that is the iter 3
+row in §2 — and the verdict was "better on rare classes, worse on the ones
+carrying the support, and no honest ranking available". It answered the cheap
+question and did not justify itself.
+
+**Option B — the cloud job — is therefore the live one.** Fine-tune the encoder
+that already *wins* frozen, which is DINOv2, not the ResNet-50 the pilot used.
+Start with `STAGE=full`: one fine-tune instead of six, ~4 h on an L4, which
+answers "does a fine-tuned DINOv2 beat frozen DINOv2 on VAL" for a sixth of the
+cost. The five per-fold encoders only buy an honest *ranking*, and there is
+nothing to rank until the headline moves.
 
 ```sh
-uv run pitvis-train instruments-v2 --variant best --space resnet50_ft
-uv run pitvis-train arst-v2       --variant best --space resnet50_ft
+SPOT=0 STAGE=full BUCKET=gs://your-private-bucket infra/launch.sh
 ```
 
-Compare against the current bests in §2.
+Prerequisites, in order — `launch.sh` preflights all of them and stops before
+the 3.6 GB upload if any fail: `gcloud` installed, `data/frames` present
+(`uv run pitvis-frames`, ~40 min), the branch pushed with `infra/` on it, and
+**both** GPU quotas non-zero (`NVIDIA_L4_GPUS` per region and the separate
+global `GPUS_ALL_REGIONS`).
 
-**Option B — the cloud job.** Six fine-tunes, which is what makes honest CV
-possible on fine-tuned features. See [`infra/README.md`](../infra/README.md).
+→ costs per backbone and per GPU, and why it is six fine-tunes rather than one:
+[`infra/README.md`](../infra/README.md)
 
-**Do A before B.** If a 5-epoch pilot already beats the current bests on VAL,
-that justifies the spend. If it does not move, you have saved the bill.
+**Afterwards, delete the instance.** Termination action is STOP so the boot disk
+survives a preemption, which means a finished job leaves a stopped instance
+billing ~$20/month for a 200 GB disk. `babysit.sh` and `launch.sh` both print
+the delete command; nothing enforces it.
 
 ### Open threads
 
-Tracked in [`roadmap.md`](roadmap.md) — the live ones are 6.5 (four instrument
-classes emitted but not usable), 6.8 (prior-corrected argmax for steps), and
-the per-fold CV harness change described at the end of `infra/README.md`.
+Tracked in [`roadmap.md`](roadmap.md). The live ones:
+
+| | |
+|---|---|
+| **3.6b** | fine-tune DINOv2 and cross-validate it honestly — Option B above |
+| **6.5** | four instrument classes emitted but not usable |
+| **6.8** | prior-corrected argmax for steps |
+| **7.4 / 7.5** | serve task 2; take pixels rather than a feature blob |
+| **5.4** | the agentic explanation layer — the canvas seam is in place, unused |
+
+Plus the per-fold CV harness change described at the end of `infra/README.md`.
+
+The honest framing on 7.x: 0.461 served at 200 Hz is still 0.461. The
+deployment path was worth building because it proved the auto-regressive
+rollout survives the port; extending it competes with making the model better,
+and 3.6b is the item that does that.

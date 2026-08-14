@@ -367,6 +367,39 @@ hypothesis, twice.
 
 ---
 
+## Phase 7 — Serving without Python
+
+Not planned; it happened because the question "could this run where a device
+vendor's runtime is the only runtime" turned out to be answerable in an evening.
+Reasoning and the fidelity result: [`deployment.md`](deployment.md).
+
+- [x] **7.1 Export the step cascade to ONNX.** Cut at the seam the decoder
+      already has — `front.onnx` for the memory, `decode.onnx` for one position
+      — with the auto-regressive loop, the CCI probes and the argmax masking
+      left in the host language, because they are control flow over a graph
+      rather than a graph. Needs the dynamo exporter: the legacy path bakes the
+      trace-time sequence length into `MultiheadAttention` and runs only at T=64.
+- [x] **7.2 Verify per second, not approximately.** `--verify` rolls the
+      exported graphs through the whole CCI decode against torch. Memory agrees
+      to 4.6e-06 and predictions agree **exactly, 4337/4337 seconds on
+      video_25**. Float noise is expected; a differing second is not, because
+      the output feeds a surface that reads as clinical.
+- [x] **7.3 A host-language decoder.** `rust/pitvis-serve`, ort 2.0 over the
+      two graphs. The rollout exists twice now — `cci_decode` stays the
+      reference — and 7.2 is what keeps the copies honest.
+- [ ] **7.4 Serve task 2.** `pitvis-export` already writes and verifies the
+      instrument graph; `main.rs` loads the step model and nothing else. The
+      exported half is the finished half.
+- [ ] **7.5 Take pixels, not features.** The binary reads a float32 feature
+      blob, so the backbone is still Python. Exporting the encoder makes it
+      genuinely standalone — and for DINOv2 that is the larger half of the
+      compute, so it is also where the interesting engineering is.
+- [ ] **7.6 (D) Is this worth continuing before the model is better?** 0.461
+      served at 200 Hz is still 0.461. Deciding this belongs with 3.6b, not
+      here.
+
+---
+
 ## Cross-cutting risks
 
 - **Frozen ImageNet features are probably the ceiling.** Everything except 3.6

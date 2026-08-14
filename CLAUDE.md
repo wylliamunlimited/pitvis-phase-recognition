@@ -447,9 +447,27 @@ src/pitvis/
 tests/test_eval.py             pins evaluation/metric.py to the official metric
 tests/test_app_range.py        pins HTTP Range parsing (see below)
 tests/test_app_case.py         pins the case document + the probability additions
+
+rust/pitvis-serve/             the step cascade without a Python runtime.
+                               ort 2.0 over front.onnx + decode.onnx; the
+                               auto-regressive loop and the CCI probes are
+                               reimplemented in steps.rs because they are
+                               control flow, not graph. notes/deployment.md
+infra/                         the cloud fine-tuning job — launch.sh (from your
+                               machine), startup.sh (GCE boot), run_job.sh (the
+                               GPU work), babysit.sh (restarts across spot
+                               preemptions). infra/README.md owns the why
+scripts/blur_frame.py          blurs the surgical frame in a screenshot before
+                               it is committed — the dataset is CC BY-NC-ND
+docs/                          README screenshots
+
 notes/                         see the doc-layer section below
-data/features/                 per-video features.npy + labels.npy (gitignored)
-data/arst/                     CITI checkpoints, standardize.npz, result.json
+data/features/<space>/         per-video features.npy + labels.npy (gitignored)
+data/frames/<size>/            1 fps JPEGs — only fine-tuning needs these
+data/backbone/<tag>/           fine-tuned encoders
+data/onnx/                     the exported bundle (build artifact)
+data/arst/, data/instruments/  checkpoints, standardize.npz, result.json;
+                               v2/<variant>/ for the variant winners
 predictions/<stem>/            pitvis-predict output (gitignored)
 26531686/                      raw PitVis download (gitignored, read-only)
 ```
@@ -466,9 +484,18 @@ uv run pitvis-eval              score an existing checkpoint, no retraining
 uv run pitvis-models            shape/param trace (~1 s smoke test)
 uv run pitvis-app               play a case beside the model's output
 
+uv run pitvis-frames            1 fps JPEGs — the only data path that is not features
+uv run pitvis-finetune          fine-tune a backbone on them (GPU; see infra/)
+uv run pitvis-probe             mean-AP: does one feature space beat another
+uv run pitvis-export            the step cascade to ONNX, verified per second
+
 uv run pitvis-train --list      what models exist
 uv run pitvis-inventory   uv run pitvis-extract   uv run pitvis-verify   uv run pytest
 ```
+
+The four in the middle block are the ones that leave the feature cache:
+`pitvis-frames` needs the raw video, `pitvis-finetune` needs a GPU, and
+`pitvis-export` produces something no Python process reads.
 
 Only `pitvis-data` and `pitvis-train` use `pipeline.py`, and only `pitvis-data`
 takes the full `--only`/`--skip`/`--dry-run`/`--continue-on-error` set;
@@ -615,6 +642,12 @@ Do not merge them. Each has a different reader in a different moment:
 - **`notes/app.md`** — the review surface: why Range is load-bearing, the
   `(-1, -2)` collision, what pre-CCI confidence means, and why the default view
   hides most of what the repo can measure. Same layer as the two above.
+- **`notes/deployment.md`** — serving without Python: where the ONNX cut falls
+  and why (the rollout is control flow, not graph), the per-second fidelity bar,
+  and what the Rust binary does *not* do yet. Same layer again.
+- **`infra/README.md`** — the cloud fine-tuning job. It lives beside the scripts
+  rather than in `notes/` because it is a runbook: you read it with a terminal
+  open, not to understand the project.
 
 `walkthrough.md` §8 and `embeddings.md` deliberately cover the same extraction stage
 at two depths. They are cross-linked, not deduplicated. When adding docs, pick the
@@ -637,6 +670,9 @@ The owners:
 | the CV protocol and fold caveats | `instrument-variants.md` §2 |
 | what the AP probe measures and found | `instrument-variants.md` §6 |
 | the label leak, and what honest CV costs | `infra/README.md` |
+| how to run the GPU job, and what it costs | `infra/README.md` |
+| the review surface's design and its caveats | `app.md` |
+| the ONNX cut, the fidelity bar, what is unserved | `deployment.md` |
 | the cross-task "backbone last" finding | `roadmap.md` |
 | the command surface | `README.md` §Usage |
 | rules that must not change | this file |

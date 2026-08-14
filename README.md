@@ -302,6 +302,22 @@ uv run pitvis-models    # shape + parameter trace through the cascade (~1 s)
 uv run pitvis-app       # play a case beside the model's output, in a browser
 ```
 
+Four more exist for the paths that need pixels rather than cached features, or
+that leave Python entirely:
+
+```sh
+uv run pitvis-frames     # decode 1 fps frames to disk — the data path fine-tuning needs
+uv run pitvis-finetune   # fine-tune a backbone on those frames (GPU; see infra/)
+uv run pitvis-probe      # mean-AP diagnostic: does one feature space beat another
+uv run pitvis-export     # the step cascade to ONNX, with per-second verification
+```
+
+`pitvis-frames` and `pitvis-finetune` are the only commands that need the raw
+video and a GPU respectively — everything else runs off the feature cache. See
+[`infra/README.md`](infra/README.md) for running the fine-tune on a rented GPU,
+and [`notes/deployment.md`](notes/deployment.md) for what the ONNX export does
+and does not cover.
+
 Every runner takes `--dry-run` to print the plan without executing, and
 `--only` / `--skip` to run part of a workflow:
 
