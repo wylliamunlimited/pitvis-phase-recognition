@@ -141,9 +141,22 @@ save_now "features ($SPACE)" features
 
 # Frozen vs fine-tuned of the SAME backbone. Comparing a fine-tuned ViT against
 # a frozen ResNet-50 would confound the two changes we are trying to separate.
-pitvis-probe --space "$FROZEN" --space "$SPACE" \
-  | tee "data/backbone/probe-${FULL_TAG}.txt"
-save_now "probe report"
+#
+# CONDITIONAL, AND NEVER FATAL. The probe needs the FROZEN space's features
+# too, and those live on the operator's machine — nothing uploads them, so on a
+# fresh instance this stage would crash. Under `set -e` that exits the whole
+# job AFTER the encoder and features are built, losing the DONE marker for a
+# diagnostic. The encoder is the deliverable; the probe is a nice-to-have that
+# runs just as well at home.
+if [ -d "data/features/$FROZEN" ]; then
+  pitvis-probe --space "$FROZEN" --space "$SPACE" \
+    | tee "data/backbone/probe-${FULL_TAG}.txt" || echo "!!! probe failed (non-fatal)"
+  save_now "probe report"
+else
+  echo "--- skipping the AP probe: no local features for the frozen space"
+  echo "    '$FROZEN'. Run it where those features live:"
+  echo "      uv run pitvis-probe --space $FROZEN --space $SPACE"
+fi
 
 # A marker, so "is it finished?" is answerable without reading logs — which is
 # what infra/babysit.sh polls to decide whether a stopped instance was preempted
