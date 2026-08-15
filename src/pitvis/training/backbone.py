@@ -33,11 +33,20 @@ jitter are three of the rows our faithfulness tables mark as not reproduced,
 purely because there were no pixels to augment. The frame cache stores 384px
 squares so a 224 crop has real headroom.
 
-COST, measured on MPS: ResNet-50 trains at 96 img/s, so one epoch over the
-84,666 training frames is ~15 min and the papers' 50 epochs is ~12 h. DINOv2
-ViT-B is 29 img/s — 41 h — which is why the backbone with the better frozen
-features is the worse one to fine-tune here. Start with a short pilot and
-re-run the AP probe before committing to the long run.
+COST, and why this trains in bf16. Measured on MPS: ResNet-50 at 96 img/s, so
+one epoch over the 84,666 training frames is ~15 min. Measured on an L4 in
+fp32: DINOv2 ViT-B at **27 img/s** — one epoch took 52 minutes and 50 epochs
+projected to **~43 hours**, against an 8-hour instance cap.
+
+That was not the dataloader. The CPU sat 79% idle while the GPU ran flat out,
+which is the signature of arithmetic rather than input starvation: an L4's
+throughput lives in its bf16 tensor cores and fp32 uses almost none of it.
+Hence the autocast below. `--no-amp` restores fp32 for isolating a suspected
+precision problem, and is otherwise the slow path.
+
+The curve is steep early — the 5-epoch ResNet-50 pilot already moved mean AP
+from 0.271 to 0.445 — so prefer a short run and the AP probe over a long one
+taken on faith.
 
 Usage:
     uv run pitvis-finetune --epochs 5              # the pilot
@@ -190,6 +199,10 @@ def main(argv: list[str] | None = None) -> None:
                     help="weight on the instrument head's loss")
     ap.add_argument("--weight-cap", type=float, default=10.0)
     ap.add_argument("--pos-weight-cap", type=float, default=50.0)
+    ap.add_argument("--no-amp", action="store_true",
+                    help="disable bf16 autocast and train in fp32. Only for "
+                         "isolating a suspected precision problem — it is ~5x "
+                         "slower on an L4")
     ap.add_argument("--device", default=None, choices=("cuda", "mps", "cpu"))
     ap.add_argument("--tag", default=None,
                     help="output directory name (default: <backbone>-<epochs>ep)")
@@ -230,6 +243,26 @@ def main(argv: list[str] | None = None) -> None:
     with torch.no_grad():
         probe = model.backbone(torch.zeros(1, 3, CROP, CROP, device=dev))
     print(f"backbone accepts {CROP}x{CROP} -> {probe.shape[1]}-d")
+    # MIXED PRECISION. Measured on an L4: fp32 ViT-B ran at ~27 img/s, which is
+    # roughly 5% of what the card should manage, with the CPU 79% idle — so it
+    # was neither the dataloader nor the disk. An L4's throughput lives in its
+    # bf16 tensor cores, and fp32 forgoes essentially all of it. At 27 img/s,
+    # 50 epochs over 84,666 frames is ~43 hours against an 8-hour cap.
+    #
+    # bfloat16 rather than float16, and therefore NO GradScaler: bf16 keeps
+    # fp32's exponent range, so the underflow that fp16 needs loss scaling to
+    # survive does not arise. One fewer moving part in a loop that has to
+    # resume correctly after a preemption.
+    #
+    # Master weights stay fp32 — autocast only casts the ops it runs — so the
+    # optimiser state, and therefore resume.pt, is unchanged in dtype and
+    # remains compatible with checkpoints written before this.
+    amp_ok = dev.type in ("cuda", "cpu") and not args.no_amp
+    if amp_ok and dev.type == "cuda" and not torch.cuda.is_bf16_supported():
+        print("bf16 unsupported on this GPU — falling back to fp32")
+        amp_ok = False
+    print(f"mixed precision: {'bf16' if amp_ok else 'off (fp32)'}", flush=True)
+
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
     ce = nn.CrossEntropyLoss(weight=class_weights(train_ds, args.weight_cap).to(dev))
@@ -271,21 +304,32 @@ def main(argv: list[str] | None = None) -> None:
         te = time.time()
         for n, (x, s, i) in enumerate(loader, 1):
             x, s, i = x.to(dev, non_blocking=True), s.to(dev), i.to(dev)
-            ls, li = model(x)
-            loss = ce(ls, s) + args.inst_weight * bce(li, i)
-            opt.zero_grad()
+            # Only the forward and the losses are autocast. The backward runs
+            # in whatever dtype each op recorded, and the optimiser step stays
+            # fp32 — putting opt.step() inside the context is the classic way
+            # to corrupt master weights.
+            with torch.autocast(device_type=dev.type, dtype=torch.bfloat16,
+                                enabled=amp_ok):
+                ls, li = model(x)
+                loss = ce(ls, s) + args.inst_weight * bce(li, i)
+            opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
             run += loss.item() * len(s)
             correct += (ls.argmax(1) == s).sum().item()
             seen += len(s)
             if n % 200 == 0:
+                # flush=True because startup.sh pipes stdout through `tee`,
+                # which makes it block-buffered: an hour of real training
+                # showed zero progress lines, and the only honest signal was
+                # resume.pt's mtime on disk. A progress line nobody can read
+                # until the job ends is not a progress line.
                 print(f"  ep{ep + 1} {n * args.batch:,}/{len(train_ds):,}  "
                       f"loss {run / seen:.4f}  step-acc {correct / seen:.3f}  "
-                      f"({seen / (time.time() - te):.0f} img/s)")
+                      f"({seen / (time.time() - te):.0f} img/s)", flush=True)
         sched.step()
         print(f"epoch {ep + 1}/{args.epochs}: loss {run / seen:.4f}  "
-              f"step-acc {correct / seen:.3f}  [{time.time() - te:.0f}s]")
+              f"step-acc {correct / seen:.3f}  [{time.time() - te:.0f}s]", flush=True)
 
         # Write to a temp file and rename. A preemption lands mid-write often
         # enough to matter over 50 epochs, and a half-written resume file is
