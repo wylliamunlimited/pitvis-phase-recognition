@@ -369,6 +369,63 @@ step loss on videos it has memorised.
 Unlike the ResNet-50 case, no metric disagrees: macro falls too, so there is no
 reading under which this encoder is better.
 
+#### Why it failed — reasoning, ranked by how much evidence there is
+
+None of these is proven. They are ordered by how much the run itself supports
+them, and each names what would settle it.
+
+**1. The learning rate was wrong for this encoder, and there was no warmup.**
+*Strongest.* 1e-4 uniformly across a ViT-B is a head-training rate, not an
+adaptation rate. Adapting DINOv2 is normally done at ~1e-5 with layer-wise
+decay — early blocks moved far less than late ones — and with warmup, because
+ViTs are unusually sensitive to large updates in the first few hundred steps.
+We had none of that: constant 1e-4 into cosine decay, every block treated
+alike, from step one. ResNet-50 tolerated the same recipe, which fits — CNN
+features are less fragile and ImageNet features are less worth preserving.
+*Test:* 1e-5 with layer-wise decay and 500 warmup steps, 5 epochs, re-probe.
+
+**2. The supervised signal is far weaker than 84,666 frames suggests.**
+*Strong, and measured.* Steps are long: across the 19 TRAIN videos there are
+**1,229 step segments for 84,685 frames — 69 frames per segment.** Frames
+inside a segment share a label and look alike, so the effective number of
+independent step decisions is closer to 1,229 than to 84,685. That is a tiny
+supervised set for 86M parameters, and it explains the trajectory: step
+accuracy 0.807 → 0.922 by epoch 12 is what memorising ~1,200 segments looks
+like. The instrument head is denser, but it rides the same encoder.
+*Test:* subsample to one frame per segment and compare — if the collapse is
+unchanged, redundancy was not the mechanism.
+
+**3. Nothing could stop it.** *Certain, but a contributing cause rather than
+the cause.* There is no validation in the fine-tune at all — `val_ds` is
+constructed and never used — so 50 epochs ran to completion with no signal that
+epoch 5 might have been better. The ResNet pilot that worked was 5 epochs. We
+cannot say where DINOv2 peaked because nothing was watching.
+*Test:* carve a validation split from TRAIN videos and log AP per epoch.
+
+**4. Training and inference see different crops.** *Plausible, secondary.*
+Training augments with `RandomResizedCrop(224, scale=(0.7, 1.0))` from the
+384px cache — 70–100% area crops. Extraction uses `crop_pct=1.0`, i.e. the
+**whole** frame resized to 224. So the encoder is adapted to zoomed views and
+then asked to embed full ones. The endoscopic circle makes this worse than
+usual: a 70% crop can clip the circle, producing framings that never occur at
+inference. ResNet-50 had the identical mismatch and still improved, which is
+why this is fourth rather than first.
+*Test:* `scale=(0.9, 1.0)`, or match extraction's view exactly.
+
+**5. The run was not precision-homogeneous.** *A confound, probably not a
+cause.* bf16 autocast was added at epoch 5 to make the job affordable, so
+epochs 1–4 ran fp32 and 5–50 bf16. bf16 keeps fp32's exponent range and is
+standard for ViT training, so it is unlikely to explain a 0.08 AP drop — but
+it does mean this was not a clean single-configuration experiment, and it
+should be stated rather than quietly ignored.
+*Test:* it comes free — any re-run will be bf16 throughout.
+
+**What I do NOT think happened.** Not a data bug: the cache verifies, 120,018
+frames, and the AppleDouble contamination was caught before training. Not a
+label misalignment: the same annotations feed the frozen-feature runs that
+score 0.4610. Not a downstream problem: the probe is a fresh logistic
+regression on the features themselves, so it sees the representation directly.
+
 **Three things would have to change to test the idea properly**, and none is
 optional on its own:
 
