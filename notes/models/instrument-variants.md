@@ -330,6 +330,60 @@ foam +0.383, stealth pointer +0.364, surgical drill +0.301). That number is
 clean — the probe fits on TRAIN and scores VAL, which no TRAIN-fitted encoder
 has seen.
 
+### Fine-tuning DINOv2 made the representation WORSE
+
+The obvious next step — fine-tune the encoder that already wins frozen — ran
+for 50 epochs on an L4 and is the clearest negative result in the project.
+Same probe, same protocol, frozen against fine-tuned:
+
+| | frozen DINOv2 | fine-tuned DINOv2 | fine-tuned ResNet-50 |
+|---|---|---|---|
+| mean AP | **0.350** | 0.270 | 0.445 |
+| classes improved | — | **3 / 19** | 19 / 19 |
+
+The collapse is broad rather than concentrated: ring curette 0.760 → 0.430,
+micro doppler 0.663 → 0.353, spatula dissector 0.116 → 0.013, kerrisons
+0.655 → 0.517. Even *suction*, the most common instrument in the dataset, fell
+0.903 → 0.751. Exactly one class gained meaningfully (haemostatic foam +0.180).
+
+**The direction is the finding.** Fine-tuning a WEAK encoder (ImageNet
+ResNet-50) moved 19/19 classes up. Fine-tuning a STRONG one (DINOv2,
+self-supervised on 142M images) moved 16/19 down. DINOv2's pretrained
+representation was already better than anything 84,666 frames from 19 videos
+can teach, and 50 epochs of supervised pressure at a uniform lr=1e-4 overwrote
+it. This is catastrophic forgetting, not a bug.
+
+The training log shows it happening: step accuracy climbed 0.807 → 0.922 by
+epoch 12 and kept going. The encoder was not learning to see surgery better,
+it was learning to reproduce this training set — and the features separating a
+ring curette from a cup forceps are not the features that minimise a 15-way
+step loss on videos it has memorised.
+
+**What it cost end to end**, VAL scored once each:
+
+| | steps metric | instruments official | instruments macro |
+|---|---|---|---|
+| frozen DINOv2 | **0.4610** | **0.5572** | 0.3792 |
+| fine-tuned DINOv2 | 0.3500 | 0.2803 | 0.2930 |
+
+Unlike the ResNet-50 case, no metric disagrees: macro falls too, so there is no
+reading under which this encoder is better.
+
+**Three things would have to change to test the idea properly**, and none is
+optional on its own:
+
+- **A much lower backbone learning rate.** 1e-4 across a ViT-B is normal for
+  training a head and aggressive for adapting a strong encoder; 1e-5 with
+  layer-wise decay is the usual prescription.
+- **Early stopping on a split carved out of TRAIN.** There is no validation in
+  the fine-tune at all (`val_ds` is built and never used), so nothing could
+  have stopped near epoch 5 where the ResNet pilot peaked. Using VAL for this
+  would be selection on VAL and is not available.
+- **Fewer epochs.** The pilot that worked was 5, not 50.
+
+Frozen DINOv2 remains the best encoder in the repo. `dinov2_ft` is kept as the
+record of a hypothesis that was tested and failed.
+
 ### End to end, the AP gain does not carry to the headline
 
 The `best` recipe on `resnet50_ft` instead of frozen DINOv2, VAL scored once

@@ -49,6 +49,7 @@ the whole reason `infra/` exists.
 | start | published reproductions | 0.3425 | 0.2321 |
 | iter 1+2 | loss, decision rule, DINOv2 | **0.4610** | **0.5572** |
 | iter 3 | fine-tuned ResNet-50 encoder | 0.4425 | 0.3805 |
+| iter 4 | fine-tuned **DINOv2** encoder | 0.3500 | 0.2803 |
 
 Steps are the challenge metric, instruments the official one, both on VAL.
 
@@ -65,9 +66,16 @@ Both arms are **single VAL measurements**, not a ranking — a CV over
 into every fold. Treat it as a reason to fine-tune DINOv2 and cross-validate
 properly, not as a verdict.
 
-Note the fine-tune is **ResNet-50, not DINOv2** — ViT-B trains at 29 img/s
-against ResNet-50's 96, so the pilot went to the cheap backbone to find out
-whether fine-tuning helps at all. Nothing has fine-tuned DINOv2 yet.
+**Iteration 4 fine-tuned DINOv2 itself, and it is the clearest negative result
+in the project.** Worse on every metric, and the AP probe says why: mean AP
+0.350 → 0.270 with only 3 of 19 classes improved. Fine-tuning a *weak* encoder
+(ImageNet ResNet-50) moved 19/19 classes up; fine-tuning a *strong* one
+overwrote a representation better than 84,666 frames can teach. 50 epochs at a
+uniform lr=1e-4, with no validation anywhere in the fine-tune, is the recipe
+for that. Full account and what would have to change:
+[`instrument-variants.md` §6](models/instrument-variants.md).
+
+**Frozen DINOv2 is still the best encoder in the repo.**
 
 - what was tried, what each variant tested, per-class movement —
   [`step-variants.md`](models/step-variants.md),
@@ -162,37 +170,29 @@ row in §2 — and the verdict was "better on rare classes, worse on the ones
 carrying the support, and no honest ranking available". It answered the cheap
 question and did not justify itself.
 
-**Option B — the cloud job — is therefore the live one.** Fine-tune the encoder
-that already *wins* frozen, which is DINOv2, not the ResNet-50 the pilot used.
-Start with `STAGE=full`: one fine-tune instead of six, ~4 h on an L4, which
-answers "does a fine-tuned DINOv2 beat frozen DINOv2 on VAL" for a sixth of the
-cost. The five per-fold encoders only buy an honest *ranking*, and there is
-nothing to rank until the headline moves.
+**Option B is also done, and it failed.** The cloud job fine-tuned DINOv2 for
+50 epochs on an L4; the result is the iter-4 row in §2. Do NOT re-run it
+unchanged — the six-fold version would spend six times as much to reproduce a
+worse encoder six times.
 
-```sh
-SPOT=0 STAGE=full BUCKET=gs://your-private-bucket infra/launch.sh
-```
+**What is actually live now**, in the order I would take them:
 
-Prerequisites, in order — `launch.sh` preflights all of them and stops before
-the 3.6 GB upload if any fail: `gcloud` installed, `data/frames` present
-(`uv run pitvis-frames`, ~40 min), the branch pushed with `infra/` on it, and
-**both** GPU quotas non-zero (`NVIDIA_L4_GPUS` per region and the separate
-global `GPUS_ALL_REGIONS`).
+1. **Fix the fine-tuning recipe, or drop the idea.** The three changes that
+   would make it a fair test are a much lower backbone LR (1e-5 with layer-wise
+   decay), early stopping on a split carved from TRAIN, and far fewer epochs.
+   `val_ds` is already built in `backbone.py` and never used — the honest
+   version carves from TRAIN instead, because stopping on VAL is selection on
+   VAL.
+2. **Roadmap 6.5** — four instrument classes are emitted but not usable
+   (bipolar forceps: 320 predictions against 49 true instances).
+3. **Roadmap 6.8** — a prior-corrected argmax for steps, the untried analogue
+   of task 2's per-class thresholds.
 
-→ costs per backbone and per GPU, and why it is six fine-tunes rather than one:
-[`infra/README.md`](../infra/README.md)
+The encoder direction is not dead, but it has now cost two runs and returned
+one clean negative. The next attempt should be cheap and validated, not another
+50 epochs on faith.
 
-**Afterwards, delete the instance.** Termination action is STOP so the boot disk
-survives a preemption, which means a finished job leaves a stopped instance
-billing ~$20/month for a 200 GB disk. `babysit.sh` and `launch.sh` both print
-the delete command; nothing enforces it.
-
-### Open threads
-
-Tracked in [`roadmap.md`](roadmap.md). The live ones:
-
-| | |
-|---|---|
+---|---|
 | **3.6b** | fine-tune DINOv2 and cross-validate it honestly — Option B above |
 | **6.5** | four instrument classes emitted but not usable |
 | **6.8** | prior-corrected argmax for steps |

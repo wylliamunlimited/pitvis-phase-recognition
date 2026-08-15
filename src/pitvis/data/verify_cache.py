@@ -54,8 +54,25 @@ FINITE_CHUNK = 50_000  # rows per np.isfinite pass over the memmap
 
 
 def space_id(space: dict) -> str:
-    """Content hash of the feature-space dict — mirrors extract_features.py."""
-    payload = {k: v for k, v in space.items() if k != "id"}
+    """Content hash of the feature-space dict — restated, not imported.
+
+    The duplication is deliberate: a check that imports the thing it checks
+    verifies nothing. But independent is not the same as free to disagree, and
+    the two must encode the SAME RULE. They drifted once, which is why this
+    docstring is longer than the function.
+
+    THE RULE: `id` is excluded because it is the output, and `_`-prefixed keys
+    are excluded because they are provenance rather than identity —
+    `_trained_on` records which videos an encoder saw, which the checkpoint
+    digest already implies and whose list order would otherwise move the hash.
+
+    When `_trained_on` was added for the leak guard, only extract_features
+    learned to skip it. This copy kept hashing it, so a correct cache verified
+    as "manifest space id != recomputed" — a scary message about a file that
+    was perfectly fine.
+    """
+    payload = {k: v for k, v in space.items()
+               if k != "id" and not k.startswith("_")}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -233,6 +250,13 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"{key}: FAIL — {e}", file=sys.stderr)
 
     if errors:
+        # Print every error, including the manifest-level ones. Those are
+        # appended above but were never displayed — only the per-video loop
+        # printed its own — so a manifest failure surfaced as a bare
+        # "FAILED: 1 problem(s)" with no way to learn what the problem was.
+        print("", file=sys.stderr)
+        for e in errors:
+            print(f"FAIL — {e}", file=sys.stderr)
         print(f"\nFAILED: {len(errors)} problem(s)", file=sys.stderr)
         sys.exit(1)
     print(f"\nOK: 25 videos, {total_frames} frames, "

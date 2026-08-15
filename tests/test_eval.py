@@ -212,3 +212,33 @@ def test_all_excluded_truth_raises_instead_of_dividing_by_zero():
 def test_empty_split_raises():
     with pytest.raises(ValueError, match="no videos"):
         evaluate([])
+
+
+def test_the_two_space_id_derivations_agree():
+    """verify_cache re-derives space_id independently — but must agree.
+
+    The duplication is deliberate (a check that imports what it checks
+    verifies nothing), and it drifted: `_trained_on` was added for the leak
+    guard and only extract_features learned to exclude it, so a correct cache
+    reported "manifest space id != recomputed". Independent, not divergent.
+    """
+    from pitvis.data.extract_features import space_id as authoritative
+    from pitvis.data.verify_cache import space_id as checker
+
+    space = {
+        "id": "ignored",
+        "backbone": "vit_base_patch14_dinov2.lvd142m",
+        "feature_dim": 768,
+        "target_fps": 1,
+        "transform": {"input_size": [3, 224, 224]},
+        "checkpoint": "abc123",
+        "source": "frames",
+        "frame_size": 384,
+        "_trained_on": [2, 3, 4],          # provenance, must not be hashed
+    }
+    assert authoritative(space) == checker(space)
+
+    # and the provenance really is excluded on both sides
+    moved = dict(space, _trained_on=[9, 9, 9])
+    assert authoritative(moved) == authoritative(space)
+    assert checker(moved) == checker(space)

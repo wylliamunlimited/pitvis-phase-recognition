@@ -198,3 +198,31 @@ discrimination — arriving with a cost the probe cannot see.
 Same caveat as task 2: both arms are single VAL measurements, not a ranking. A
 CV over `resnet50_ft` is unavailable because one encoder trained on all of TRAIN
 leaks into every fold.
+
+
+---
+
+## 7. Fine-tuned DINOv2 — the encoder experiment, and why it failed
+
+`best` on `dinov2_ft` (DINOv2 ViT-B fine-tuned 50 epochs on the frame cache),
+VAL scored once — `data/arst/v2/best@dinov2_ft/`:
+
+| | frozen DINOv2 | fine-tuned ResNet-50 | fine-tuned DINOv2 |
+|---|---|---|---|
+| **challenge metric** | **0.4610** ±0.043 | 0.4425 ±0.050 | 0.3500 ±0.105 |
+| macro F1 | 0.4420 | **0.4658** | 0.3631 |
+| edit score | **0.4801** | 0.4193 | 0.3369 |
+
+Worse on every metric, and by more than the fold spread. The per-video std also
+doubles (±0.105 against ±0.043), so it is less stable as well as lower.
+
+The cause is in the representation, not the temporal model: the AP probe puts
+mean AP at 0.270 against frozen DINOv2's 0.350, with only 3 of 19 classes
+improved. Fine-tuning overwrote a representation that was already better than
+this dataset can teach. Full account, including what would have to change to
+test the idea properly, in
+[`instrument-variants.md` §6](instrument-variants.md).
+
+The pooled per-class table shows the damage where the classes are thin —
+septum displacement and durotomy collapse to 0.000 and 0.071 F1 respectively,
+having been learnable on frozen features.
