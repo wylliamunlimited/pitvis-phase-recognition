@@ -267,10 +267,38 @@ stages — a training-time prior correction. Applying an inference-time prior
 correction on top pushes past the optimum rather than toward it, which is
 exactly the monotone degradation observed.
 
-*Test:* run the adjustment on `masked` without class weights. If it helps
-there and hurts here, double correction is confirmed and the useful version is
-"correct once, in either place, not both". Untested — the two CV runs needed
-are ~9 minutes each.
+*Test, now run.* Same recipe with the class weights removed, with and without
+the adjustment:
+
+| | class weights | adjustment | macro | edit | metric |
+|---|---|---|---|---|---|
+| best | yes | — | **0.5044** | 0.5789 | **0.5417** |
+| prior-half | yes | tau=0.5 | 0.4927 | 0.5782 | 0.5355 |
+| masked-dinov2 | no | — | 0.4902 | 0.5050 | 0.4976 |
+| prior-noweight | no | tau=0.5 | 0.4850 | **0.5236** | 0.5043 |
+
+**Double correction is confirmed, and it changes what the adjustment is for.**
+With class weights present the adjustment costs metric (−0.0062); with them
+removed it *gains* metric (+0.0067) and gains edit outright (+0.0186). The
+sign flips on whether the prior has already been corrected once. Correcting in
+both places is worse than correcting in either.
+
+But the useful conclusion is the other comparison: **class weights are the
+better of the two corrections.** Weights alone against neither is +0.0142
+macro and +0.0441 metric; the adjustment alone is roughly a wash. Training-time
+correction beats inference-time correction on this task, which is the opposite
+of task 2 — where the decision rule was where the gain lived, because
+nineteen independent sigmoids each have a bar to move and one argmax does not.
+
+Every difference here sits inside the fold spread (±0.09–0.13), so none of it
+is individually significant. What carries the argument is the pattern: monotone
+in tau, and a sign that flips exactly when the other correction is removed.
+`best` is unchanged as the winner.
+
+Note also the adjustment's one consistent effect is on the EDIT score, which
+rises in both arms it is applied to (+0.0186 without weights, −0.0007 with).
+It makes the sequence marginally more stable and the per-frame decisions
+marginally worse — the reverse of the trade fine-tuning made.
 
 Note the edit score barely moves (0.5789 → 0.5782), so the adjustment is not
 shattering segments; the whole cost is per-frame macro F1.

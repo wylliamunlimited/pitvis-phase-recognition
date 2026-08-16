@@ -96,6 +96,18 @@ VARIANTS: dict[str, Variant] = {
                 space="dinov2_vitb14", mask=True, weighted=True, prior_tau=1.0),
         Variant("prior-half", "logit adjustment, half strength (tau=0.5)",
                 space="dinov2_vitb14", mask=True, weighted=True, prior_tau=0.5),
+        # The double-correction test. `best` already corrects the prior at
+        # TRAINING time via inverse-frequency class weights, so adjusting the
+        # logits again at inference may be pushing past the optimum rather than
+        # toward it — which is what the monotone degradation in tau suggests.
+        # These two isolate it: same recipe with the class weights removed, with
+        # and without the adjustment. If the adjustment helps HERE and hurts on
+        # `best`, correcting once in either place is the rule.
+        Variant("masked-dinov2", "masked on DINOv2, NO class weights — the "
+                "control for the double-correction test",
+                space="dinov2_vitb14", mask=True, weighted=False),
+        Variant("prior-noweight", "logit adjustment INSTEAD OF class weights",
+                space="dinov2_vitb14", mask=True, weighted=False, prior_tau=0.5),
     ]
 }
 
