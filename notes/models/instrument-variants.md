@@ -441,6 +441,60 @@ optional on its own:
 Frozen DINOv2 remains the best encoder in the repo. `dinov2_ft` is kept as the
 record of a hypothesis that was tested and failed.
 
+### The recipe, iterated — what changed and why
+
+The failure above was diagnosed as recipe rather than concept, so the recipe
+changed. Recorded here because "we fine-tuned it again and it worked" is not a
+result unless what differed is written down.
+
+| | run 1 (failed) | run 2 |
+|---|---|---|
+| backbone LR | 1e-4, uniform | **1e-5**, `lr/10` |
+| layer-wise decay | none | **0.75** — 1.0e-05 at the deepest ViT block down to 3.2e-07 at the stem |
+| head LR | 1e-4 | 1e-4 (unchanged — the heads are random, they should move) |
+| warmup | none | **200 steps**, per batch |
+| validation | none | **3 TRAIN videos**, held out by video |
+| stopping | fixed 50 epochs | **early stop**, patience 3, `best.pt` kept |
+| precision | fp32 → bf16 mid-run | bf16 throughout |
+
+**The reasoning behind each, in the order they matter.**
+
+*Layer-wise decay is the load-bearing one.* A single rate treats the patch
+embedding — which encodes generic visual structure, the part of DINOv2 worth
+keeping — exactly like the last block, which is the part that should
+specialise. Decaying by 0.75 per layer means the stem moves ~30x slower than
+the deepest block. This is the standard prescription for adapting a strong
+self-supervised encoder, and its absence is the most likely single cause of
+the collapse.
+
+*Warmup, per batch not per epoch.* ViTs are unusually sensitive to large
+updates in the first few hundred steps. Run 1 went straight to full rate from
+step one, on a model with the most to lose from that.
+
+*The validation split is carved from TRAIN, by video.* Not from VAL — stopping
+on VAL is selection on VAL and would contaminate the single VAL scoring the
+whole protocol rests on. By video rather than by frame because frames run ~69
+to a step segment and look alike; a frame-level split puts near-duplicates on
+both sides and reports a loss that only measures memory. The cost is real: the
+encoder now trains on 16 videos instead of 19.
+
+*Early stopping is what makes the rest testable.* Run 1 could not have stopped
+at epoch 5 where the ResNet pilot peaked, because nothing was watching. The
+loop now prints a train−val accuracy gap each epoch; on a smoke run it went
++0.010 → +0.411 in a single epoch while held-out accuracy fell, which is
+precisely the divergence that ran unnoticed for fifty.
+
+**What did NOT change, deliberately.** The augmentation, the two-head
+multi-task setup, the class weighting and the frame cache are all identical.
+Changing them at the same time would make the comparison uninterpretable — the
+question is whether the *optimisation recipe* was the problem, and that needs
+everything else held.
+
+**The falsifier, fixed in advance.** The AP probe is the verdict, not the
+downstream metric. If mean AP does not exceed frozen DINOv2's **0.350**, the
+recipe was not the problem and fine-tuning this encoder on this dataset should
+be abandoned rather than tuned further. Run 1 scored 0.270.
+
 ### End to end, the AP gain does not carry to the headline
 
 The `best` recipe on `resnet50_ft` instead of frozen DINOv2, VAL scored once
