@@ -369,7 +369,60 @@ step loss on videos it has memorised.
 Unlike the ResNet-50 case, no metric disagrees: macro falls too, so there is no
 reading under which this encoder is better.
 
-#### Why it failed — reasoning, ranked by how much evidence there is
+#### RUN 2 — the recipe was the problem, and fixing it worked
+
+*This section supersedes the failure above as the current state of the
+encoder. Run 1 is kept because the contrast is the finding.*
+
+Same encoder, same data, same augmentation, same heads. Only the optimisation
+recipe changed — backbone LR 1e-4 → 1e-5, layer-wise decay 0.75, 200-step
+warmup, and early stopping on three TRAIN videos held out for the purpose.
+
+| | frozen DINOv2 | run 1 (uniform 1e-4, 50 ep) | **run 2 (epoch 2)** | fine-tuned ResNet-50 |
+|---|---|---|---|---|
+| mean AP | 0.350 | 0.270 | **0.523** | 0.445 |
+| classes improved | — | 3 / 19 | **19 / 19** | 19 / 19 |
+
+**+0.172 over frozen, every single class better.** The falsifier fixed in
+advance was "mean AP must clear 0.350"; it clears it by half again. This is now
+the best representation in the repo by AP, ahead of the fine-tuned ResNet-50.
+
+The classes that moved are the ones the whole exercise was about — the six the
+frozen encoder could not see:
+
+| class | frozen | run 2 |
+|---|---|---|
+| surgical drill | 0.023 | **0.470** |
+| cottle | 0.319 | **0.823** |
+| bipolar forceps | 0.058 | 0.258 |
+| stealth pointer | 0.214 | 0.447 |
+| spatula dissector | 0.116 | 0.296 |
+| retractable knife | 0.018 | 0.060 |
+
+Surgical drill going 0.023 → 0.470 is the single clearest demonstration that
+the original diagnosis was right: the information was in the pixels, the frozen
+encoder simply could not represent it, and 404 training instances were enough
+once the encoder was allowed to adapt *gently*.
+
+**Which of the four changes mattered is not separated.** They were applied
+together, deliberately — the question was whether the recipe as a whole was the
+problem. Attributing the gain to layer-wise decay specifically would need an
+ablation nobody has run, and the honest statement is that the recipe was wrong
+and this recipe is not.
+
+**Two things to hold onto.** The best epoch was **2**, and the train−val gap
+widened every epoch afterwards (+0.118 → +0.274) — so this encoder still
+memorises almost immediately, and what saved it was stopping, not slowing.
+And it trained on **16 videos, not 19**: three went to the early-stopping
+split. That is the price of having a signal at all.
+
+**The probe is not the score.** Fine-tuned ResNet-50 reached 0.445 AP and still
+lost end to end, because AP measures the representation and the challenge
+metric measures decisions after a temporal model. The downstream numbers are
+the next thing to run, and until they exist this is a better *representation*,
+not a better *model*.
+
+#### Why run 1 failed — reasoning, ranked by how much evidence there is
 
 None of these is proven. They are ordered by how much the run itself supports
 them, and each names what would settle it.

@@ -66,16 +66,29 @@ Both arms are **single VAL measurements**, not a ranking — a CV over
 into every fold. Treat it as a reason to fine-tune DINOv2 and cross-validate
 properly, not as a verdict.
 
-**Iteration 4 fine-tuned DINOv2 itself, and it is the clearest negative result
-in the project.** Worse on every metric, and the AP probe says why: mean AP
-0.350 → 0.270 with only 3 of 19 classes improved. Fine-tuning a *weak* encoder
-(ImageNet ResNet-50) moved 19/19 classes up; fine-tuning a *strong* one
-overwrote a representation better than 84,666 frames can teach. 50 epochs at a
-uniform lr=1e-4, with no validation anywhere in the fine-tune, is the recipe
-for that. Full account and what would have to change:
-[`instrument-variants.md` §6](models/instrument-variants.md).
+**Iteration 4 fine-tuned DINOv2 itself. The first attempt was the clearest
+negative result in the project; the second, after fixing the recipe, is the
+clearest positive one.**
 
-**Frozen DINOv2 is still the best encoder in the repo.**
+| | mean AP | classes improved |
+|---|---|---|
+| frozen DINOv2 | 0.350 | — |
+| run 1 — uniform 1e-4, 50 epochs | 0.270 | 3 / 19 |
+| **run 2 — 1e-5, layer decay, warmup, early stop @ epoch 2** | **0.523** | **19 / 19** |
+
+Same encoder, same data, same augmentation. Only the optimisation recipe
+changed. Surgical drill went 0.023 → 0.470, which is the clearest single sign
+the original diagnosis held: the information was in the pixels and the frozen
+encoder could not represent it.
+
+**This is a better representation, not yet a better model** — the downstream
+VAL scoring has not been run. Fine-tuned ResNet-50 reached 0.445 AP and still
+lost end to end. Run it before believing the win.
+
+Historical, for the contrast: run 1 overwrote a representation better than
+84,666 frames can teach — 50 epochs at a uniform lr=1e-4 with no validation
+anywhere in the loop. Full account, both runs, in
+[`instrument-variants.md` §6](models/instrument-variants.md).
 
 - what was tried, what each variant tested, per-class movement —
   [`step-variants.md`](models/step-variants.md),
