@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 
@@ -166,6 +167,61 @@ def device_of(name: str | None = None) -> torch.device:
     return torch.device("cpu")
 
 
+def depth_of(name: str, n_blocks: int) -> int:
+    """Which layer a backbone parameter belongs to, 0 = stem, n = deepest.
+
+    Name-based rather than structural, because the two families we fine-tune
+    expose their depth differently and a structural walk would have to special
+    case both anyway. Anything unrecognised — the final norm, a pooling head —
+    is treated as the TOP of the backbone, which is the conservative choice:
+    it gets the largest learning rate, so an unknown parameter is trained
+    rather than silently frozen.
+    """
+    m = re.search(r"blocks\.(\d+)\.", name)          # timm ViT
+    if m:
+        return int(m.group(1)) + 1
+    m = re.search(r"layer(\d+)\.", name)             # timm / torchvision ResNet
+    if m:
+        return int(m.group(1))
+    if any(k in name for k in ("patch_embed", "cls_token", "pos_embed",
+                               "conv1", "bn1", "stem")):
+        return 0
+    return n_blocks
+
+
+def layer_decay_groups(model: nn.Module, backbone_lr: float, head_lr: float,
+                       decay: float) -> list[dict]:
+    """Parameter groups with layer-wise learning-rate decay.
+
+    WHY. Fine-tuning DINOv2 at a uniform 1e-4 destroyed it — mean AP fell
+    0.350 -> 0.270 with 16 of 19 classes worse. A single rate treats the
+    patch embedding, which encodes generic visual structure worth keeping, the
+    same as the last block, which is the part that should specialise. Layer-wise
+    decay makes early layers move `decay^k` times as fast as late ones, which is
+    the standard prescription for adapting a strong self-supervised encoder.
+
+    With decay=1.0 this degenerates to a single group at `backbone_lr`, so the
+    old behaviour is still reachable and reproducible.
+    """
+    depths = {n: depth_of(n, 0) for n, _ in model.backbone.named_parameters()}
+    n_blocks = max(depths.values(), default=0)
+    depths = {n: depth_of(n, n_blocks) for n in depths}
+
+    groups: dict[int, list] = {}
+    for n, p in model.backbone.named_parameters():
+        if p.requires_grad:
+            groups.setdefault(depths[n], []).append(p)
+
+    out = [{"params": ps, "lr": backbone_lr * decay ** (n_blocks - d),
+            "name": f"backbone.depth{d}"}
+           for d, ps in sorted(groups.items())]
+    # The heads are new and random — they get the full rate regardless.
+    out.append({"params": list(model.steps.parameters())
+                + list(model.instruments.parameters()),
+                "lr": head_lr, "name": "heads"})
+    return out
+
+
 def class_weights(ds: Frames, cap: float) -> torch.Tensor:
     counts = np.bincount([s for _, s, _ in ds.items], minlength=NUM_CLASSES)
     inv = np.where(counts > 0, len(ds) / (NUM_CLASSES * np.maximum(counts, 1)), 1.0)
@@ -191,7 +247,25 @@ def main(argv: list[str] | None = None) -> None:
                          "unset for a CNN, which infers its size from the input")
     ap.add_argument("--epochs", type=int, default=5,
                     help="5 is the pilot; the papers use 50")
-    ap.add_argument("--lr", type=float, default=1e-4)
+    ap.add_argument("--lr", type=float, default=1e-4,
+                    help="learning rate for the randomly-initialised HEADS")
+    ap.add_argument("--backbone-lr", type=float, default=None, metavar="LR",
+                    help="learning rate for the pretrained encoder. Defaults to "
+                         "lr/10. A uniform 1e-4 across a ViT-B destroyed DINOv2 "
+                         "(mean AP 0.350 -> 0.270), which is what this exists to "
+                         "avoid")
+    ap.add_argument("--layer-decay", type=float, default=0.75, metavar="D",
+                    help="layer-wise lr decay: layer k trains at "
+                         "backbone_lr * D^(depth-k). 1.0 disables it")
+    ap.add_argument("--warmup", type=int, default=200, metavar="STEPS",
+                    help="linear warmup steps. ViTs are unusually sensitive to "
+                         "large updates in the first few hundred steps")
+    ap.add_argument("--val-videos", type=int, default=3, metavar="N",
+                    help="videos held out of TRAIN for early stopping. NOT the "
+                         "VAL split — stopping on VAL would be selection on VAL")
+    ap.add_argument("--patience", type=int, default=3, metavar="EPOCHS",
+                    help="stop after this many epochs without a better "
+                         "validation loss. 0 disables early stopping")
     ap.add_argument("--batch", type=int, default=32)
     ap.add_argument("--size", type=int, default=DEFAULT_SIZE)
     ap.add_argument("--workers", type=int, default=4)
@@ -223,13 +297,40 @@ def main(argv: list[str] | None = None) -> None:
     videos = [v for v in TRAIN if v not in excluded]
     if excluded:
         print(f"holding out {sorted(excluded)} — this backbone never sees them")
-    train_ds = Frames(videos, args.size, train=True)
-    val_ds = Frames(VAL, args.size, train=False)
+    # EARLY-STOPPING SPLIT, CARVED FROM TRAIN — never from VAL.
+    #
+    # The previous version built `Frames(VAL, ...)` and never used it, so 50
+    # epochs ran with nothing watching and DINOv2 was destroyed without a
+    # signal. Wiring VAL in would have been worse: stopping on VAL is selection
+    # on VAL, and it would contaminate the single VAL scoring the whole
+    # protocol is built around.
+    #
+    # Held out BY VIDEO, not by frame. Frames within a video are ~69 to a step
+    # segment and look alike, so a frame-level split would put near-duplicates
+    # on both sides and report a validation loss that only measures memory.
+    # Taken from the END of the list so `--exclude` (per-fold encoders) still
+    # removes videos from the front deterministically.
+    holdout = videos[-args.val_videos:] if args.val_videos else []
+    fit_videos = [v for v in videos if v not in holdout]
+
+    train_ds = Frames(fit_videos, args.size, train=True)
+    val_ds = Frames(holdout, args.size, train=False) if holdout else None
     if args.limit:
         train_ds.items = train_ds.items[:args.limit]
+        if val_ds:
+            val_ds.items = val_ds.items[:args.limit]
     print(f"device {dev}  backbone {args.backbone}  epochs {args.epochs}")
-    print(f"train {len(train_ds):,} frames from {len(videos)} videos   "
-          f"val {len(val_ds):,} from {len(VAL)}")
+    print(f"train {len(train_ds):,} frames from {len(fit_videos)} videos")
+    if val_ds:
+        print(f"early-stop split: {len(val_ds):,} frames from videos {holdout} "
+              f"(carved from TRAIN; VAL is untouched)")
+    else:
+        print("early-stop split: NONE (--val-videos 0) — nothing will stop this run")
+
+    val_loader = (DataLoader(val_ds, batch_size=args.batch, shuffle=False,
+                             num_workers=args.workers,
+                             pin_memory=(dev.type == "cuda"))
+                  if val_ds else None)
 
     loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True,
                         num_workers=args.workers, pin_memory=(dev.type == "cuda"),
@@ -263,8 +364,24 @@ def main(argv: list[str] | None = None) -> None:
         amp_ok = False
     print(f"mixed precision: {'bf16' if amp_ok else 'off (fp32)'}", flush=True)
 
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
+    backbone_lr = args.backbone_lr if args.backbone_lr is not None else args.lr / 10
+    groups = layer_decay_groups(model, backbone_lr, args.lr, args.layer_decay)
+    print(f"lr: heads {args.lr:.1e}  backbone {backbone_lr:.1e} "
+          f"(layer decay {args.layer_decay}, {len(groups)} groups, "
+          f"deepest->stem {groups[-2]['lr']:.1e}->{groups[0]['lr']:.1e})")
+    opt = torch.optim.AdamW(groups, lr=args.lr)
+
+    # Warmup then cosine, stepped PER BATCH. ViTs are unusually sensitive to
+    # large updates in the first few hundred steps, and a strong pretrained
+    # encoder has the most to lose from them.
+    steps_per_epoch = max(1, len(train_ds) // args.batch)
+    total_steps = steps_per_epoch * args.epochs
+    warm = min(args.warmup, max(1, total_steps - 1))
+    sched = torch.optim.lr_scheduler.SequentialLR(
+        opt,
+        [torch.optim.lr_scheduler.LinearLR(opt, start_factor=0.01, total_iters=warm),
+         torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, total_steps - warm))],
+        milestones=[warm])
     ce = nn.CrossEntropyLoss(weight=class_weights(train_ds, args.weight_cap).to(dev))
     bce = nn.BCEWithLogitsLoss(
         pos_weight=pos_weight(train_ds, args.pos_weight_cap).to(dev))
@@ -297,6 +414,7 @@ def main(argv: list[str] | None = None) -> None:
                 f"holds out a different set. Delete {resume_path} to start over "
                 f"— resuming would silently mix two different encoders.")
 
+    best_val, since_best, stopped_early = float("inf"), 0, False
     t0 = time.time()
     for ep in range(start_ep, args.epochs):
         model.train()
@@ -315,6 +433,7 @@ def main(argv: list[str] | None = None) -> None:
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
+            sched.step()          # per BATCH: warmup is measured in steps
             run += loss.item() * len(s)
             correct += (ls.argmax(1) == s).sum().item()
             seen += len(s)
@@ -327,9 +446,43 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"  ep{ep + 1} {n * args.batch:,}/{len(train_ds):,}  "
                       f"loss {run / seen:.4f}  step-acc {correct / seen:.3f}  "
                       f"({seen / (time.time() - te):.0f} img/s)", flush=True)
-        sched.step()
         print(f"epoch {ep + 1}/{args.epochs}: loss {run / seen:.4f}  "
               f"step-acc {correct / seen:.3f}  [{time.time() - te:.0f}s]", flush=True)
+
+        # THE SIGNAL THAT WAS MISSING. Held-out loss on TRAIN videos the
+        # encoder never saw, so it measures adaptation rather than memory.
+        if val_loader is not None:
+            model.eval()
+            vl = vn = vcorrect = 0.0
+            with torch.no_grad():
+                for x, sT, iT in val_loader:
+                    x, sT, iT = x.to(dev), sT.to(dev), iT.to(dev)
+                    with torch.autocast(device_type=dev.type,
+                                        dtype=torch.bfloat16, enabled=amp_ok):
+                        ls, li = model(x)
+                        l = ce(ls, sT) + args.inst_weight * bce(li, iT)
+                    vl += float(l) * len(sT)
+                    vcorrect += float((ls.argmax(1) == sT).sum())
+                    vn += len(sT)
+            val_loss = vl / max(vn, 1)
+            gap = (correct / seen) - (vcorrect / max(vn, 1))
+            print(f"  val: loss {val_loss:.4f}  step-acc {vcorrect / max(vn,1):.3f}"
+                  f"  (train-val acc gap {gap:+.3f})", flush=True)
+
+            if val_loss < best_val - 1e-4:
+                best_val, since_best = val_loss, 0
+                torch.save({"backbone": model.backbone.state_dict(),
+                            "name": args.backbone,
+                            "trained_on": sorted(fit_videos), "epoch": ep + 1,
+                            "val_loss": val_loss, "args": vars(args)},
+                           out / "best.pt")
+                print(f"  new best (epoch {ep + 1}) -> best.pt", flush=True)
+            else:
+                since_best += 1
+                if args.patience and since_best >= args.patience:
+                    print(f"  early stop: {since_best} epochs without "
+                          f"improvement (best {best_val:.4f})", flush=True)
+                    stopped_early = True
 
         # Write to a temp file and rename. A preemption lands mid-write often
         # enough to matter over 50 epochs, and a half-written resume file is
@@ -340,6 +493,8 @@ def main(argv: list[str] | None = None) -> None:
                     "opt": opt.state_dict(), "sched": sched.state_dict(),
                     "trained_on": sorted(videos)}, tmp)
         tmp.replace(resume_path)
+        if stopped_early:
+            break
 
     # Only the backbone matters downstream — the heads exist to shape it.
     # `trained_on` is what lets crossval refuse to hold out a video this
