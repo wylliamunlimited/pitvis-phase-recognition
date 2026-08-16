@@ -42,6 +42,7 @@ do" never gets tangled with "what did we do next".
 | [instruments.md](models/instruments.md) | the SANO task-2 reproduction, and a defect in the official metric |
 | [step-variants.md](models/step-variants.md) | the task-1 iteration — masking, class weights, DINOv2 |
 | [instrument-variants.md](models/instrument-variants.md) | the task-2 iteration, and §2 owns the CV protocol |
+- [`models/ensembling-plan.md`](models/ensembling-plan.md) — the untested lever, designed before any number exists
 
 ## [surfaces/](surfaces/) — how the model reaches a person
 
