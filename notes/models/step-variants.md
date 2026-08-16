@@ -226,3 +226,51 @@ test the idea properly, in
 The pooled per-class table shows the damage where the classes are thin —
 septum displacement and durotomy collapse to 0.000 and 0.071 F1 respectively,
 having been learnable on frozen features.
+
+
+---
+
+## 8. Logit adjustment — task 2's best idea does not transfer
+
+Task 2's largest modelling gain was per-class thresholds (+0.099 macro), and
+task 1 had no equivalent: one argmax over 15 classes whose priors span 23.9%
+(tumour excision) to 0.06% (nasal packing). The per-class recalls looked like
+exactly that problem — 0.907 for sphenoid sinus clearance against 0.040 for
+durotomy and 0.000 for septum displacement.
+
+The multi-class analogue is **logit adjustment** (Menon et al. 2021):
+subtract `tau * log(prior)` at inference, computed on the fold's training
+labels only. Rare classes get a larger boost — nasal packing +7.07 against
+tumour excision +1.555 at tau=1.
+
+**It does not help.** Cross-validated over the same frozen folds:
+
+| variant | macro | edit | metric |
+|---|---|---|---|
+| best (no adjustment) | **0.5044**±0.103 | 0.5789 | **0.5417**±0.092 |
+| tau = 0.5 | 0.4927±0.107 | 0.5782 | 0.5355±0.094 |
+| tau = 1.0 | 0.4732±0.127 | 0.5744 | 0.5238±0.114 |
+
+Both are inside the fold spread, so the honest reading is "no effect" — but
+the direction is consistent and **monotone in tau**, which noise would not be.
+More adjustment, worse macro.
+
+**Why it transfers badly, and the test that would confirm it.** Task 2 is
+multi-LABEL: nineteen independent sigmoids, each with its own bar, so moving
+one class's threshold costs nothing elsewhere. Task 1 is multi-CLASS with a
+single argmax, where every unit given to a rare class is taken from a frequent
+one directly.
+
+More specifically, the suspicion is **double correction**. `best` already
+carries inverse-frequency class weights in the cross-entropy at all three
+stages — a training-time prior correction. Applying an inference-time prior
+correction on top pushes past the optimum rather than toward it, which is
+exactly the monotone degradation observed.
+
+*Test:* run the adjustment on `masked` without class weights. If it helps
+there and hurts here, double correction is confirmed and the useful version is
+"correct once, in either place, not both". Untested — the two CV runs needed
+are ~9 minutes each.
+
+Note the edit score barely moves (0.5789 → 0.5782), so the adjustment is not
+shattering segments; the whole cost is per-frame macro F1.

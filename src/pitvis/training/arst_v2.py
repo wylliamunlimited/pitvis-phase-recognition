@@ -71,6 +71,8 @@ class Variant:
     space: str = spaces.DEFAULT
     mask: bool = False
     weighted: bool = False
+    # tau for logit adjustment; 0.0 disables it. See prior_adjustment().
+    prior_tau: float = 0.0
 
 
 VARIANTS: dict[str, Variant] = {
@@ -85,8 +87,37 @@ VARIANTS: dict[str, Variant] = {
         # 0.4047 / 0.4282 / 0.4164.
         Variant("best", "WINNER — argmax masking + class weights on DINOv2",
                 space="dinov2_vitb14", mask=True, weighted=True),
+        # Task 1's missing analogue of task 2's per-class thresholds. Steps
+        # decide by a single argmax over 15 classes whose priors span 23.9%
+        # (tumour excision) to 0.06% (nasal packing), and the per-class recalls
+        # show the collapse that produces: 0.907 for sphenoid sinus clearance
+        # against 0.040 for durotomy and 0.000 for septum displacement.
+        Variant("prior", "logit adjustment on top of best (tau=1.0)",
+                space="dinov2_vitb14", mask=True, weighted=True, prior_tau=1.0),
+        Variant("prior-half", "logit adjustment, half strength (tau=0.5)",
+                space="dinov2_vitb14", mask=True, weighted=True, prior_tau=0.5),
     ]
 }
+
+
+def prior_adjustment(train, tau: float) -> np.ndarray | None:
+    """tau * log(class prior), from the TRAINING labels only.
+
+    Subtracted from the logits at inference. `tau=0` returns None, so the
+    decode path is byte-for-byte what it was before this existed and every
+    prior result stays reproducible.
+
+    An unseen class would give log(0); the epsilon floor keeps the adjustment
+    finite, and such a class is either excluded from scoring or already
+    unpredictable, so the exact value does not matter — only that it is not
+    -inf, which would turn a subtraction into +inf and make it the argmax.
+    """
+    if not tau:
+        return None
+    y = np.concatenate([l for _, _, l in train])
+    counts = np.bincount(y, minlength=NUM_CLASSES).astype(np.float64)
+    prior = np.maximum(counts / counts.sum(), 1e-8)
+    return (tau * np.log(prior)).astype(np.float32)
 
 
 def class_weights(train, cap: float, dev: torch.device) -> torch.Tensor:
@@ -187,8 +218,9 @@ def make_fit(variant: Variant):
         fs = temporal(tecno, zs)
         arst = train_arst_w(fs, args, dev, w)
 
-        opts = argparse.Namespace(chunk=args.chunk, cci=args.cci,
-                                  mask_excluded=variant.mask)
+        opts = argparse.Namespace(
+            chunk=args.chunk, cci=args.cci, mask_excluded=variant.mask,
+            logit_adjust=prior_adjustment(train, variant.prior_tau))
 
         def predict(features: np.ndarray) -> np.ndarray:
             x = torch.from_numpy((features - mean) / std).to(dev)

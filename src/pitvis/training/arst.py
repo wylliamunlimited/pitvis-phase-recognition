@@ -234,11 +234,27 @@ def cci_decode(model, f, args, dev, *, return_probs: bool = False):
     # forces an MPS sync per iteration, which is measurable at T~4,300.
     probs = torch.empty(T, model.head.out_features, device=dev) if return_probs else None
 
+    # LOGIT ADJUSTMENT (Menon et al. 2021), the multi-class analogue of task 2's
+    # per-class thresholds. Subtracting tau*log(prior) at inference shifts the
+    # decision boundary away from frequent classes without retraining anything.
+    #
+    # Task 2 got its largest single modelling gain (+0.099 macro) from letting
+    # each class clear its own bar; steps had no equivalent, because one argmax
+    # over 15 classes has no per-class bar to move. This is that bar. The priors
+    # come from the TRAINING labels only — computing them on the data being
+    # scored would be reading the answer.
+    adjust = getattr(args, "logit_adjust", None)
+    adjust = None if adjust is None else torch.as_tensor(
+        adjust, dtype=torch.float32, device=dev)
+
     def step(t, prev_seq):
         """logits at absolute position t given decoder inputs prev_seq."""
         lo = max(0, t - W)
         logits = model.decode(mem[:, lo:t + 1], prev_seq[:, lo:t + 1], offset=lo)[0, -1]
+        if adjust is not None:
+            logits = logits - adjust
         if banned is not None:
+            # After the adjustment, so -inf cannot be shifted back into range.
             logits = logits.index_fill(0, banned, float("-inf"))
         return logits
 
