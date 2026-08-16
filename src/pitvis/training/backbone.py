@@ -496,15 +496,33 @@ def main(argv: list[str] | None = None) -> None:
         if stopped_early:
             break
 
-    # Only the backbone matters downstream — the heads exist to shape it.
-    # `trained_on` is what lets crossval refuse to hold out a video this
-    # encoder has already memorised. Without it the leak is invisible.
+    # BACKBONE.PT IS THE BEST EPOCH, NOT THE LAST ONE.
+    #
+    # Early stopping wrote best.pt and nothing read it: `spaces.py` loads
+    # backbone.pt, so the encoder shipped downstream was the FINAL epoch — the
+    # one with the worst validation loss, which is the exact weights early
+    # stopping exists to discard. On run 2 that was epoch 5 (val 1.7758)
+    # instead of epoch 2 (val 1.4812).
+    #
+    # Restoring here rather than repointing the space keeps backbone.pt the
+    # single name every downstream reader already knows.
+    best_epoch = None
+    best_path = out / "best.pt"
+    if best_path.exists():
+        b = torch.load(best_path, map_location=dev, weights_only=False)
+        model.backbone.load_state_dict(b["backbone"])
+        best_epoch = b.get("epoch")
+        print(f"restoring best epoch {best_epoch} (val {b.get('val_loss'):.4f}) "
+              f"as backbone.pt", flush=True)
+
     torch.save({"backbone": model.backbone.state_dict(), "name": args.backbone,
-                "trained_on": sorted(videos), "args": vars(args)},
+                "trained_on": sorted(fit_videos), "best_epoch": best_epoch,
+                "args": vars(args)},
                out / "backbone.pt")
     (out / "result.json").write_text(json.dumps(
         {"backbone": args.backbone, "epochs": args.epochs,
-         "train_frames": len(train_ds), "trained_on": sorted(videos),
+         "train_frames": len(train_ds), "trained_on": sorted(fit_videos),
+         "best_epoch": best_epoch, "epochs_ran": ep + 1,
          "seconds": round(time.time() - t0, 1), "args": vars(args)},
         indent=2) + "\n")
     # The run finished, so the resume state is now dead weight — and it is
