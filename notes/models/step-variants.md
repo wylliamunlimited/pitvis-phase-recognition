@@ -155,14 +155,16 @@ taking; a support-weighted reading would not.
 | edit score | 0.3767 | **0.4801**±0.041 | +0.103 |
 
 Against Table 8's **70** for CITI on these same five videos, 46.1 is still well
-short — the frozen backbone remains the untested lever (roadmap 1.7/3.6).
+short — the frozen backbone was the untested lever at this point. §7 tests it,
+and closes about half the remaining gap.
 
 ---
 
 ## 5. What this did not test
 
-- **Backbone fine-tuning.** Still the largest untested lever, and the DINOv2
-  interaction above is now evidence *for* it rather than against.
+- **Backbone fine-tuning.** The largest untested lever at the time, and the
+  DINOv2 interaction above is evidence *for* it rather than against. §7 now
+  tests it — twice — and it is where the largest gain in this note comes from.
 - **Per-class decision thresholds**, which paid on task 2. Steps are
   multi-class with a single argmax rather than 15 independent sigmoids, so the
   equivalent is a prior-corrected argmax — untried.
@@ -202,30 +204,85 @@ leaks into every fold.
 
 ---
 
-## 7. Fine-tuned DINOv2 — the encoder experiment, and why it failed
+## 7. Fine-tuned DINOv2 — the encoder experiment, twice
 
-`best` on `dinov2_ft` (DINOv2 ViT-B fine-tuned 50 epochs on the frame cache),
-VAL scored once — `data/arst/v2/best@dinov2_ft/`:
+The same idea run twice with one difference — the optimisation recipe — and it
+is the difference between the worst result in this note and the best. Both are
+`best` on `dinov2_ft`, VAL scored once each, `data/arst/v2/best@dinov2_ft/`.
 
-| | frozen DINOv2 | fine-tuned ResNet-50 | fine-tuned DINOv2 |
-|---|---|---|---|
-| **challenge metric** | **0.4610** ±0.043 | 0.4425 ±0.050 | 0.3500 ±0.105 |
-| macro F1 | 0.4420 | **0.4658** | 0.3631 |
-| edit score | **0.4801** | 0.4193 | 0.3369 |
+| | frozen DINOv2 | ft ResNet-50 | ft DINOv2 **run 1** | ft DINOv2 **run 2** |
+|---|---|---|---|---|
+| **challenge metric** | 0.4610 ±0.043 | 0.4425 ±0.050 | 0.3500 ±0.105 | **0.5608** ±0.052 |
+| macro F1 | 0.4420 | 0.4658 | 0.3631 | **0.6147** |
+| edit score | 0.4801 | 0.4193 | 0.3369 | **0.5068** |
 
-Worse on every metric, and by more than the fold spread. The per-video std also
-doubles (±0.105 against ±0.043), so it is less stable as well as lower.
+**Run 2 is the largest single gain in the project — +0.0998 on the challenge
+metric, +0.173 macro** — and it is larger than every modelling change in §4
+combined (masking, class weights and the backbone swap together moved 0.3425 →
+0.4610, or +0.119).
 
-The cause is in the representation, not the temporal model: the AP probe puts
-mean AP at 0.270 against frozen DINOv2's 0.350, with only 3 of 19 classes
-improved. Fine-tuning overwrote a representation that was already better than
-this dataset can teach. Full account, including what would have to change to
-test the idea properly, in
-[`instrument-variants.md` §6](instrument-variants.md).
+### Run 1 — why it failed
 
-The pooled per-class table shows the damage where the classes are thin —
-septum displacement and durotomy collapse to 0.000 and 0.071 F1 respectively,
-having been learnable on frozen features.
+Worse on every metric and by more than the fold spread, with the per-video std
+doubled (±0.105 against ±0.043). The cause was the representation, not the
+temporal model: the AP probe put mean AP at 0.270 against frozen DINOv2's
+0.350, with 3 of 19 classes improved. Fifty epochs at a uniform 1e-4 with no
+validation anywhere in the loop overwrote a representation better than 84,666
+frames can teach. The per-class damage landed where the classes are thin —
+septum displacement and durotomy at 0.000 and 0.071 F1, both learnable on
+frozen features.
+
+### Run 2 — what changed, and what it bought
+
+Layer-wise LR decay, warmup, and early stopping on three TRAIN videos held out
+by video. It stopped at **epoch 2**. Recipe and reasoning in
+[`instrument-variants.md` §6](instrument-variants.md) — the AP probe there is
+the falsifier this passed (0.350 → 0.523, 19/19 classes improved) before any
+step number existed.
+
+Pooled per-class F1, frozen against fine-tuned, both on the five VAL videos:
+
+| step | name | support | frozen | **run 2** | Δ |
+|---|---|---|---|---|---|
+| 6 | durotomy | 1,419 | 0.000 | **0.573** | **+0.573** |
+| 5 | sellotomy | 3,034 | 0.240 | **0.604** | +0.364 |
+| 14 | debris clearance | 349 | 0.303 | **0.623** | +0.320 |
+| 3 | septum displacement | 351 | 0.064 | **0.279** | +0.215 |
+| 9 | synthetic graft placement | 840 | 0.142 | **0.349** | +0.207 |
+| 7 | tumour excision | 9,720 | 0.767 | **0.924** | +0.157 |
+| 12 | dural sealant | 184 | 0.332 | **0.482** | +0.150 |
+| 8 | haemostasis | 4,266 | 0.530 | **0.674** | +0.144 |
+| 10 | fat graft placement | 343 | 0.509 | **0.636** | +0.127 |
+| 4 | sphenoid sinus clearance | 4,229 | 0.637 | **0.717** | +0.080 |
+| 2 | anterior sphenoidotomy | 2,678 | 0.851 | 0.845 | −0.006 |
+| 1 | nasal corridor creation | 512 | 0.922 | 0.894 | −0.028 |
+
+**Eleven of twelve scored classes improve, and durotomy comes back from the
+dead** — 0.000 F1 to 0.573. That is the signature this whole line of work was
+after: not a decision rule trading one class against another, but classes
+becoming *visible* that were not. Note the two regressions are the two classes
+already above 0.85, and both move by less than the noise floor.
+
+**Every previous gain in this note was redistribution; this one is not.** §4's
+per-class table shows masking and class weights buying rare-class F1 by giving
+up tumour excision (0.664 → 0.588) and haemostasis (0.549 → 0.512). Here tumour
+excision goes *up* 0.157 at the same time as durotomy goes up 0.573. A better
+representation is the only change that moves both ends at once.
+
+### What this result is not
+
+**It is one VAL measurement, not a cross-validated ranking.** The same
+limitation as §6: a single encoder trained on all 19 TRAIN videos leaks into
+every fold, so `crossval.check_no_leak` refuses the configuration. The honest
+version is six fine-tunes — five fold encoders plus one — costing ~6× the GPU
+time. See [`infra/README.md`](../../infra/README.md).
+
+**It also cannot be compared to the numbers above it in the table on equal
+terms.** The frozen-DINOv2 row was selected by CV and then measured once; this
+row was measured once with nothing selected on it, which is *cleaner*, not
+worse — but the two arms differ in how much VAL-adjacent choice sits behind
+them. What makes the result credible anyway is that the falsifier was fixed
+before the run: the AP probe had to clear 0.350, and it cleared it by 0.173.
 
 
 ---

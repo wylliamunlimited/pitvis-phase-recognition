@@ -387,6 +387,11 @@ warmup, and early stopping on three TRAIN videos held out for the purpose.
 advance was "mean AP must clear 0.350"; it clears it by half again. This is now
 the best representation in the repo by AP, ahead of the fine-tuned ResNet-50.
 
+**And unlike the ResNet-50 case, it carries end to end** — on steps outright
+(+0.0998 challenge metric, [`step-variants.md` §7](step-variants.md)) and on
+instruments once the vendored metric's column defect is accounted for (see
+"Fine-tuned DINOv2 end to end" at the bottom of this section).
+
 The classes that moved are the ones the whole exercise was about — the six the
 frozen encoder could not see:
 
@@ -491,8 +496,9 @@ optional on its own:
   would be selection on VAL and is not available.
 - **Fewer epochs.** The pilot that worked was 5, not 50.
 
-Frozen DINOv2 remains the best encoder in the repo. `dinov2_ft` is kept as the
-record of a hypothesis that was tested and failed.
+*(Written after run 1, and superseded by run 2 below — all three changes were
+made, and the hypothesis that failed here is the one that then held. The
+paragraph stays because the diagnosis is the reason run 2 exists.)*
 
 ### The recipe, iterated — what changed and why
 
@@ -574,3 +580,58 @@ the gap; video_25 alone scores 0.836 against 0.20–0.32 for the others.
 So it is a reason to fine-tune DINOv2 and cross-validate properly, not a reason
 to switch. See [`infra/README.md`](../../infra/README.md) for why an honest version
 costs six fine-tunes rather than one.
+
+### Fine-tuned DINOv2 end to end — and the metric that reads it backwards
+
+`best` on `dinov2_ft` (run 2), VAL scored once —
+`data/instruments/v2/best@dinov2_ft/`:
+
+| | frozen DINOv2 | ft ResNet-50 | **ft DINOv2 (run 2)** |
+|---|---|---|---|
+| official (weighted, w/ defect) | **0.5572** ±0.225 | 0.3805 ±0.232 | 0.3220 ±0.089 |
+| aligned-weighted | 0.7383 ±0.041 | 0.7973 | **0.8416** ±0.036 |
+| **macro F1** (primary) | 0.3792 ±0.044 | 0.4783 | **0.5333** ±0.069 |
+
+Read the official row and this is the worst encoder tried. Read either
+defect-free row and it is the best by a wide margin — **+0.154 macro and +0.103
+aligned-weighted over frozen DINOv2**, both several times the fold spread.
+
+**The disagreement is not a trade-off this time. It is the vendored defect.**
+`hot_encode_insts` fits a separate `MultiLabelBinarizer` on truths and on
+predictions, so when the two observe different class sets the column *orders*
+diverge and `f1_score` compares them positionally. Per video, with the class
+sets counted directly:
+
+| video | sets match? | frozen: official / aligned | ft: official / aligned |
+|---|---|---|---|
+| 01 | no / no | 0.7130 / 0.7141 | 0.2516 / **0.7957** |
+| 12 | **yes** / no | **0.7513 / 0.7513** | 0.4816 / **0.8868** |
+| 21 | no / no | 0.3756 / 0.6806 | 0.3301 / **0.8015** |
+| 24 | no / no | 0.2044 / 0.8037 | 0.2276 / **0.8605** |
+| 25 | **yes** / no | **0.7419 / 0.7419** | 0.3194 / **0.8636** |
+
+On the two videos where the frozen model's predicted class set happens to
+*coincide* with the truth's, official and aligned agree to four decimals —
+because with identical sets the two binarizers produce identical column orders
+and there is nothing to misalign. Those two videos, 0.7513 and 0.7419, are what
+carries its 0.5572 mean. On the other three the official number collapses,
+worst at video 24: **0.2044 official against 0.8037 aligned.**
+
+The fine-tuned model never gets that coincidence — it is more conservative,
+predicting 16–17 classes where truth has 14–19 — so all five videos are
+penalised and its official mean is uniformly low (std ±0.089 against ±0.225).
+
+**On the aligned metric it wins every single video, 5 of 5, by 0.06 to 0.14.**
+There is no video on which the frozen encoder is genuinely better. The official
+ranking is an artifact of which model got lucky with class-set overlap.
+
+This is the sharpest case yet for why all three numbers are printed. The
+headline stays the vendored one — that is what `CLAUDE.md` requires and what
+makes our number the challenge's by construction — but reporting only the
+headline here would record a 0.235 regression for a model that improved on
+every video.
+
+**Same caveat as every arm in this section: one VAL measurement, not a
+ranking.** And unlike task 1, where the same encoder gained +0.0998 on the
+challenge metric outright, task 2's gain is invisible to the official metric —
+so it cannot be claimed as a leaderboard improvement, only as a real one.

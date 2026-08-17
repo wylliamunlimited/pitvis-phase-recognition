@@ -259,29 +259,37 @@ documented instead of contradicting it.
 
 ## 5. Honesty is load-bearing, not decoration
 
-The best step model scores **0.461 ± 0.043** on the challenge metric — and the
+The best step model scores **0.561 ± 0.052** on the challenge metric — and the
 predictions this app is usually shown with are the earlier reproduction, which
 scores 0.340 across the val split and gets **40.5%** of seconds right on
 video_25. A composed, clinical-looking surface makes any number on it read as
-authority. Five things exist specifically to resist that, and none of them
+authority. Four things exist specifically to resist that, and none of them
 should be trimmed for cleanliness:
 
-1. **`RESEARCH — NOT FOR CLINICAL USE`** in the header, non-dismissible.
-2. **The split chip turns amber on a training video.** video_02 reads 0.891
-   frame accuracy against video_25's 0.405 — roughly twice as good, and
-   meaningless as a measure of generalisation. Without saying which split a
-   case belongs to, the app would flatter the model by a wide margin depending
-   on which case you happened to open.
-3. **Missing ground truth is stated, never blank.** video_19 has no
+1. **The train/val caveat sits under the score block**, in words: *"This video
+   was TRAINED ON — these measure fit, not generalisation."* video_02 reads
+   0.891 frame accuracy against video_25's 0.405 — roughly twice as good, and
+   meaningless as a measure of generalisation. Without it the app would flatter
+   the model by a wide margin depending on which case you happened to open.
+
+   *(This replaced a `[ VAL SPLIT ]` / `[ TRAIN SPLIT ]` header chip, and the
+   `RESEARCH — NOT FOR CLINICAL USE` banner was removed from the header and the
+   burn-in at the user's explicit request. Both are deliberate deletions
+   recorded in `CLAUDE.md`, not oversights — the rule that replaced them is
+   that **a caveat sits with the number it qualifies, never in the chrome**.
+   The disclaimer lives in `README.md` and `NOTICE`.)*
+2. **Missing ground truth is stated, never blank.** video_19 has no
    `annotations_19.csv` — a gap in the download, not an exclusion. Its truth
    lane says so in words. An empty lane would read as "all background".
-5. **The provenance chip says `MODEL NOT RECORDED`** when it is. Four
+3. **The provenance chip says `MODEL NOT RECORDED`** when it is. Four
    checkpoint families and three feature spaces now exist, and every v2
    checkpoint is called `model.pt` — so a filename cannot answer "what am I
    looking at". Predictions made before the tags existed carry none, which is
    the common case rather than the edge one, and the chip says so in amber
    rather than rendering a confident blank.
-4. **Confidence is always a number**, never a bar alone, and scores are
+4. **Confidence is always a number**, never a bar alone — and it is
+   **pre-CCI**, so it reads low exactly where the consistency constraint is
+   holding a phase the frame does not support. Scores are
    labelled *this video alone — NOT the 5-video mean±std* that the paper and
    the README quote.
 

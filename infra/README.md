@@ -320,13 +320,22 @@ gcloud compute instances delete pitvis-ft --zone=us-central1-a
 
 ## Reading the result honestly
 
-**The bar to beat**, VAL, frozen DINOv2 with the `best` recipe:
+**The bar to beat**, VAL, `best` recipe. The right-hand column is what the job
+described here has already produced — it is the bar now, not the frozen one:
 
-| | frozen DINOv2 |
-|---|---|
-| steps · challenge metric | **0.4610** ± 0.043 |
-| instruments · official | **0.5572** ± 0.225 |
-| instruments · macro | 0.3792 |
+| | frozen DINOv2 | **`dinov2_ft` (run 2)** |
+|---|---|---|
+| steps · challenge metric | 0.4610 ± 0.043 | **0.5608** ± 0.052 |
+| instruments · official | **0.5572** ± 0.225 | 0.3220 ± 0.089 |
+| instruments · name-aligned weighted | 0.7383 ± 0.041 | **0.8416** ± 0.036 |
+| instruments · macro | 0.3792 | **0.5333** |
+| probe · mean AP | 0.350 | **0.523** |
+
+The instrument `official` row falling while both defect-free rows rise is the
+vendored column-ordering defect, not a regression —
+[`instrument-variants.md`](../notes/models/instrument-variants.md) has the
+per-video proof. Point 2 below was written before that was understood and is
+still the right rule; it just does not apply to this particular disagreement.
 
 Four things to hold on to when the numbers come back:
 

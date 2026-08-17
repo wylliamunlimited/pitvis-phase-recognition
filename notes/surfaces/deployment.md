@@ -116,4 +116,12 @@ one. Regenerating it is seconds given a checkpoint and a cached video.
 Tracked as **Phase 7** in [`roadmap.md`](../roadmap.md). The open ends are the two
 in §3 — serving task 2, and exporting the encoder so the input is pixels rather
 than a feature blob — plus the question of whether any of it is worth doing
-before the model itself is better than 0.461.
+before the model itself is better.
+
+That question has moved since this was written: the step metric went 0.461 →
+**0.561** with a fine-tuned DINOv2 encoder. Two consequences for this file.
+The bar for "is the model good enough to serve" is higher, so 7.4/7.5 are
+closer to worth doing. But 7.5 in particular got *harder* — the exported bundle
+is built against whichever feature space the checkpoint declares, and the best
+one is now a fine-tuned ViT-B rather than a stock timm checkpoint, so
+"export the encoder" means shipping our own weights, not naming a public model.

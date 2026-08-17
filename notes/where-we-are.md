@@ -1,6 +1,6 @@
 # Where we are — orientation snapshot
 
-*Snapshot: 2026-08-14. Read this first after time away, then follow the links.*
+*Snapshot: 2026-08-16. Read this first after time away, then follow the links.*
 
 **This note owns two things and nothing else: the vocabulary, and what to do
 next.** Everything else here is a pointer. Results live in the iteration notes,
@@ -44,14 +44,33 @@ the whole reason `infra/` exists.
 
 ## 2. Where we got to
 
-| | what changed | steps | instruments |
+| | what changed | steps | instruments (official / macro) |
 |---|---|---|---|
-| start | published reproductions | 0.3425 | 0.2321 |
-| iter 1+2 | loss, decision rule, DINOv2 | **0.4610** | **0.5572** |
-| iter 3 | fine-tuned ResNet-50 encoder | 0.4425 | 0.3805 |
-| iter 4 | fine-tuned **DINOv2** encoder | 0.3500 | 0.2803 |
+| start | published reproductions | 0.3425 | 0.2321 / 0.2556 |
+| iter 1+2 | loss, decision rule, DINOv2 | 0.4610 | **0.5572** / 0.3792 |
+| iter 3 | fine-tuned ResNet-50 encoder | 0.4425 | 0.3805 / 0.4783 |
+| iter 4a | fine-tuned DINOv2 — bad recipe | 0.3500 | 0.2803 / — |
+| **iter 4b** | fine-tuned DINOv2 — fixed recipe | **0.5608** | 0.3220 / **0.5333** |
 
 Steps are the challenge metric, instruments the official one, both on VAL.
+Instruments carry a second column because the official number and the honest
+one disagree — see below.
+
+**Iteration 4b is the largest single gain in the project.** Steps +0.0998 on
+the challenge metric outright, which is more than everything in iterations 1+2
+combined. Eleven of twelve scored step classes improve and durotomy comes back
+from 0.000 F1 to 0.573 — a class the frozen encoder never once predicted
+correctly.
+
+**On instruments the same encoder wins every video and the official metric says
+it lost.** Macro +0.154 and name-aligned weighted +0.103, both several times the
+spread; the official number falls 0.235. That is not a trade-off, it is the
+vendored `MultiLabelBinarizer` column defect: on the two videos where the frozen
+model's predicted class set happened to match the truth's, official and aligned
+agree to four decimals, and those two videos carry its whole 0.5572 mean. The
+fine-tuned model never gets that coincidence, so all five videos are penalised.
+Aligned, it wins 5 of 5. Full per-video breakdown in
+[`instrument-variants.md`](models/instrument-variants.md).
 
 **Iteration 3 did not win, and the reason is interesting rather than
 disappointing.** On the *primary* metric it does win instruments — macro F1
@@ -66,9 +85,10 @@ Both arms are **single VAL measurements**, not a ranking — a CV over
 into every fold. Treat it as a reason to fine-tune DINOv2 and cross-validate
 properly, not as a verdict.
 
-**Iteration 4 fine-tuned DINOv2 itself. The first attempt was the clearest
-negative result in the project; the second, after fixing the recipe, is the
-clearest positive one.**
+**Iteration 4 fine-tuned DINOv2 itself, twice. The first attempt was the
+clearest negative result in the project; the second, after fixing the recipe,
+is the clearest positive one.** Same encoder, same data, same augmentation,
+same heads — only the optimisation recipe changed.
 
 | | mean AP | classes improved |
 |---|---|---|
@@ -76,14 +96,14 @@ clearest positive one.**
 | run 1 — uniform 1e-4, 50 epochs | 0.270 | 3 / 19 |
 | **run 2 — 1e-5, layer decay, warmup, early stop @ epoch 2** | **0.523** | **19 / 19** |
 
-Same encoder, same data, same augmentation. Only the optimisation recipe
-changed. Surgical drill went 0.023 → 0.470, which is the clearest single sign
-the original diagnosis held: the information was in the pixels and the frozen
+Surgical drill went 0.023 → 0.470, which is the clearest single sign the
+original diagnosis held: the information was in the pixels and the frozen
 encoder could not represent it.
 
-**This is a better representation, not yet a better model** — the downstream
-VAL scoring has not been run. Fine-tuned ResNet-50 reached 0.445 AP and still
-lost end to end. Run it before believing the win.
+**The AP probe was the falsifier, fixed before the run, and it predicted the
+downstream result correctly** — unlike the ResNet-50 case, where 0.445 AP still
+lost end to end. That is the one methodological thing worth carrying: an AP
+gain this large (+0.172, all 19 classes) carried; a moderate one did not.
 
 Historical, for the contrast: run 1 overwrote a representation better than
 84,666 frames can teach — 50 epochs at a uniform lr=1e-4 with no validation
@@ -155,10 +175,12 @@ Four spaces are *defined* (`resnet50`, `resnet50_ft`, `dinov2_vitb14`,
 `dinov2_ft`); how many are *extracted* is per machine — `ls data/features/`.
 A machine with the ResNet-50 cache only will train and score, but reproduces
 the 0.34 / 0.23 reproductions rather than the current bests, which live in
-`dinov2_vitb14`.
+**`dinov2_ft`** — and that space cannot be regenerated from video alone: it
+needs `data/backbone/dinov2_ft/backbone.pt`, which is an L4-hour away.
 
-**The fine-tuned backbone is the one worth carrying** — 96 MB for an hour of
-training. Copy `data/` (6.3 GB) to a private bucket or an external drive.
+**The fine-tuned backbones are the artifacts worth carrying**, for exactly that
+reason — 96 MB standing in for GPU time this machine does not have. Copy
+`data/` (6.3 GB) to a private bucket or an external drive.
 
 You only need the 40 GB of video for `pitvis-app`, `pitvis-frames`, or a new
 extraction. Training and evaluation need **features only**.
@@ -178,43 +200,53 @@ uv run pytest
 
 ## 4. What to do next
 
-**Option A is done.** The pilot backbone was scored on VAL — that is the iter 3
-row in §2 — and the verdict was "better on rare classes, worse on the ones
-carrying the support, and no honest ranking available". It answered the cheap
-question and did not justify itself.
+**The encoder question is answered.** Options A and B are both done, and the
+fixed-recipe rerun (iter 4b) won on both tasks. `dinov2_ft` is now the best
+feature space in the repo — by AP, by step metric, and by every defect-free
+instrument metric.
 
-**Option B is also done, and it failed.** The cloud job fine-tuned DINOv2 for
-50 epochs on an L4; the result is the iter-4 row in §2. Do NOT re-run it
-unchanged — the six-fold version would spend six times as much to reproduce a
-worse encoder six times.
+**What is live now**, in the order I would take them:
 
-**What is actually live now**, in the order I would take them:
-
-1. **Fix the fine-tuning recipe, or drop the idea.** The three changes that
-   would make it a fair test are a much lower backbone LR (1e-5 with layer-wise
-   decay), early stopping on a split carved from TRAIN, and far fewer epochs.
-   `val_ds` is already built in `backbone.py` and never used — the honest
-   version carves from TRAIN instead, because stopping on VAL is selection on
-   VAL.
-2. **Roadmap 6.5** — four instrument classes are emitted but not usable
+1. **Cross-validate `dinov2_ft` honestly** — the one thing standing between
+   iteration 4b and a defensible ranking. Every number in §2 for it is a single
+   VAL measurement, because one encoder trained on all of TRAIN leaks into every
+   fold and `crossval.check_no_leak` refuses the configuration. The honest
+   version is `STAGE=all`: six fine-tunes, ~23 h on an L4, ~6× the cost of the
+   run that produced the current encoder. It also needs a **harness change
+   first** — each fold must read features from *its own* encoder, which a single
+   `--space` cannot express. That change is local and free; write it before
+   renting anything. See [`infra/README.md`](../infra/README.md).
+2. **Ensembling** — now the cheapest untried lever, and the plan is already
+   written with its falsifier fixed:
+   [`ensembling-plan.md`](models/ensembling-plan.md). Note its §1 premise
+   ("the encoder: two negatives") is now out of date; `dinov2_ft` is a member
+   worth having rather than a cautionary tale.
+3. **Roadmap 6.5** — four instrument classes are emitted but not usable
    (bipolar forceps: 320 predictions against 49 true instances).
-3. **Roadmap 6.8** — a prior-corrected argmax for steps, the untried analogue
-   of task 2's per-class thresholds.
+4. **Roadmap 6.8** — a prior-corrected argmax for steps. Tried and it lost
+   (`step-variants.md` §8); listed here only so it is not retried by accident.
 
-The encoder direction is not dead, but it has now cost two runs and returned
-one clean negative. The next attempt should be cheap and validated, not another
-50 epochs on faith.
+**One repo defect surfaced while writing this up:** `pitvis-eval` has no
+`--space` flag, so it always loads `resnet50` features and cannot score any
+checkpoint trained on another space. Every result above was produced through
+`pitvis-train`, which does take `--space`, so nothing is wrong with the numbers
+— but the standalone scorer is unusable on four of the five checkpoints in
+`data/arst/`.
 
----|---|
-| **3.6b** | fine-tune DINOv2 and cross-validate it honestly — Option B above |
+The same list against `roadmap.md`, for anyone reading it alongside:
+
+| item | state |
+|---|---|
+| **3.6b** | fine-tuning done and it won; the honest CV is what remains — item 1 above |
 | **6.5** | four instrument classes emitted but not usable |
-| **6.8** | prior-corrected argmax for steps |
+| **6.8** | prior-corrected argmax for steps — **tried, lost**, `step-variants.md` §8 |
 | **7.4 / 7.5** | serve task 2; take pixels rather than a feature blob |
 | **5.4** | the agentic explanation layer — the canvas seam is in place, unused |
 
-Plus the per-fold CV harness change described at the end of `infra/README.md`.
+Plus the per-fold CV harness change described at the end of `infra/README.md`,
+which item 1 depends on.
 
-The honest framing on 7.x: 0.461 served at 200 Hz is still 0.461. The
+The honest framing on 7.x: 0.561 served at 200 Hz is still 0.561. The
 deployment path was worth building because it proved the auto-regressive
 rollout survives the port; extending it competes with making the model better,
 and 3.6b is the item that does that.

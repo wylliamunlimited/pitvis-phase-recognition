@@ -27,7 +27,7 @@ The dataset, the feature cache and all model output are gitignored, so a fresh
 clone gets code and documentation only. Two things still work immediately:
 
 ```sh
-uv sync && uv run pytest        # 89 tests — metrics, Range parsing, case model
+uv sync && uv run pytest        # 136 tests — metrics, Range parsing, case model
 uv run pitvis-models            # ~1 s shape + parameter trace through the cascade
 ```
 
@@ -68,12 +68,23 @@ This is a temporal segmentation problem with real-world difficulties:
 Two-stage pipeline, standard for surgical phase recognition:
 
 1. **Frame features** — decode each video at 1 fps and embed every frame with a
-   frozen ImageNet-pretrained ResNet-50 (2048-d). Extraction is resumable; done
-   once, cached under `data/features/`.
+   frozen encoder. Extraction is resumable; done once, cached under
+   `data/features/<space>/`. Four encoders coexist as separate *feature spaces*
+   — ImageNet ResNet-50 (2048-d), DINOv2 ViT-B/14 (768-d), and a fine-tuned
+   version of each. `--space` selects.
 2. **Classification over the cached features** — for **task 1** (steps) a
    frame-wise linear probe as the floor, then CITI's ARST (the challenge
    winner); for **task 2** (instruments) SANO's joint-winning causal LSTM.
    Both read the same cache, so a training run is minutes rather than hours.
+
+Both published architectures are reproduced first, then iterated on — loss,
+decision rule, and encoder, each isolated and cross-validated over the 19
+training videos before the 5 validation videos are scored once. The step metric
+has gone **0.3425 → 0.5608** across four iterations; the largest single gain
+came from fine-tuning the encoder, and only on the second attempt, after the
+first destroyed the representation. Results, and what each iteration tested,
+live in [`notes/models/`](notes/models/) — start with
+[`where-we-are.md`](notes/where-we-are.md).
 
 Train/val split follows the paper: videos 01, 12, 21, 24, 25 for validation, the
 rest for training (19 train videos in practice, since video 19 has no labels).
@@ -170,7 +181,7 @@ right?" from "is my data right?" — worth doing before committing to step 4.
 
 ```sh
 uv run pitvis-models      # ~1 s: every tensor shape and parameter count
-uv run pytest             # ~3 s: 50 tests pinning both metrics + the registry
+uv run pytest             # ~3 s: 136 tests pinning both metrics + the registry
 ```
 
 `pitvis-models` falls back to a synthetic tensor when the cache is absent, so it

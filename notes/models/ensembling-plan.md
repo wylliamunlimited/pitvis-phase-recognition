@@ -21,10 +21,19 @@ been pushed to their ends:
 | direction | outcome |
 |---|---|
 | the decision rule | paid on task 2 (+0.099 macro), **null on task 1** — logit adjustment loses, monotonically |
-| the encoder | **two negatives** — fine-tuned ResNet-50 is a wash, fine-tuned DINOv2 destroys the representation |
+| the encoder | fine-tuned ResNet-50 a wash; DINOv2 **once destroyed and once won** — see the update below |
 
 Ensembling is the remaining lever that needs no new encoder, no GPU, and no
 new data. Everything it needs is already cached.
+
+> **Update, 2026-08-16 — the encoder row changed after this was written.**
+> Re-running the DINOv2 fine-tune with a fixed recipe produced the largest gain
+> in the project: steps 0.4610 → **0.5608**, instruments macro 0.3792 →
+> **0.5333**. That does not weaken the case for ensembling, but it does change
+> the members: `dinov2_ft` is now the strongest single space and belongs in
+> every ensemble here, where this plan originally listed it as a member that
+> was "worse individually". §2B below is updated; the rest stands as written,
+> deliberately, since the protocol must not be chosen after seeing results.
 
 **And the variance argues for it directly.** Our per-video std on the step
 metric is **±0.092**, on the instrument headline **±0.225**. Those are enormous
@@ -55,8 +64,14 @@ diversity.
 `resnet50` (2048-d, ImageNet CNN) and `dinov2_vitb14` (768-d, self-supervised
 ViT) are genuinely different encoders — different architecture, different
 pretraining data, different failure modes. `resnet50_ft` and `dinov2_ft` add
-two more, and both being *worse individually* does not preclude them helping:
-an ensemble wants members that are wrong in different places.
+two more, and one being *worse individually* does not preclude it helping: an
+ensemble wants members that are wrong in different places.
+
+*Updated:* `dinov2_ft` is now the best single space, not a weak member, so the
+first ensemble to try is **`dinov2_ft` + `dinov2_vitb14`** — the same encoder
+before and after adaptation, which is the cheapest genuinely-decorrelated pair
+available and directly tests whether fine-tuning traded away something the
+frozen version still has. `resnet50` joins as the architecture-diverse third.
 
 This is the axis most likely to pay, and the AP probe already hints at it —
 tissue glue scores 0.767 on frozen DINOv2 while cup forceps scores 0.055, and
@@ -149,16 +164,24 @@ per-video-then-mean metric on five videos. My estimate, and it is an estimate:
 **What it will not do** is close the gap to CITI's 70. Ensembling narrows
 variance around a ceiling set by the representation; it does not raise the
 ceiling. If the goal is the leaderboard rather than the best model this repo
-can honestly build, the encoder is still the answer — and it is still
-unsolved, now with a recipe that can at least tell us when it is failing.
+can honestly build, the encoder is the answer.
+
+*That last sentence has since been acted on and it was right* — the fixed
+recipe moved steps to 0.5608, closing about half the gap that stood when this
+was written, and doing it by raising the ceiling rather than narrowing variance
+around it. The prediction stands as a check on the estimates above: ensembling
+is now the *cheap* remaining lever, not the *best* one.
 
 ---
 
 ## 6. Order of work
 
-1. Task 2, feature-space ensemble of `resnet50` + `dinov2_vitb14`, probabilities
-   averaged, taus re-fitted, CV. **~20 minutes, no new training.**
-2. If that clears the bar: add `resnet50_ft` and `dinov2_ft` as members and
+1. Task 2, feature-space ensemble of `dinov2_ft` + `dinov2_vitb14`,
+   probabilities averaged, taus re-fitted, CV. **~20 minutes, no new
+   training.** (Was `resnet50` + `dinov2_vitb14`; reordered because the best
+   single member changed. The falsifier's bar moves with it — beat
+   `dinov2_ft` alone, not the frozen space.)
+2. If that clears the bar: add `resnet50` and `resnet50_ft` as members and
    re-run. Tests whether individually-worse members still help.
 3. Task 1, option 2 (average pre-CCI probabilities). **~1 hour.**
 4. Only if 3 pays: option 3, the lockstep decoder. **A day, and a real change

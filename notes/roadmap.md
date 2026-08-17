@@ -197,15 +197,30 @@ before the next one starts, so we always know what an idea actually bought.
       Numbers in [`step-variants.md` §6](models/step-variants.md) and
       [`instrument-variants.md` §6](models/instrument-variants.md).
 
-- [ ] **3.6b Fine-tune DINOv2, and cross-validate it honestly.** The pilot went
-      to ResNet-50 because ViT-B trains at 29 img/s against 96 — the cheap
-      backbone answers "does fine-tuning help at all" for a quarter of the
-      cost. It does. But it was applied to the backbone that *loses* frozen, so
-      the obvious next move is the one that wins frozen. Needs the `dinov2_ft`
-      space and a GPU: `BACKBONE=vit_base_patch14_dinov2.lvd142m` in
-      [`infra/`](../infra/README.md). Honest ranking additionally needs one
-      encoder per fold — six fine-tunes — because a single encoder trained on
-      all of TRAIN leaks into every fold (measured: steps macro read 0.917).
+- [x] **3.6b Fine-tune DINOv2 — done, and it is the largest gain in the
+      project.** The pilot went to ResNet-50 because ViT-B trains at 29 img/s
+      against 96 — the cheap backbone answers "does fine-tuning help at all"
+      for a quarter of the cost. It does, but it was applied to the backbone
+      that *loses* frozen, so this applied it to the one that wins frozen.
+
+      **It took two runs, and the difference between them is the recipe, not
+      the idea.** Run 1 (uniform 1e-4, 50 epochs, no validation anywhere)
+      destroyed the representation: mean AP 0.350 → 0.270, steps 0.4610 →
+      0.3500. Run 2 (backbone lr 1e-5, layer-wise decay 0.75, 200-step warmup,
+      early stopping on three TRAIN videos held out by video — stopped at
+      **epoch 2**) reversed it: **mean AP 0.523 with 19/19 classes improved,
+      steps 0.4610 → 0.5608, instruments macro 0.3792 → 0.5333.** Eleven of
+      twelve scored step classes improve and durotomy goes 0.000 → 0.573 F1.
+      Numbers in [`step-variants.md` §7](models/step-variants.md) and
+      [`instrument-variants.md` §6](models/instrument-variants.md).
+
+- [ ] **3.6c Cross-validate `dinov2_ft` honestly.** Everything in 3.6b is a
+      single VAL measurement. A ranking needs one encoder per fold — six
+      fine-tunes, `STAGE=all`, ~23 h on an L4 — because a single encoder
+      trained on all of TRAIN leaks into every fold (measured: steps macro read
+      0.917). It also needs a harness change first: each fold must read
+      features from its own encoder, which one `--space` cannot express. See
+      [`infra/`](../infra/README.md).
 
 ---
 
@@ -350,10 +365,16 @@ Recorded in full in [`notes/models/instrument-variants.md`](models/instrument-va
 - [x] **6.7 The CV harness is task-agnostic.** `crossval.Task` holds the
       loader, scorer and ranking metric, so both tasks share the fold logic and
       the leaderboard instead of a second copy.
-- [ ] **6.8 Per-class thresholds for steps.** Task 2's second-largest win has
-      no direct analogue: steps are multi-class with one argmax rather than 15
-      independent sigmoids. The equivalent is a prior-corrected argmax —
-      untried.
+- [x] **6.8 Per-class thresholds for steps — tried, and it loses.** Task 2's
+      second-largest win has no direct analogue: steps are multi-class with one
+      argmax rather than 15 independent sigmoids. The equivalent is a
+      prior-corrected argmax (logit adjustment, Menon et al. 2021), and it
+      degrades **monotonically in tau**. The cause is double correction — the
+      winning recipe already carries inverse-frequency class weights, and the
+      sign of the adjustment's effect flips when those are removed. Training-
+      time correction beats inference-time correction on this task, the
+      opposite of task 2. Numbers in
+      [`step-variants.md` §8](models/step-variants.md).
 
 ### The finding worth carrying forward
 
@@ -364,6 +385,22 @@ were fixed (+0.055 and +0.014 respectively, winning on every metric). The
 representation gain is real and it is masked by the imbalance defect. Testing
 the backbone first and stopping at the null would have retired a true
 hypothesis, twice.
+
+**And the same mistake was nearly made a third time, from the other end.**
+Fine-tuning DINOv2 produced the worst result in the repo (3.6b run 1) and the
+best (run 2), from the same code, the same data and the same augmentation. Only
+the optimisation recipe differed. A fine-tune that fails tells you nothing
+about whether fine-tuning helps until you can see the failure happening — run 1
+had no validation split at all, so fifty epochs of damage were indistinguishable
+from fifty epochs of learning from inside the loop.
+
+The generalisable form: **every expensive experiment needs a cheap falsifier
+fixed before it runs.** Here that was the AP probe, which fits on TRAIN and
+scores VAL, so it reads the representation without the temporal model in the
+way. It called run 1 correctly (0.270, abandon) and run 2 correctly (0.523,
+proceed) — and it also called the ResNet-50 case correctly as *equivocal*
+(0.445, a moderate gain that did not carry end to end). A large AP gain
+carried; a moderate one did not.
 
 ---
 
@@ -394,9 +431,11 @@ Reasoning and the fidelity result: [`deployment.md`](surfaces/deployment.md).
       blob, so the backbone is still Python. Exporting the encoder makes it
       genuinely standalone — and for DINOv2 that is the larger half of the
       compute, so it is also where the interesting engineering is.
-- [ ] **7.6 (D) Is this worth continuing before the model is better?** 0.461
-      served at 200 Hz is still 0.461. Deciding this belongs with 3.6b, not
-      here.
+- [ ] **7.6 (D) Is this worth continuing before the model is better?** 0.561
+      served at 200 Hz is still 0.561. 3.6b has now landed and raised that
+      number, which makes 7.4/7.5 more attractive — and 7.5 harder, since the
+      best encoder is now our own fine-tuned ViT-B rather than a stock timm
+      checkpoint. Deciding this belongs with 3.6c.
 
 ---
 

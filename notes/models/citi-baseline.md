@@ -198,8 +198,9 @@ and `standardize.npz` — the train-split feature mean/std, which closes roadmap
 
 > **Superseded in part.** [`step-variants.md`](step-variants.md) applies the
 > instrument-variant protocol to task 1: argmax masking plus class weights on
-> DINOv2 features lifts the challenge metric from 0.3425 to 0.4610 on val. The
-> reproduction below is unchanged and still what `pitvis-train arst` produces.
+> DINOv2 features lifts the challenge metric from 0.3425 to 0.4610 on val, and
+> a fine-tuned DINOv2 encoder takes it to **0.5608**. The reproduction below is
+> unchanged and still what `pitvis-train arst` produces.
 
 ## 6. Results
 
