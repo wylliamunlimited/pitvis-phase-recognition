@@ -2,6 +2,10 @@
 
 *Snapshot: 2026-08-16. Read this first after time away, then follow the links.*
 
+**For the system as it stands** — what is trained, what is wired to what, how
+a case flows through the app, and what may be claimed in a demo — see
+[`current-state.md`](current-state.md). This note is the *research* view.
+
 **This note owns two things and nothing else: the vocabulary, and what to do
 next.** Everything else here is a pointer. Results live in the iteration notes,
 architectures in the reproduction notes, commands in the README. If you find

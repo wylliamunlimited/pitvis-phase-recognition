@@ -9,6 +9,7 @@ scoreboard maintained in four files is a scoreboard that goes stale in three.
 
 | | |
 |---|---|
+| [**current-state.md**](current-state.md) | the **system** as it stands — what is trained, what is wired to what, how a case flows through the app, and which claims the evidence supports. Start here to demo or hand over. |
 | [**where-we-are.md**](where-we-are.md) | orientation snapshot — the vocabulary, where the numbers got to, what to run next. A **dated** snapshot: re-date it when it goes stale rather than leaving old numbers standing. |
 | [**roadmap.md**](roadmap.md) | everything left to build, in phases, with the decisions each item is waiting on |
 
