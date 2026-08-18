@@ -1,0 +1,1579 @@
+<title>PitVis Architecture Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --paper:#eef1f2; --surface:#ffffff; --surface-2:#f6f8f9;
+  --ink:#14181d; --ink-2:#454e57; --muted:#77838d;
+  --rule:#d5dbdf; --rule-2:#e6eaed;
+  --accent:#0a6f7a; --accent-soft:#dbeef1; --accent-line:#0a6f7a;
+  --warn:#9a4823; --warn-soft:#f5e6dd;
+  --frozen:#8a949c;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0d1115; --surface:#151b21; --surface-2:#1a2128;
+    --ink:#e7ecf0; --ink-2:#a9b4bd; --muted:#7d8892;
+    --rule:#28323b; --rule-2:#202931;
+    --accent:#54cbd8; --accent-soft:#0f333a; --accent-line:#54cbd8;
+    --warn:#e08d61; --warn-soft:#33211a;
+    --frozen:#6d7882;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0d1115; --surface:#151b21; --surface-2:#1a2128;
+  --ink:#e7ecf0; --ink-2:#a9b4bd; --muted:#7d8892;
+  --rule:#28323b; --rule-2:#202931;
+  --accent:#54cbd8; --accent-soft:#0f333a; --accent-line:#54cbd8;
+  --warn:#e08d61; --warn-soft:#33211a;
+  --frozen:#6d7882;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:16.5px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px 96px}
+
+/* ---------- masthead ---------- */
+header.top{padding:72px 0 34px;border-bottom:1px solid var(--rule)}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 14px
+}
+h1{
+  font-family:Spectral,Georgia,serif;font-weight:600;font-size:clamp(34px,5.2vw,54px);
+  line-height:1.06;letter-spacing:-.015em;margin:0 0 18px;text-wrap:balance
+}
+.standfirst{
+  font-family:Spectral,Georgia,serif;font-size:20px;line-height:1.5;color:var(--ink-2);
+  max-width:62ch;margin:0 0 26px
+}
+.provenance{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:1.7;color:var(--muted);
+  border-left:2px solid var(--accent-line);padding-left:14px;max-width:72ch
+}
+
+/* ---------- sections ---------- */
+section{padding:52px 0 0}
+h2{
+  font-family:Spectral,Georgia,serif;font-weight:600;font-size:29px;line-height:1.2;
+  letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance
+}
+h3{
+  font-family:"IBM Plex Sans",sans-serif;font-weight:600;font-size:16px;
+  margin:34px 0 8px;letter-spacing:-.005em
+}
+p{margin:0 0 16px;max-width:68ch;color:var(--ink-2)}
+p.lede{color:var(--ink);font-size:17.5px}
+strong{color:var(--ink);font-weight:600}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 40%,transparent)}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+code,.mono{font-family:"IBM Plex Mono",monospace;font-size:.88em}
+code{background:var(--surface-2);border:1px solid var(--rule-2);border-radius:3px;padding:.1em .34em}
+
+/* ---------- plate ---------- */
+.plate{
+  background:var(--surface);border:1px solid var(--rule);border-radius:2px;
+  margin:26px 0 8px;overflow:hidden
+}
+.plate-head{
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;
+  padding:14px 20px;border-bottom:1px solid var(--rule-2);background:var(--surface-2)
+}
+.fignum{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent)
+}
+.figtitle{font-size:14px;font-weight:500;color:var(--ink)}
+.figmeta{
+  margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);
+  font-variant-numeric:tabular-nums
+}
+.canvas{padding:26px 20px;overflow-x:auto}
+figure{margin:0}
+svg{display:block;max-width:100%;height:auto;margin:0 auto;color:var(--ink)}
+figcaption{
+  padding:0 20px 20px;font-size:14.5px;line-height:1.6;color:var(--ink-2);max-width:82ch
+}
+figcaption b{color:var(--ink);font-weight:600}
+
+/* ---------- svg grammar ---------- */
+.bx{fill:var(--surface-2);stroke:var(--rule);stroke-width:1}
+.bx-t{fill:var(--accent-soft);stroke:var(--accent-line);stroke-width:1.4}
+.bx-f{fill:none;stroke:var(--frozen);stroke-width:1;stroke-dasharray:4 3}
+.bx-w{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.2}
+.bx-g{fill:var(--surface-2);stroke:var(--rule-2);stroke-width:1}
+.ln{stroke:var(--ink-2);stroke-width:1.2;fill:none}
+.ln-d{stroke:var(--frozen);stroke-width:1;fill:none;stroke-dasharray:4 3}
+.ln-a{stroke:var(--accent-line);stroke-width:1.4;fill:none}
+.rule{stroke:var(--rule);stroke-width:1}
+.lbl{font-family:"IBM Plex Sans",sans-serif;font-size:12.5px;font-weight:500;fill:var(--ink)}
+.lbl-s{font-family:"IBM Plex Sans",sans-serif;font-size:11.5px;font-weight:500;fill:var(--ink)}
+.sub{font-family:"IBM Plex Mono",monospace;font-size:10.5px;fill:var(--muted)}
+.sub-i{font-family:"IBM Plex Mono",monospace;font-size:10.5px;fill:var(--ink-2)}
+.sub-xs{font-family:"IBM Plex Mono",monospace;font-size:8.5px;fill:var(--muted)}
+.acc{fill:var(--accent)}
+.wrn{fill:var(--warn)}
+.tag{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.12em;fill:var(--muted)}
+.head-a{fill:var(--ink-2)}
+.cell{fill:var(--accent-soft);stroke:var(--accent-line);stroke-width:.8}
+.cell-o{fill:none;stroke:var(--rule);stroke-width:.8}
+
+/* ---------- tables ---------- */
+.tbl-wrap{overflow-x:auto;margin:20px 0 8px;border:1px solid var(--rule);border-radius:2px}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-2);white-space:nowrap}
+th{
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--surface-2)
+}
+td.num{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+td.nm{font-family:"IBM Plex Mono",monospace;font-size:13px}
+tbody tr:last-child td{border-bottom:none}
+tr.total td{font-weight:600;color:var(--ink);background:var(--surface-2)}
+
+/* ---------- notes ---------- */
+.note{
+  border-left:2px solid var(--warn);background:var(--warn-soft);
+  padding:13px 16px;margin:20px 0;font-size:14.5px;line-height:1.55;color:var(--ink-2);
+  max-width:78ch
+}
+.note b{color:var(--ink)}
+.legend{
+  display:flex;flex-wrap:wrap;gap:20px;padding:14px 20px;border-top:1px solid var(--rule-2);
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);background:var(--surface-2)
+}
+.legend span{display:flex;align-items:center;gap:7px}
+.sw{width:20px;height:11px;border-radius:1px;display:inline-block}
+.sw-t{background:var(--accent-soft);border:1.4px solid var(--accent-line)}
+.sw-f{border:1px dashed var(--frozen)}
+.sw-w{background:var(--warn-soft);border:1.2px solid var(--warn)}
+hr.div{border:none;border-top:1px solid var(--rule);margin:56px 0 0}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <p class="eyebrow">PitVis · EndoVis / MICCAI-2023 · endoscopic transsphenoidal approach</p>
+  <h1>PitVis Architecture Atlas</h1>
+  <p class="standfirst">Every network in the repository, drawn to the same grammar — two encoders, the
+  step cascade, the instrument model, and the probe that sets the floor.</p>
+  <p class="provenance">All shapes and parameter counts read off the live modules, 2026-08-18.<br>
+  torch 2.13.0+cu130 · timm 1.0.28 · encoders instantiated at 224 px, batch 1<br>
+  Nothing below is estimated or quoted from a paper.</p>
+</header>
+
+<section id="system">
+  <p class="eyebrow">Orientation</p>
+  <h2>One decode, one encoder, two heads</h2>
+  <p class="lede">The current best system is <code>arst-v2:best@dinov2_ft</code> for steps and
+  <code>instruments-v2:best@dinov2_ft</code> for instruments. Both read the same cache, produced by the
+  same fine-tuned DINOv2 encoder. Everything else in this atlas is either an earlier encoder, an earlier
+  head, or the floor.</p>
+
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 0</span>
+      <span class="figtitle">System dataflow — pixels to per-second predictions</span>
+      <span class="figmeta">115,314,526 params end to end</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 980 320" role="img" aria-label="Dataflow: an mp4 is decoded at 1 fps to frames, embedded by a fine-tuned DINOv2 encoder into a cached feature array, which then feeds a step head and an instrument head.">
+          <defs><marker id="a0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker></defs>
+
+          <rect x="20" y="130" width="104" height="58" rx="2" class="bx"/>
+          <text x="72" y="153" text-anchor="middle" class="lbl">video.mp4</text>
+          <text x="72" y="170" text-anchor="middle" class="sub">1280×720 · 24 fps</text>
+
+          <line x1="124" y1="159" x2="162" y2="159" class="ln" marker-end="url(#a0)"/>
+
+          <rect x="168" y="130" width="112" height="58" rx="2" class="bx"/>
+          <text x="224" y="153" text-anchor="middle" class="lbl">ffmpeg</text>
+          <text x="224" y="170" text-anchor="middle" class="sub">decode at 1 fps</text>
+
+          <line x1="280" y1="159" x2="316" y2="159" class="ln" marker-end="url(#a0)"/>
+
+          <rect x="322" y="130" width="100" height="58" rx="2" class="bx"/>
+          <text x="372" y="153" text-anchor="middle" class="lbl">frames</text>
+          <text x="372" y="170" text-anchor="middle" class="sub">384 px JPEG</text>
+
+          <line x1="422" y1="159" x2="466" y2="159" class="ln" marker-end="url(#a0)"/>
+          <text x="444" y="150" text-anchor="middle" class="sub-i">(3,224,224)</text>
+
+          <rect x="472" y="130" width="140" height="58" rx="2" class="bx-t"/>
+          <text x="542" y="152" text-anchor="middle" class="lbl">ENCODER</text>
+          <text x="542" y="169" text-anchor="middle" class="sub-i">DINOv2 ViT-B/14 · ft</text>
+
+          <line x1="612" y1="159" x2="654" y2="159" class="ln" marker-end="url(#a0)"/>
+          <text x="633" y="150" text-anchor="middle" class="sub-i">(768,)</text>
+
+          <rect x="660" y="130" width="120" height="58" rx="2" class="bx"/>
+          <text x="720" y="153" text-anchor="middle" class="lbl">feature cache</text>
+          <text x="720" y="170" text-anchor="middle" class="sub">(T, 768) float32</text>
+
+          <path d="M780,159 H808 V69 H830" class="ln" marker-end="url(#a0)"/>
+          <path d="M808,159 V249 H830" class="ln" marker-end="url(#a0)"/>
+
+          <rect x="836" y="40" width="124" height="58" rx="2" class="bx"/>
+          <text x="898" y="63" text-anchor="middle" class="lbl">TASK 1 · steps</text>
+          <text x="898" y="80" text-anchor="middle" class="sub">15-way, 1 per second</text>
+
+          <rect x="836" y="220" width="124" height="58" rx="2" class="bx"/>
+          <text x="898" y="243" text-anchor="middle" class="lbl">TASK 2 · instruments</text>
+          <text x="898" y="260" text-anchor="middle" class="sub">19 sigmoids, ≤ 2</text>
+
+          <path d="M20,206 V214 H612 V206" class="rule" fill="none"/>
+          <text x="316" y="232" text-anchor="middle" class="tag">RUNS ONCE PER SPACE · 40 GB DECODE · HOURS ON GPU</text>
+          <path d="M660,206 V214 H960 V206" class="rule" fill="none"/>
+          <text x="810" y="232" text-anchor="middle" class="tag">RUNS PER EXPERIMENT · MINUTES ON CPU/MPS</text>
+
+          <text x="542" y="118" text-anchor="middle" class="tag">FROZEN AT TRAINING AND INFERENCE</text>
+        </svg>
+      </figure>
+    </div>
+    <figcaption>The encoder is the seam. Everything left of the cache is paid once and shared; everything
+    right of it is cheap enough to cross-validate. That is also why fine-tuning was the last lever pulled and
+    the largest — <b>it is the only change that moves the input to every head at once.</b></figcaption>
+    <div class="legend">
+      <span><i class="sw sw-t"></i> trained in this repo</span>
+      <span><i class="sw sw-f"></i> frozen / no gradient</span>
+      <span><i class="sw sw-w"></i> decision rule, not a learned module</span>
+    </div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>component</th><th>module</th><th class="num">params</th><th>output</th><th>trained</th></tr></thead>
+      <tbody>
+        <tr><td>encoder</td><td class="nm">dinov2_ft</td><td class="num">85,724,928</td><td class="nm">(T, 768)</td><td>2 epochs, 16 videos</td></tr>
+        <tr><td>task 1 cascade</td><td class="nm">arst-v2:best</td><td class="num">24,845,372</td><td class="nm">(T,) ∈ 0..14</td><td>20 / 30 / 20 epochs</td></tr>
+        <tr><td>task 2 head</td><td class="nm">instruments-v2:best</td><td class="num">4,744,226</td><td class="nm">(T, 19) sigmoid</td><td>30 epochs</td></tr>
+        <tr class="total"><td>total</td><td class="nm">—</td><td class="num">115,314,526</td><td class="nm">—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+<hr class="div">
+
+<section id="resnet">
+  <p class="eyebrow">Encoder A</p>
+  <h2>ResNet-50 — the original cache</h2>
+  <p>Two feature spaces are built from this network: <code>resnet50</code> (ImageNet weights, frozen) and
+  <code>resnet50_ft</code> (5 epochs on PitVis frames). Both emit 2,048-d, which is why they are
+  interchangeable at load time — and why <code>pitvis-eval</code> can silently score one against the other.</p>
+
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 1</span>
+      <span class="figtitle">ResNet-50 — box height ∝ spatial resolution</span>
+      <span class="figmeta">23,508,032 params · 224² → 2048-d</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 960 272" role="img" aria-label="ResNet-50 stage diagram: resolution halves from 224 to 7 pixels across conv1, maxpool and four bottleneck stages, while channels grow from 64 to 2048, ending in global average pooling to a 2048-dimensional vector.">
+          <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker></defs>
+
+          <text x="62"  y="70" text-anchor="middle" class="sub">224²</text>
+          <text x="180" y="70" text-anchor="middle" class="sub">112²</text>
+          <text x="298" y="70" text-anchor="middle" class="sub">56²</text>
+          <text x="416" y="70" text-anchor="middle" class="sub">56²</text>
+          <text x="534" y="70" text-anchor="middle" class="sub">28²</text>
+          <text x="652" y="70" text-anchor="middle" class="sub">14²</text>
+          <text x="770" y="70" text-anchor="middle" class="sub">7²</text>
+          <text x="865" y="70" text-anchor="middle" class="sub">1²</text>
+
+          <rect x="16"  y="91"  width="92" height="118" rx="2" class="bx-g"/>
+          <rect x="134" y="102" width="92" height="96"  rx="2" class="bx"/>
+          <rect x="252" y="114" width="92" height="72"  rx="2" class="bx"/>
+          <rect x="370" y="114" width="92" height="72"  rx="2" class="bx"/>
+          <rect x="488" y="123" width="92" height="54"  rx="2" class="bx"/>
+          <rect x="606" y="131" width="92" height="38"  rx="2" class="bx"/>
+          <rect x="724" y="137" width="92" height="26"  rx="2" class="bx"/>
+          <rect x="842" y="141" width="46" height="18"  rx="2" class="bx-t"/>
+
+          <line x1="108" y1="150" x2="130" y2="150" class="ln" marker-end="url(#a1)"/>
+          <line x1="226" y1="150" x2="248" y2="150" class="ln" marker-end="url(#a1)"/>
+          <line x1="344" y1="150" x2="366" y2="150" class="ln" marker-end="url(#a1)"/>
+          <line x1="462" y1="150" x2="484" y2="150" class="ln" marker-end="url(#a1)"/>
+          <line x1="580" y1="150" x2="602" y2="150" class="ln" marker-end="url(#a1)"/>
+          <line x1="698" y1="150" x2="720" y2="150" class="ln" marker-end="url(#a1)"/>
+          <line x1="816" y1="150" x2="838" y2="150" class="ln" marker-end="url(#a1)"/>
+          <line x1="888" y1="150" x2="922" y2="150" class="ln-a" marker-end="url(#a1)"/>
+
+          <text x="62"  y="228" text-anchor="middle" class="lbl-s">input</text>
+          <text x="180" y="228" text-anchor="middle" class="lbl-s">conv1</text>
+          <text x="298" y="228" text-anchor="middle" class="lbl-s">maxpool</text>
+          <text x="416" y="228" text-anchor="middle" class="lbl-s">layer1 ×3</text>
+          <text x="534" y="228" text-anchor="middle" class="lbl-s">layer2 ×4</text>
+          <text x="652" y="228" text-anchor="middle" class="lbl-s">layer3 ×6</text>
+          <text x="770" y="228" text-anchor="middle" class="lbl-s">layer4 ×3</text>
+          <text x="865" y="228" text-anchor="middle" class="lbl-s">avgpool</text>
+
+          <text x="62"  y="244" text-anchor="middle" class="sub">3 ch</text>
+          <text x="180" y="244" text-anchor="middle" class="sub">7×7 s2 · 64</text>
+          <text x="298" y="244" text-anchor="middle" class="sub">3×3 s2 · 64</text>
+          <text x="416" y="244" text-anchor="middle" class="sub">256 ch</text>
+          <text x="534" y="244" text-anchor="middle" class="sub">512 ch</text>
+          <text x="652" y="244" text-anchor="middle" class="sub">1024 ch</text>
+          <text x="770" y="244" text-anchor="middle" class="sub">2048 ch</text>
+          <text x="865" y="244" text-anchor="middle" class="sub">2048-d</text>
+
+          <text x="180" y="260" text-anchor="middle" class="sub-i">9,408</text>
+          <text x="416" y="260" text-anchor="middle" class="sub-i">215,808</text>
+          <text x="534" y="260" text-anchor="middle" class="sub-i">1,219,584</text>
+          <text x="652" y="260" text-anchor="middle" class="sub-i">7,098,368</text>
+          <text x="770" y="260" text-anchor="middle" class="sub-i">14,964,736</text>
+          <text x="16"  y="260" class="tag">PARAMS</text>
+        </svg>
+      </figure>
+    </div>
+    <figcaption><b>Two thirds of the network is the last stage.</b> layer4 alone holds 14.96 M of 23.51 M
+    parameters (63.7%), and layer3 + layer4 together hold 93.9% — all of it operating at 14² or 7², where a
+    surgical frame has already been reduced to 49 spatial positions. That is the part fine-tuning has the most
+    leverage over, and the part ImageNet pre-training is least likely to have got right for an endoscope.</figcaption>
+  </div>
+</section>
+
+<section id="dinov2">
+  <p class="eyebrow">Encoder B — the one that ships</p>
+  <h2>DINOv2 ViT-B/14 at 224 px</h2>
+  <p>Self-supervised, no classification head ever trained on it. Built at <code>img_size=224</code> rather than
+  the checkpoint's native 518, which is why <code>build_model</code> has to override
+  <code>resolve_data_config</code> — the transform must describe the tensor the backbone actually sees.
+  <code>dinov2_ft</code> is this network after 2 epochs on PitVis frames.</p>
+
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 2</span>
+      <span class="figtitle">DINOv2 ViT-B/14 — patchification, 12 blocks, CLS pooling</span>
+      <span class="figmeta">85,724,928 params · 224² → 768-d</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 960 430" role="img" aria-label="DINOv2 ViT-B/14: a 224 pixel image is cut into a 16 by 16 grid of 14-pixel patches by a strided convolution, giving 256 tokens plus a CLS token with positional embeddings, passed through 12 pre-norm transformer blocks, with the CLS token taken as the 768-dimensional output. An inset expands one block into LayerNorm, 12-head attention, LayerScale, LayerNorm and a GELU MLP with residual connections.">
+          <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker></defs>
+
+          <text x="16" y="30" class="tag">BAND A · TOKEN FLOW</text>
+
+          <rect x="16" y="52" width="128" height="128" class="bx-g"/>
+          <g class="cell-o">
+            <line x1="24" y1="52" x2="24" y2="180"/><line x1="32" y1="52" x2="32" y2="180"/>
+            <line x1="40" y1="52" x2="40" y2="180"/><line x1="48" y1="52" x2="48" y2="180"/>
+            <line x1="56" y1="52" x2="56" y2="180"/><line x1="64" y1="52" x2="64" y2="180"/>
+            <line x1="72" y1="52" x2="72" y2="180"/><line x1="80" y1="52" x2="80" y2="180"/>
+            <line x1="88" y1="52" x2="88" y2="180"/><line x1="96" y1="52" x2="96" y2="180"/>
+            <line x1="104" y1="52" x2="104" y2="180"/><line x1="112" y1="52" x2="112" y2="180"/>
+            <line x1="120" y1="52" x2="120" y2="180"/><line x1="128" y1="52" x2="128" y2="180"/>
+            <line x1="136" y1="52" x2="136" y2="180"/>
+            <line x1="16" y1="60" x2="144" y2="60"/><line x1="16" y1="68" x2="144" y2="68"/>
+            <line x1="16" y1="76" x2="144" y2="76"/><line x1="16" y1="84" x2="144" y2="84"/>
+            <line x1="16" y1="92" x2="144" y2="92"/><line x1="16" y1="100" x2="144" y2="100"/>
+            <line x1="16" y1="108" x2="144" y2="108"/><line x1="16" y1="116" x2="144" y2="116"/>
+            <line x1="16" y1="124" x2="144" y2="124"/><line x1="16" y1="132" x2="144" y2="132"/>
+            <line x1="16" y1="140" x2="144" y2="140"/><line x1="16" y1="148" x2="144" y2="148"/>
+            <line x1="16" y1="156" x2="144" y2="156"/><line x1="16" y1="164" x2="144" y2="164"/>
+            <line x1="16" y1="172" x2="144" y2="172"/>
+          </g>
+          <rect x="16" y="52" width="8" height="8" class="cell"/>
+          <text x="80" y="198" text-anchor="middle" class="lbl-s">frame</text>
+          <text x="80" y="214" text-anchor="middle" class="sub">224×224 · 16×16 grid</text>
+
+          <line x1="144" y1="116" x2="184" y2="116" class="ln" marker-end="url(#a2)"/>
+
+          <rect x="190" y="86" width="136" height="60" rx="2" class="bx"/>
+          <text x="258" y="109" text-anchor="middle" class="lbl">PatchEmbed</text>
+          <text x="258" y="126" text-anchor="middle" class="sub">Conv2d 14×14, stride 14</text>
+          <text x="258" y="198" text-anchor="middle" class="lbl-s">non-overlapping</text>
+          <text x="258" y="214" text-anchor="middle" class="sub">452,352 params</text>
+
+          <line x1="326" y1="116" x2="366" y2="116" class="ln" marker-end="url(#a2)"/>
+          <text x="346" y="107" text-anchor="middle" class="sub-i">(256,768)</text>
+
+          <rect x="372" y="46" width="86" height="14" rx="1" class="cell"/>
+          <text x="466" y="57" class="sub-i">CLS</text>
+          <rect x="372" y="66" width="86" height="14" rx="1" class="bx"/>
+          <rect x="372" y="86" width="86" height="14" rx="1" class="bx"/>
+          <rect x="372" y="106" width="86" height="14" rx="1" class="bx"/>
+          <text x="415" y="136" text-anchor="middle" class="sub">⋮</text>
+          <rect x="372" y="146" width="86" height="14" rx="1" class="bx"/>
+          <text x="415" y="198" text-anchor="middle" class="lbl-s">257 tokens</text>
+          <text x="415" y="214" text-anchor="middle" class="sub">+ pos_embed (1,257,768)</text>
+
+          <line x1="458" y1="116" x2="498" y2="116" class="ln" marker-end="url(#a2)"/>
+
+          <rect x="504" y="60" width="150" height="112" rx="2" class="bx-t"/>
+          <text x="579" y="102" text-anchor="middle" class="lbl">Transformer Block</text>
+          <text x="579" y="122" text-anchor="middle" class="lbl">× 12</text>
+          <text x="579" y="142" text-anchor="middle" class="sub-i">7,089,408 each</text>
+          <text x="579" y="198" text-anchor="middle" class="lbl-s">pre-norm, see Band B</text>
+          <text x="579" y="214" text-anchor="middle" class="sub">85,072,896 total</text>
+
+          <line x1="654" y1="116" x2="694" y2="116" class="ln" marker-end="url(#a2)"/>
+
+          <rect x="700" y="86" width="96" height="60" rx="2" class="bx"/>
+          <text x="748" y="112" text-anchor="middle" class="lbl">LayerNorm</text>
+          <text x="748" y="129" text-anchor="middle" class="sub">final</text>
+
+          <line x1="796" y1="116" x2="836" y2="116" class="ln-a" marker-end="url(#a2)"/>
+
+          <rect x="842" y="86" width="102" height="60" rx="2" class="bx-t"/>
+          <text x="893" y="105" text-anchor="middle" class="lbl">take CLS</text>
+          <text x="893" y="122" text-anchor="middle" class="sub-i">(768,)</text>
+          <text x="893" y="138" text-anchor="middle" class="sub">1 of 257</text>
+          <text x="893" y="198" text-anchor="middle" class="lbl-s">one frame</text>
+          <text x="893" y="214" text-anchor="middle" class="sub">→ feature cache</text>
+
+          <line x1="16" y1="244" x2="944" y2="244" class="rule"/>
+          <text x="16" y="270" class="tag">BAND B · ONE BLOCK, EXPANDED</text>
+
+          <line x1="30" y1="340" x2="70" y2="340" class="ln" marker-end="url(#a2)"/>
+          <text x="46" y="331" text-anchor="middle" class="sub-i">x</text>
+
+          <circle cx="90" cy="340" r="10" class="bx"/><text x="90" y="345" text-anchor="middle" class="sub-i">+</text>
+          <rect x="120" y="316" width="76" height="48" rx="2" class="bx"/>
+          <text x="158" y="337" text-anchor="middle" class="lbl-s">LayerNorm</text>
+          <text x="158" y="352" text-anchor="middle" class="sub">ε=1e-6</text>
+
+          <line x1="196" y1="340" x2="222" y2="340" class="ln" marker-end="url(#a2)"/>
+          <rect x="228" y="304" width="150" height="72" rx="2" class="bx-t"/>
+          <text x="303" y="326" text-anchor="middle" class="lbl">Attention</text>
+          <text x="303" y="343" text-anchor="middle" class="sub-i">qkv 768→2304</text>
+          <text x="303" y="359" text-anchor="middle" class="sub">12 heads × 64 · proj 768→768</text>
+
+          <line x1="378" y1="340" x2="404" y2="340" class="ln" marker-end="url(#a2)"/>
+          <rect x="410" y="322" width="64" height="36" rx="2" class="bx"/>
+          <text x="442" y="345" text-anchor="middle" class="lbl-s">LayerScale</text>
+
+          <line x1="474" y1="340" x2="500" y2="340" class="ln" marker-end="url(#a2)"/>
+          <circle cx="512" cy="340" r="10" class="bx"/><text x="512" y="345" text-anchor="middle" class="sub-i">+</text>
+          <path d="M90,330 V292 H512 V330" class="ln-d"/>
+          <text x="301" y="286" text-anchor="middle" class="tag">RESIDUAL</text>
+
+          <line x1="522" y1="340" x2="548" y2="340" class="ln" marker-end="url(#a2)"/>
+          <rect x="554" y="316" width="76" height="48" rx="2" class="bx"/>
+          <text x="592" y="337" text-anchor="middle" class="lbl-s">LayerNorm</text>
+          <text x="592" y="352" text-anchor="middle" class="sub">ε=1e-6</text>
+
+          <line x1="630" y1="340" x2="656" y2="340" class="ln" marker-end="url(#a2)"/>
+          <rect x="662" y="304" width="150" height="72" rx="2" class="bx-t"/>
+          <text x="737" y="326" text-anchor="middle" class="lbl">MLP</text>
+          <text x="737" y="343" text-anchor="middle" class="sub-i">768 → 3072 → 768</text>
+          <text x="737" y="359" text-anchor="middle" class="sub">GELU</text>
+
+          <line x1="812" y1="340" x2="838" y2="340" class="ln" marker-end="url(#a2)"/>
+          <rect x="844" y="322" width="52" height="36" rx="2" class="bx"/>
+          <text x="870" y="345" text-anchor="middle" class="lbl-s">LayerScale</text>
+
+          <circle cx="920" cy="340" r="10" class="bx"/><text x="920" y="345" text-anchor="middle" class="sub-i">+</text>
+          <line x1="896" y1="340" x2="908" y2="340" class="ln" marker-end="url(#a2)"/>
+          <path d="M512,330 V292 H920 V330" class="ln-d"/>
+          <text x="716" y="286" text-anchor="middle" class="tag">RESIDUAL</text>
+          <line x1="920" y1="350" x2="920" y2="400" class="ln" marker-end="url(#a2)"/>
+          <text x="920" y="416" text-anchor="middle" class="sub-i">x′</text>
+        </svg>
+      </figure>
+    </div>
+    <figcaption><b>The 768 numbers that reach every downstream model are the CLS token, not a pooled average
+    of the 256 patch tokens</b> — <code>global_pool='token'</code>, <code>num_prefix_tokens=1</code>. So the
+    whole cache is one learned summary vector per second, and the spatial grid is discarded inside the encoder
+    rather than at extraction time. Fine-tuning is the only lever that changes what that summary contains.</figcaption>
+  </div>
+</section>
+<hr class="div">
+
+<section id="finetune">
+  <p class="eyebrow">Encoder training</p>
+  <h2>The fine-tune wrapper — two heads that never ship</h2>
+  <p>Fine-tuning is not a third task. <code>MultiTask</code> bolts a step head and an instrument head onto the
+  backbone, trains all three, and then throws the heads away — only <code>backbone.pt</code> is kept, and the
+  cache is re-extracted through it. The second head is free supervision on data already labelled for it.</p>
+
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 3</span>
+      <span class="figtitle">MultiTask fine-tuning — and the learning rate each depth actually gets</span>
+      <span class="figmeta">85,751,074 params trained · 14 groups</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 960 370" role="img" aria-label="Fine-tuning wrapper: a batch of frames passes through the backbone into a 15-way step head and a 19-way instrument head, each with its own weighted loss; only the backbone is saved. Below, a bar chart shows learning rate rising from 3.2e-7 at the stem to 1e-5 at the last block and 1e-4 at the heads.">
+          <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker></defs>
+
+          <text x="16" y="26" class="tag">BAND A · WHAT IS TRAINED</text>
+
+          <rect x="16" y="86" width="112" height="52" rx="2" class="bx"/>
+          <text x="72" y="108" text-anchor="middle" class="lbl-s">frame batch</text>
+          <text x="72" y="124" text-anchor="middle" class="sub">32 × (3,224,224)</text>
+
+          <line x1="128" y1="112" x2="166" y2="112" class="ln" marker-end="url(#a3)"/>
+
+          <rect x="172" y="76" width="156" height="72" rx="2" class="bx-t"/>
+          <text x="250" y="102" text-anchor="middle" class="lbl">backbone</text>
+          <text x="250" y="119" text-anchor="middle" class="sub-i">85,724,928</text>
+          <text x="250" y="135" text-anchor="middle" class="sub">AdamW · bf16 autocast</text>
+          <text x="250" y="166" text-anchor="middle" class="tag">THE ONLY THING SAVED</text>
+
+          <path d="M328,112 H360 V70 H392" class="ln" marker-end="url(#a3)"/>
+          <path d="M360,112 V154 H392" class="ln" marker-end="url(#a3)"/>
+
+          <rect x="398" y="44" width="152" height="52" rx="2" class="bx"/>
+          <text x="474" y="66" text-anchor="middle" class="lbl-s">steps head</text>
+          <text x="474" y="82" text-anchor="middle" class="sub">Linear 768→15 · 11,535</text>
+
+          <rect x="398" y="128" width="152" height="52" rx="2" class="bx"/>
+          <text x="474" y="150" text-anchor="middle" class="lbl-s">instruments head</text>
+          <text x="474" y="166" text-anchor="middle" class="sub">Linear 768→19 · 14,611</text>
+
+          <line x1="550" y1="70" x2="588" y2="70" class="ln" marker-end="url(#a3)"/>
+          <line x1="550" y1="154" x2="588" y2="154" class="ln" marker-end="url(#a3)"/>
+
+          <rect x="594" y="44" width="168" height="52" rx="2" class="bx-w"/>
+          <text x="678" y="66" text-anchor="middle" class="lbl-s">cross-entropy</text>
+          <text x="678" y="82" text-anchor="middle" class="sub">inverse-freq weights, cap 10</text>
+
+          <rect x="594" y="128" width="168" height="52" rx="2" class="bx-w"/>
+          <text x="678" y="150" text-anchor="middle" class="lbl-s">BCE-with-logits</text>
+          <text x="678" y="166" text-anchor="middle" class="sub">pos_weight, cap 50</text>
+
+          <path d="M762,70 H800 V102 H826" class="ln" marker-end="url(#a3)"/>
+          <path d="M762,154 H800 V122 H826" class="ln" marker-end="url(#a3)"/>
+          <rect x="832" y="86" width="112" height="52" rx="2" class="bx"/>
+          <text x="888" y="108" text-anchor="middle" class="lbl-s">total loss</text>
+          <text x="888" y="124" text-anchor="middle" class="sub">inst-weight 1.0</text>
+
+          <path d="M474,96 V116" class="ln-d"/>
+          <text x="474" y="196" text-anchor="middle" class="tag">BOTH HEADS DISCARDED AFTER TRAINING</text>
+
+          <line x1="16" y1="216" x2="944" y2="216" class="rule"/>
+          <text x="16" y="242" class="tag">BAND B · LAYER-WISE LR DECAY 0.75 — LOG SCALE</text>
+
+          <rect x="44" y="330.6" width="40" height="5.4" rx="1" class="bx"/>
+          <text x="64" y="351" text-anchor="middle" class="sub">stem</text>
+          <text x="64" y="323.6" text-anchor="middle" class="sub-i">3.2e-07</text>
+          <rect x="106" y="327.2" width="40" height="8.8" rx="1" class="bx"/>
+          <text x="126" y="351" text-anchor="middle" class="sub">b0</text>
+          <rect x="168" y="323.8" width="40" height="12.2" rx="1" class="bx"/>
+          <text x="188" y="351" text-anchor="middle" class="sub">b1</text>
+          <rect x="230" y="320.5" width="40" height="15.5" rx="1" class="bx"/>
+          <text x="250" y="351" text-anchor="middle" class="sub">b2</text>
+          <rect x="292" y="317.1" width="40" height="18.9" rx="1" class="bx"/>
+          <text x="312" y="351" text-anchor="middle" class="sub">b3</text>
+          <rect x="354" y="313.7" width="40" height="22.3" rx="1" class="bx"/>
+          <text x="374" y="351" text-anchor="middle" class="sub">b4</text>
+          <rect x="416" y="310.3" width="40" height="25.7" rx="1" class="bx"/>
+          <text x="436" y="351" text-anchor="middle" class="sub">b5</text>
+          <rect x="478" y="307.0" width="40" height="29.0" rx="1" class="bx"/>
+          <text x="498" y="351" text-anchor="middle" class="sub">b6</text>
+          <rect x="540" y="303.6" width="40" height="32.4" rx="1" class="bx"/>
+          <text x="560" y="351" text-anchor="middle" class="sub">b7</text>
+          <rect x="602" y="300.2" width="40" height="35.8" rx="1" class="bx"/>
+          <text x="622" y="351" text-anchor="middle" class="sub">b8</text>
+          <rect x="664" y="296.8" width="40" height="39.2" rx="1" class="bx"/>
+          <text x="684" y="351" text-anchor="middle" class="sub">b9</text>
+          <rect x="726" y="293.5" width="40" height="42.5" rx="1" class="bx"/>
+          <text x="746" y="351" text-anchor="middle" class="sub">b10</text>
+          <rect x="788" y="290.1" width="40" height="45.9" rx="1" class="bx"/>
+          <text x="808" y="351" text-anchor="middle" class="sub">b11</text>
+          <text x="808" y="283.1" text-anchor="middle" class="sub-i">1.0e-05</text>
+          <rect x="850" y="263.1" width="40" height="72.9" rx="1" class="bx-t"/>
+          <text x="870" y="351" text-anchor="middle" class="sub">heads</text>
+          <text x="870" y="256.1" text-anchor="middle" class="sub-i">1.0e-04</text>
+          <line x1="16" y1="336" x2="944" y2="336" class="rule"/>
+        </svg>
+      </figure>
+    </div>
+    <figcaption><b>The bar chart is the whole reason run 2 worked.</b> Run 1 fine-tuned DINOv2 at a uniform
+    1e-4 for 50 epochs and destroyed it — mean AP fell 0.350 → 0.270. Layer-wise decay makes the stem move
+    <span class="mono">0.75¹² ≈ 1/32</span> as fast as the last block, so generic visual structure survives while
+    the top specialises. With warmup (200 steps) and early stopping on three held-out training videos, run 2
+    stopped at <b>epoch 2</b> and lifted mean AP to 0.523 with 19 of 19 classes improved.</figcaption>
+    <div class="legend">
+      <span><i class="sw sw-t"></i> kept</span>
+      <span><i class="sw sw-f"></i> discarded</span>
+      <span><i class="sw sw-w"></i> loss / decision</span>
+      <span>stem→b11: 3.2e-7 → 1.0e-5 · heads 1.0e-4</span>
+    </div>
+  </div>
+</section>
+<hr class="div">
+
+
+<section id="task1">
+  <p class="eyebrow">Task 1 — the current best step model</p>
+  <h2>Spatial embedding → TeCNO → ARST</h2>
+  <p>Three stages, each <b>frozen before the next one trains</b>. That is not an implementation shortcut — it
+  is the published recipe, and it is what makes the cascade trainable on a laptop: no stage ever backpropagates
+  into another. The whole thing is causal, because the challenge permits only online models.</p>
+
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 4</span>
+      <span class="figtitle">The step cascade, DINOv2 space — three stages, two freeze barriers</span>
+      <span class="figmeta">24,845,372 params · (T,768) → (T,)</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 980 540" role="img" aria-label="Three-stage step cascade. Stage one projects cached 768-dimensional features to 512 with a discarded auxiliary classifier. Stage two is a two-stage dilated causal TCN whose second stage hidden state is the temporal feature. Stage three is a one-layer encoder-decoder transformer with a banded causal mask, auto-regressive over phase labels, followed by masked argmax and consistency-constraint inference.">
+          <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker></defs>
+
+          <text x="16" y="26" class="tag">STAGE 1 · SPATIAL EMBEDDING — SGD 1e-4, 20 EPOCHS</text>
+
+          <rect x="16" y="76" width="104" height="48" rx="2" class="bx"/>
+          <text x="68" y="96" text-anchor="middle" class="lbl-s">cache</text>
+          <text x="68" y="112" text-anchor="middle" class="sub">(T, 768)</text>
+
+          <line x1="120" y1="100" x2="152" y2="100" class="ln" marker-end="url(#a4)"/>
+
+          <rect x="158" y="76" width="112" height="48" rx="2" class="bx"/>
+          <text x="214" y="96" text-anchor="middle" class="lbl-s">standardize</text>
+          <text x="214" y="112" text-anchor="middle" class="sub">fold-train μ, σ</text>
+
+          <line x1="270" y1="100" x2="302" y2="100" class="ln" marker-end="url(#a4)"/>
+
+          <rect x="308" y="76" width="136" height="48" rx="2" class="bx-t"/>
+          <text x="376" y="96" text-anchor="middle" class="lbl-s">Linear 768 → 512</text>
+          <text x="376" y="112" text-anchor="middle" class="sub-i">393,728</text>
+
+          <path d="M376,76 V50 H500" class="ln-d" marker-end="url(#a4)"/>
+          <rect x="506" y="30" width="150" height="40" rx="2" class="bx-f"/>
+          <text x="581" y="47" text-anchor="middle" class="lbl-s">Linear 512 → 15</text>
+          <text x="581" y="62" text-anchor="middle" class="sub">7,695 · trains stage 1 only</text>
+          <text x="700" y="53" class="tag">DISCARDED</text>
+
+          <line x1="444" y1="100" x2="492" y2="100" class="ln-a" marker-end="url(#a4)"/>
+          <text x="530" y="105" class="sub-i">Z (1, T, 512)</text>
+
+          <line x1="16" y1="146" x2="964" y2="146" class="ln-d"/>
+          <text x="820" y="141" class="tag">FREEZE — NO GRADIENT CROSSES</text>
+
+          <text x="16" y="178" class="tag">STAGE 2 · TeCNO — ADAM 1e-4, 30 EPOCHS, CE ON BOTH STAGES</text>
+
+          <rect x="110" y="196" width="250" height="104" rx="2" class="bx-t"/>
+          <text x="235" y="215" text-anchor="middle" class="lbl-s">TCN stage 1 · 8,667,151</text>
+          <rect x="123" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="135" y="258" text-anchor="middle" class="sub-xs">1</text>
+          <rect x="151" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="163" y="258" text-anchor="middle" class="sub-xs">2</text>
+          <rect x="179" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="191" y="258" text-anchor="middle" class="sub-xs">4</text>
+          <rect x="207" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="219" y="258" text-anchor="middle" class="sub-xs">8</text>
+          <rect x="235" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="247" y="258" text-anchor="middle" class="sub-xs">16</text>
+          <rect x="263" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="275" y="258" text-anchor="middle" class="sub-xs">32</text>
+          <rect x="291" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="303" y="258" text-anchor="middle" class="sub-xs">64</text>
+          <rect x="319" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="331" y="258" text-anchor="middle" class="sub-xs">128</text>
+          <text x="235" y="272" text-anchor="middle" class="sub">1×1 512→512 · dilated causal ×8 · 1×1 →15</text>
+
+          <line x1="360" y1="248" x2="424" y2="248" class="ln" marker-end="url(#a4)"/>
+          <text x="392" y="240" text-anchor="middle" class="sub-i">softmax</text>
+          <text x="392" y="264" text-anchor="middle" class="sub">(1,T,15)</text>
+
+          <rect x="430" y="196" width="250" height="104" rx="2" class="bx-t"/>
+          <text x="555" y="215" text-anchor="middle" class="lbl-s">TCN stage 2 · 8,412,687</text>
+          <rect x="443" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="455" y="258" text-anchor="middle" class="sub-xs">1</text>
+          <rect x="471" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="483" y="258" text-anchor="middle" class="sub-xs">2</text>
+          <rect x="499" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="511" y="258" text-anchor="middle" class="sub-xs">4</text>
+          <rect x="527" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="539" y="258" text-anchor="middle" class="sub-xs">8</text>
+          <rect x="555" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="567" y="258" text-anchor="middle" class="sub-xs">16</text>
+          <rect x="583" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="595" y="258" text-anchor="middle" class="sub-xs">32</text>
+          <rect x="611" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="623" y="258" text-anchor="middle" class="sub-xs">64</text>
+          <rect x="639" y="222" width="24" height="22" rx="1" class="bx-g"/>
+          <text x="651" y="258" text-anchor="middle" class="sub-xs">128</text>
+          <text x="555" y="272" text-anchor="middle" class="sub">1×1 15→512 · dilated causal ×8 · 1×1 →15</text>
+
+          <line x1="680" y1="248" x2="716" y2="248" class="ln-a" marker-end="url(#a4)"/>
+          <rect x="722" y="224" width="118" height="48" rx="2" class="bx"/>
+          <text x="781" y="244" text-anchor="middle" class="lbl-s">F_t</text>
+          <text x="781" y="260" text-anchor="middle" class="sub">(1, T, 512) hidden</text>
+
+          <text x="856" y="230" class="sub">receptive field</text>
+          <text x="856" y="245" class="sub-i">511 / stage</text>
+          <text x="856" y="260" class="sub-i">1,021 cascaded</text>
+          <text x="856" y="275" class="sub">≈ 17 min @ 1 fps</text>
+
+          <text x="16" y="248" class="sub">Z</text>
+          <line x1="30" y1="248" x2="104" y2="248" class="ln" marker-end="url(#a4)"/>
+
+          <line x1="16" y1="318" x2="964" y2="318" class="ln-d"/>
+          <text x="820" y="313" class="tag">FREEZE — NO GRADIENT CROSSES</text>
+
+          <text x="16" y="350" class="tag">STAGE 3 · ARST — ADAM 1e-5, 20 EPOCHS, TEACHER FORCED, 1024-FRAME CHUNKS</text>
+
+          <rect x="16" y="368" width="96" height="44" rx="2" class="bx"/>
+          <text x="64" y="386" text-anchor="middle" class="lbl-s">F_t</text>
+          <text x="64" y="401" text-anchor="middle" class="sub">(1,T,512)</text>
+
+          <line x1="112" y1="390" x2="140" y2="390" class="ln" marker-end="url(#a4)"/>
+          <rect x="146" y="368" width="80" height="44" rx="2" class="bx"/>
+          <text x="186" y="386" text-anchor="middle" class="lbl-s">+ pos enc</text>
+          <text x="186" y="401" text-anchor="middle" class="sub">sinusoidal</text>
+
+          <line x1="226" y1="390" x2="254" y2="390" class="ln" marker-end="url(#a4)"/>
+          <rect x="260" y="362" width="148" height="56" rx="2" class="bx-t"/>
+          <text x="334" y="382" text-anchor="middle" class="lbl-s">ENCODER · 3,152,384</text>
+          <text x="334" y="398" text-anchor="middle" class="sub">8 heads × 64 · FFN 2048</text>
+          <text x="334" y="412" text-anchor="middle" class="sub-i">banded mask W=5</text>
+
+          <rect x="16" y="452" width="96" height="44" rx="2" class="bx"/>
+          <text x="64" y="470" text-anchor="middle" class="lbl-s">prev phases</text>
+          <text x="64" y="485" text-anchor="middle" class="sub">[SOS, y₀ … y_{T-2}]</text>
+
+          <line x1="112" y1="474" x2="140" y2="474" class="ln" marker-end="url(#a4)"/>
+          <rect x="146" y="446" width="120" height="56" rx="2" class="bx-f"/>
+          <text x="206" y="466" text-anchor="middle" class="lbl-s">phase embedding</text>
+          <text x="206" y="481" text-anchor="middle" class="sub">segmented, fixed</text>
+          <text x="206" y="495" text-anchor="middle" class="sub-i">(16,512) buffer</text>
+
+          <path d="M408,390 H436 V424 H462" class="ln-a" marker-end="url(#a4)"/>
+          <text x="424" y="382" class="sub-i">memory</text>
+          <path d="M266,474 H436 V456 H462" class="ln" marker-end="url(#a4)"/>
+
+          <rect x="468" y="392" width="164" height="96" rx="2" class="bx-t"/>
+          <text x="550" y="414" text-anchor="middle" class="lbl-s">DECODER · 4,204,032</text>
+          <text x="550" y="432" text-anchor="middle" class="sub">self-attn — banded W=5</text>
+          <text x="550" y="448" text-anchor="middle" class="sub">cross-attn — Q dec, K/V mem</text>
+          <text x="550" y="464" text-anchor="middle" class="sub">FFN 512→2048→512</text>
+          <text x="550" y="480" text-anchor="middle" class="sub-i">3 × LayerNorm</text>
+
+          <line x1="632" y1="440" x2="660" y2="440" class="ln" marker-end="url(#a4)"/>
+          <rect x="666" y="416" width="98" height="48" rx="2" class="bx"/>
+          <text x="715" y="436" text-anchor="middle" class="lbl-s">Linear 512→15</text>
+          <text x="715" y="452" text-anchor="middle" class="sub">7,695</text>
+
+          <line x1="764" y1="440" x2="788" y2="440" class="ln" marker-end="url(#a4)"/>
+          <rect x="794" y="416" width="80" height="48" rx="2" class="bx-w"/>
+          <text x="834" y="436" text-anchor="middle" class="lbl-s">argmax</text>
+          <text x="834" y="452" text-anchor="middle" class="sub">0/11/13 → −∞</text>
+
+          <line x1="874" y1="440" x2="892" y2="440" class="ln" marker-end="url(#a4)"/>
+          <rect x="898" y="416" width="66" height="48" rx="2" class="bx-w"/>
+          <text x="931" y="436" text-anchor="middle" class="lbl-s">CCI</text>
+          <text x="931" y="452" text-anchor="middle" class="sub">n = 10</text>
+
+          <path d="M931,464 V516 H64 V502" class="ln-a" marker-end="url(#a4)"/>
+          <text x="500" y="532" text-anchor="middle" class="sub-i">auto-regression — the label emitted at t is the decoder input at t+1</text>
+        </svg>
+      </figure>
+    </div>
+    <figcaption>Read the bottom loop first: <b>this is not a per-frame classifier.</b> The decoder consumes its
+    own past predictions, so it models <span class="mono">p(y_t | y_0:t−1, F_1:t)</span> and the transition
+    structure is learned rather than smoothed on afterwards. TeCNO supplies ~17 minutes of causal context, which
+    is why a 5-frame attention band is enough on top — and why our <code>--width 0</code> ablation scored
+    <em>slightly better</em> than the paper's W=5 optimum.</figcaption>
+    <div class="legend">
+      <span><i class="sw sw-t"></i> trained, then frozen</span>
+      <span><i class="sw sw-f"></i> fixed or discarded</span>
+      <span><i class="sw sw-w"></i> inference-time decision rule</span>
+    </div>
+  </div>
+</section>
+
+<section id="mask">
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 4b</span>
+      <span class="figtitle">What the banded mask removes</span>
+      <span class="figmeta">W = 5 · both encoder and decoder</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 640 300" role="img" aria-label="Two 14 by 14 attention masks side by side. The left is a full lower-triangular causal mask where each query attends to all past keys. The right is the banded mask actually used, where each query attends only to the five most recent keys plus itself, so the filled region is a narrow diagonal stripe.">
+          <text x="60" y="46" class="lbl-s">full causal</text>
+          <text x="60" y="62" class="sub">every past frame</text>
+          <text x="380" y="46" class="lbl-s acc">banded, W = 5 — used here</text>
+          <text x="380" y="62" class="sub">only t−5 … t</text>
+          <rect x="60" y="78" width="14" height="14" class="cell"/>
+          <rect x="74" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="88" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="102" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="116" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="130" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="144" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="158" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="172" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="186" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="92" width="14" height="14" class="cell"/>
+          <rect x="74" y="92" width="14" height="14" class="cell"/>
+          <rect x="88" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="102" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="116" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="130" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="144" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="158" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="172" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="186" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="106" width="14" height="14" class="cell"/>
+          <rect x="74" y="106" width="14" height="14" class="cell"/>
+          <rect x="88" y="106" width="14" height="14" class="cell"/>
+          <rect x="102" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="116" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="130" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="144" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="158" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="172" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="186" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="120" width="14" height="14" class="cell"/>
+          <rect x="74" y="120" width="14" height="14" class="cell"/>
+          <rect x="88" y="120" width="14" height="14" class="cell"/>
+          <rect x="102" y="120" width="14" height="14" class="cell"/>
+          <rect x="116" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="130" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="144" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="158" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="172" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="186" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="134" width="14" height="14" class="cell"/>
+          <rect x="74" y="134" width="14" height="14" class="cell"/>
+          <rect x="88" y="134" width="14" height="14" class="cell"/>
+          <rect x="102" y="134" width="14" height="14" class="cell"/>
+          <rect x="116" y="134" width="14" height="14" class="cell"/>
+          <rect x="130" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="144" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="158" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="172" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="186" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="148" width="14" height="14" class="cell"/>
+          <rect x="74" y="148" width="14" height="14" class="cell"/>
+          <rect x="88" y="148" width="14" height="14" class="cell"/>
+          <rect x="102" y="148" width="14" height="14" class="cell"/>
+          <rect x="116" y="148" width="14" height="14" class="cell"/>
+          <rect x="130" y="148" width="14" height="14" class="cell"/>
+          <rect x="144" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="158" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="172" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="186" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="162" width="14" height="14" class="cell"/>
+          <rect x="74" y="162" width="14" height="14" class="cell"/>
+          <rect x="88" y="162" width="14" height="14" class="cell"/>
+          <rect x="102" y="162" width="14" height="14" class="cell"/>
+          <rect x="116" y="162" width="14" height="14" class="cell"/>
+          <rect x="130" y="162" width="14" height="14" class="cell"/>
+          <rect x="144" y="162" width="14" height="14" class="cell"/>
+          <rect x="158" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="172" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="186" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="176" width="14" height="14" class="cell"/>
+          <rect x="74" y="176" width="14" height="14" class="cell"/>
+          <rect x="88" y="176" width="14" height="14" class="cell"/>
+          <rect x="102" y="176" width="14" height="14" class="cell"/>
+          <rect x="116" y="176" width="14" height="14" class="cell"/>
+          <rect x="130" y="176" width="14" height="14" class="cell"/>
+          <rect x="144" y="176" width="14" height="14" class="cell"/>
+          <rect x="158" y="176" width="14" height="14" class="cell"/>
+          <rect x="172" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="186" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="190" width="14" height="14" class="cell"/>
+          <rect x="74" y="190" width="14" height="14" class="cell"/>
+          <rect x="88" y="190" width="14" height="14" class="cell"/>
+          <rect x="102" y="190" width="14" height="14" class="cell"/>
+          <rect x="116" y="190" width="14" height="14" class="cell"/>
+          <rect x="130" y="190" width="14" height="14" class="cell"/>
+          <rect x="144" y="190" width="14" height="14" class="cell"/>
+          <rect x="158" y="190" width="14" height="14" class="cell"/>
+          <rect x="172" y="190" width="14" height="14" class="cell"/>
+          <rect x="186" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="200" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="204" width="14" height="14" class="cell"/>
+          <rect x="74" y="204" width="14" height="14" class="cell"/>
+          <rect x="88" y="204" width="14" height="14" class="cell"/>
+          <rect x="102" y="204" width="14" height="14" class="cell"/>
+          <rect x="116" y="204" width="14" height="14" class="cell"/>
+          <rect x="130" y="204" width="14" height="14" class="cell"/>
+          <rect x="144" y="204" width="14" height="14" class="cell"/>
+          <rect x="158" y="204" width="14" height="14" class="cell"/>
+          <rect x="172" y="204" width="14" height="14" class="cell"/>
+          <rect x="186" y="204" width="14" height="14" class="cell"/>
+          <rect x="200" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="214" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="218" width="14" height="14" class="cell"/>
+          <rect x="74" y="218" width="14" height="14" class="cell"/>
+          <rect x="88" y="218" width="14" height="14" class="cell"/>
+          <rect x="102" y="218" width="14" height="14" class="cell"/>
+          <rect x="116" y="218" width="14" height="14" class="cell"/>
+          <rect x="130" y="218" width="14" height="14" class="cell"/>
+          <rect x="144" y="218" width="14" height="14" class="cell"/>
+          <rect x="158" y="218" width="14" height="14" class="cell"/>
+          <rect x="172" y="218" width="14" height="14" class="cell"/>
+          <rect x="186" y="218" width="14" height="14" class="cell"/>
+          <rect x="200" y="218" width="14" height="14" class="cell"/>
+          <rect x="214" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="228" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="232" width="14" height="14" class="cell"/>
+          <rect x="74" y="232" width="14" height="14" class="cell"/>
+          <rect x="88" y="232" width="14" height="14" class="cell"/>
+          <rect x="102" y="232" width="14" height="14" class="cell"/>
+          <rect x="116" y="232" width="14" height="14" class="cell"/>
+          <rect x="130" y="232" width="14" height="14" class="cell"/>
+          <rect x="144" y="232" width="14" height="14" class="cell"/>
+          <rect x="158" y="232" width="14" height="14" class="cell"/>
+          <rect x="172" y="232" width="14" height="14" class="cell"/>
+          <rect x="186" y="232" width="14" height="14" class="cell"/>
+          <rect x="200" y="232" width="14" height="14" class="cell"/>
+          <rect x="214" y="232" width="14" height="14" class="cell"/>
+          <rect x="228" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="242" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="246" width="14" height="14" class="cell"/>
+          <rect x="74" y="246" width="14" height="14" class="cell"/>
+          <rect x="88" y="246" width="14" height="14" class="cell"/>
+          <rect x="102" y="246" width="14" height="14" class="cell"/>
+          <rect x="116" y="246" width="14" height="14" class="cell"/>
+          <rect x="130" y="246" width="14" height="14" class="cell"/>
+          <rect x="144" y="246" width="14" height="14" class="cell"/>
+          <rect x="158" y="246" width="14" height="14" class="cell"/>
+          <rect x="172" y="246" width="14" height="14" class="cell"/>
+          <rect x="186" y="246" width="14" height="14" class="cell"/>
+          <rect x="200" y="246" width="14" height="14" class="cell"/>
+          <rect x="214" y="246" width="14" height="14" class="cell"/>
+          <rect x="228" y="246" width="14" height="14" class="cell"/>
+          <rect x="242" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="60" y="260" width="14" height="14" class="cell"/>
+          <rect x="74" y="260" width="14" height="14" class="cell"/>
+          <rect x="88" y="260" width="14" height="14" class="cell"/>
+          <rect x="102" y="260" width="14" height="14" class="cell"/>
+          <rect x="116" y="260" width="14" height="14" class="cell"/>
+          <rect x="130" y="260" width="14" height="14" class="cell"/>
+          <rect x="144" y="260" width="14" height="14" class="cell"/>
+          <rect x="158" y="260" width="14" height="14" class="cell"/>
+          <rect x="172" y="260" width="14" height="14" class="cell"/>
+          <rect x="186" y="260" width="14" height="14" class="cell"/>
+          <rect x="200" y="260" width="14" height="14" class="cell"/>
+          <rect x="214" y="260" width="14" height="14" class="cell"/>
+          <rect x="228" y="260" width="14" height="14" class="cell"/>
+          <rect x="242" y="260" width="14" height="14" class="cell"/>
+          <rect x="380" y="78" width="14" height="14" class="cell"/>
+          <rect x="394" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="408" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="422" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="436" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="450" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="464" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="478" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="492" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="506" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="78" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="92" width="14" height="14" class="cell"/>
+          <rect x="394" y="92" width="14" height="14" class="cell"/>
+          <rect x="408" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="422" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="436" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="450" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="464" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="478" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="492" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="506" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="92" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="106" width="14" height="14" class="cell"/>
+          <rect x="394" y="106" width="14" height="14" class="cell"/>
+          <rect x="408" y="106" width="14" height="14" class="cell"/>
+          <rect x="422" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="436" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="450" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="464" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="478" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="492" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="506" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="106" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="120" width="14" height="14" class="cell"/>
+          <rect x="394" y="120" width="14" height="14" class="cell"/>
+          <rect x="408" y="120" width="14" height="14" class="cell"/>
+          <rect x="422" y="120" width="14" height="14" class="cell"/>
+          <rect x="436" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="450" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="464" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="478" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="492" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="506" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="120" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="134" width="14" height="14" class="cell"/>
+          <rect x="394" y="134" width="14" height="14" class="cell"/>
+          <rect x="408" y="134" width="14" height="14" class="cell"/>
+          <rect x="422" y="134" width="14" height="14" class="cell"/>
+          <rect x="436" y="134" width="14" height="14" class="cell"/>
+          <rect x="450" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="464" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="478" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="492" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="506" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="134" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="148" width="14" height="14" class="cell"/>
+          <rect x="394" y="148" width="14" height="14" class="cell"/>
+          <rect x="408" y="148" width="14" height="14" class="cell"/>
+          <rect x="422" y="148" width="14" height="14" class="cell"/>
+          <rect x="436" y="148" width="14" height="14" class="cell"/>
+          <rect x="450" y="148" width="14" height="14" class="cell"/>
+          <rect x="464" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="478" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="492" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="506" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="148" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="394" y="162" width="14" height="14" class="cell"/>
+          <rect x="408" y="162" width="14" height="14" class="cell"/>
+          <rect x="422" y="162" width="14" height="14" class="cell"/>
+          <rect x="436" y="162" width="14" height="14" class="cell"/>
+          <rect x="450" y="162" width="14" height="14" class="cell"/>
+          <rect x="464" y="162" width="14" height="14" class="cell"/>
+          <rect x="478" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="492" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="506" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="162" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="394" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="408" y="176" width="14" height="14" class="cell"/>
+          <rect x="422" y="176" width="14" height="14" class="cell"/>
+          <rect x="436" y="176" width="14" height="14" class="cell"/>
+          <rect x="450" y="176" width="14" height="14" class="cell"/>
+          <rect x="464" y="176" width="14" height="14" class="cell"/>
+          <rect x="478" y="176" width="14" height="14" class="cell"/>
+          <rect x="492" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="506" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="176" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="394" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="408" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="422" y="190" width="14" height="14" class="cell"/>
+          <rect x="436" y="190" width="14" height="14" class="cell"/>
+          <rect x="450" y="190" width="14" height="14" class="cell"/>
+          <rect x="464" y="190" width="14" height="14" class="cell"/>
+          <rect x="478" y="190" width="14" height="14" class="cell"/>
+          <rect x="492" y="190" width="14" height="14" class="cell"/>
+          <rect x="506" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="520" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="190" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="394" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="408" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="422" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="436" y="204" width="14" height="14" class="cell"/>
+          <rect x="450" y="204" width="14" height="14" class="cell"/>
+          <rect x="464" y="204" width="14" height="14" class="cell"/>
+          <rect x="478" y="204" width="14" height="14" class="cell"/>
+          <rect x="492" y="204" width="14" height="14" class="cell"/>
+          <rect x="506" y="204" width="14" height="14" class="cell"/>
+          <rect x="520" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="534" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="204" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="394" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="408" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="422" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="436" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="450" y="218" width="14" height="14" class="cell"/>
+          <rect x="464" y="218" width="14" height="14" class="cell"/>
+          <rect x="478" y="218" width="14" height="14" class="cell"/>
+          <rect x="492" y="218" width="14" height="14" class="cell"/>
+          <rect x="506" y="218" width="14" height="14" class="cell"/>
+          <rect x="520" y="218" width="14" height="14" class="cell"/>
+          <rect x="534" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="548" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="218" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="394" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="408" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="422" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="436" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="450" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="464" y="232" width="14" height="14" class="cell"/>
+          <rect x="478" y="232" width="14" height="14" class="cell"/>
+          <rect x="492" y="232" width="14" height="14" class="cell"/>
+          <rect x="506" y="232" width="14" height="14" class="cell"/>
+          <rect x="520" y="232" width="14" height="14" class="cell"/>
+          <rect x="534" y="232" width="14" height="14" class="cell"/>
+          <rect x="548" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="562" y="232" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="394" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="408" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="422" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="436" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="450" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="464" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="478" y="246" width="14" height="14" class="cell"/>
+          <rect x="492" y="246" width="14" height="14" class="cell"/>
+          <rect x="506" y="246" width="14" height="14" class="cell"/>
+          <rect x="520" y="246" width="14" height="14" class="cell"/>
+          <rect x="534" y="246" width="14" height="14" class="cell"/>
+          <rect x="548" y="246" width="14" height="14" class="cell"/>
+          <rect x="562" y="246" width="14" height="14" class="cell-o"/>
+          <rect x="380" y="260" width="14" height="14" class="cell-o"/>
+          <rect x="394" y="260" width="14" height="14" class="cell-o"/>
+          <rect x="408" y="260" width="14" height="14" class="cell-o"/>
+          <rect x="422" y="260" width="14" height="14" class="cell-o"/>
+          <rect x="436" y="260" width="14" height="14" class="cell-o"/>
+          <rect x="450" y="260" width="14" height="14" class="cell-o"/>
+          <rect x="464" y="260" width="14" height="14" class="cell-o"/>
+          <rect x="478" y="260" width="14" height="14" class="cell-o"/>
+          <rect x="492" y="260" width="14" height="14" class="cell"/>
+          <rect x="506" y="260" width="14" height="14" class="cell"/>
+          <rect x="520" y="260" width="14" height="14" class="cell"/>
+          <rect x="534" y="260" width="14" height="14" class="cell"/>
+          <rect x="548" y="260" width="14" height="14" class="cell"/>
+          <rect x="562" y="260" width="14" height="14" class="cell"/>
+          <text x="60" y="290" class="sub">query t ↓ · key j →</text>
+          <text x="380" y="290" class="sub">69 of 105 causal pairs kept</text>
+        </svg>
+      </figure>
+    </div>
+    <figcaption>Position <span class="mono">t</span> attends to <span class="mono">[t−5, t]</span> and nothing
+    else — never the future, and never further back than five seconds. The stated rationale is that distant past
+    is noise once recent predictions are available; here the more likely reason it costs nothing is that
+    <b>TeCNO has already folded 17 minutes of history into every F_t</b>, so the transformer has little left to
+    reach for.</figcaption>
+  </div>
+</section>
+
+
+<section id="cci">
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 4c</span>
+      <span class="figtitle">Consistency-constraint inference — the only fixed-lag component</span>
+      <span class="figmeta">n = 10 · ARST Algorithm 1</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 880 320" role="img" aria-label="Consistency-constraint inference. At frame t the decoder proposes a switch from phase A to phase B. The decoder is then re-run at the next ten frames while the old phase A is still asserted as its input. If all ten agree with B the switch is accepted; if any one disagrees the frame reverts to A.">
+          <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker></defs>
+
+          <text x="40" y="32" class="tag">1 · DECODER ARGMAX PROPOSES A TRANSITION AT t</text>
+          <text x="65" y="62" text-anchor="middle" class="sub">t−2</text>
+          <text x="121" y="62" text-anchor="middle" class="sub">t−1</text>
+          <text x="177" y="62" text-anchor="middle" class="sub">t</text>
+          <text x="233" y="62" text-anchor="middle" class="sub">t+1</text>
+          <text x="289" y="62" text-anchor="middle" class="sub">t+2</text>
+          <text x="345" y="62" text-anchor="middle" class="sub">t+3</text>
+          <text x="401" y="62" text-anchor="middle" class="sub">t+4</text>
+          <text x="457" y="62" text-anchor="middle" class="sub">t+5</text>
+          <text x="513" y="62" text-anchor="middle" class="sub">t+6</text>
+          <text x="569" y="62" text-anchor="middle" class="sub">t+7</text>
+          <text x="625" y="62" text-anchor="middle" class="sub">t+8</text>
+          <text x="681" y="62" text-anchor="middle" class="sub">t+9</text>
+          <text x="737" y="62" text-anchor="middle" class="sub">t+10</text>
+          <rect x="40" y="70" width="50" height="34" rx="2" class="bx"/>
+          <text x="65" y="92" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="96" y="70" width="50" height="34" rx="2" class="bx"/>
+          <text x="121" y="92" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="152" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="177" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="149" y="67" width="56" height="40" rx="3" fill="none" stroke="var(--warn)" stroke-width="1.6"/>
+          <rect x="208" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="233" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="264" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="289" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="320" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="345" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="376" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="401" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="432" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="457" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="488" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="513" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="544" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="569" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="600" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="625" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="656" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="681" y="92" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="712" y="70" width="50" height="34" rx="2" class="cell"/>
+          <text x="737" y="92" text-anchor="middle" class="lbl-s">B</text>
+
+          <path d="M208,110 V132 H762" class="ln-d"/>
+          <path d="M233,138 V116" class="ln" marker-end="url(#a5)"/>
+          <path d="M345,138 V116" class="ln" marker-end="url(#a5)"/>
+          <path d="M513,138 V116" class="ln" marker-end="url(#a5)"/>
+          <path d="M737,138 V116" class="ln" marker-end="url(#a5)"/>
+          <text x="40" y="158" class="tag wrn">2 · PROBE — RE-RUN t+1 … t+10 WITH THE OLD PHASE A STILL ASSERTED</text>
+          <text x="40" y="176" class="sub-i">accept the switch only if all ten probes also say B</text>
+
+          <text x="762" y="192" text-anchor="end" class="tag">10/10 AGREE</text>
+          <rect x="40" y="196" width="50" height="34" rx="2" class="bx"/>
+          <text x="65" y="218" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="96" y="196" width="50" height="34" rx="2" class="bx"/>
+          <text x="121" y="218" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="152" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="177" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="149" y="193" width="56" height="40" rx="3" fill="none" stroke="var(--warn)" stroke-width="1.6"/>
+          <rect x="208" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="233" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="264" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="289" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="320" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="345" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="376" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="401" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="432" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="457" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="488" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="513" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="544" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="569" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="600" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="625" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="656" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="681" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <rect x="712" y="196" width="50" height="34" rx="2" class="cell"/>
+          <text x="737" y="218" text-anchor="middle" class="lbl-s">B</text>
+          <text x="762" y="254" text-anchor="end" class="tag wrn">ANY ONE DISAGREES</text>
+          <rect x="40" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="65" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="96" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="121" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="152" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="177" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="149" y="255" width="56" height="40" rx="3" fill="none" stroke="var(--warn)" stroke-width="1.6"/>
+          <rect x="208" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="233" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="264" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="289" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="320" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="345" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="376" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="401" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="432" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="457" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="488" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="513" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="544" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="569" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="600" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="625" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="656" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="681" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <rect x="712" y="258" width="50" height="34" rx="2" class="bx"/>
+          <text x="737" y="280" text-anchor="middle" class="lbl-s">A</text>
+          <text x="778" y="219" class="lbl-s acc">emit B</text>
+          <text x="778" y="281" class="lbl-s">emit A</text>
+        </svg>
+      </figure>
+    </div>
+    <figcaption><b>This is what makes the system fixed-lag rather than strictly causal:</b> frame t's final
+    label is decided after observing t+10. The challenge tolerated it — TSO-NCT smoothed over 7 frames — but it
+    is not the same claim as an online model, so <code>--no-cci</code> exists and the strictly causal variant is
+    reported separately. It is also why the app's confidence readout is <em>pre</em>-CCI: it reads low exactly
+    where the constraint overrode the frame, on 3.8% of seconds in video 25.</figcaption>
+  </div>
+</section>
+<hr class="div">
+
+
+<section id="task2">
+  <p class="eyebrow">Task 2 — instruments</p>
+  <h2>SANO's causal windowed LSTM</h2>
+  <p>A different problem shape, so a different model: instruments are <b>multi-label</b> — zero, one or two may
+  be visible — so nineteen independent sigmoids, not one argmax. That difference is why per-class thresholds
+  paid here (+0.099 macro) and the same idea failed on steps.</p>
+
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 5</span>
+      <span class="figtitle">SanoLSTM — 5-frame causal window, 2×512 unidirectional</span>
+      <span class="figmeta">4,744,226 params · (T,768) → (T,19)</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 960 360" role="img" aria-label="SANO instrument model: each second is turned into a left-padded window of the five frames ending at it, run through a two-layer unidirectional LSTM, and decoded from the window's final hidden state into nineteen sigmoid instrument outputs plus a discarded auxiliary step head.">
+          <defs><marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker></defs>
+
+          <text x="16" y="34" class="tag">BAND A · CAUSAL WINDOWING — UNFOLD, NOT A LOOP</text>
+          <rect x="40" y="70" width="46" height="30" rx="2" class="bx"/>
+          <text x="63" y="112" text-anchor="middle" class="sub">0</text>
+          <rect x="91" y="70" width="46" height="30" rx="2" class="bx"/>
+          <text x="114" y="112" text-anchor="middle" class="sub">1</text>
+          <rect x="142" y="70" width="46" height="30" rx="2" class="bx"/>
+          <text x="165" y="112" text-anchor="middle" class="sub">2</text>
+          <rect x="193" y="70" width="46" height="30" rx="2" class="cell"/>
+          <text x="216" y="112" text-anchor="middle" class="sub">3</text>
+          <rect x="244" y="70" width="46" height="30" rx="2" class="cell"/>
+          <text x="267" y="112" text-anchor="middle" class="sub">4</text>
+          <rect x="295" y="70" width="46" height="30" rx="2" class="cell"/>
+          <text x="318" y="112" text-anchor="middle" class="sub">5</text>
+          <rect x="346" y="70" width="46" height="30" rx="2" class="cell"/>
+          <text x="369" y="112" text-anchor="middle" class="sub">6</text>
+          <rect x="397" y="70" width="46" height="30" rx="2" class="cell"/>
+          <text x="420" y="112" text-anchor="middle" class="sub">7</text>
+          <rect x="448" y="70" width="46" height="30" rx="2" class="bx"/>
+          <text x="471" y="112" text-anchor="middle" class="sub">8</text>
+          <rect x="499" y="70" width="46" height="30" rx="2" class="bx"/>
+          <text x="522" y="112" text-anchor="middle" class="sub">9</text>
+          <path d="M193,64 H448 V64" class="ln-a"/>
+          <path d="M193,64 V70" class="ln-a"/>
+          <path d="M448,64 V70" class="ln-a"/>
+          <text x="320" y="54" text-anchor="middle" class="sub-i">window for t = 7 · frames 3…7</text>
+          <text x="40" y="134" class="sub">frame 0 is repeated to left-pad the first W−1 positions — nothing ever reads t+1</text>
+          <text x="560" y="80" class="lbl-s">(B, T, 768)</text>
+          <line x1="560" y1="88" x2="560" y2="96" class="ln"/>
+          <text x="560" y="110" class="lbl-s acc">→ (B, T, 5, 768)</text>
+          <text x="560" y="130" class="sub">torch.unfold — a view, not a copy</text>
+
+          <line x1="16" y1="160" x2="944" y2="160" class="rule"/>
+          <text x="16" y="188" class="tag">BAND B · TEMPORAL MODEL AND HEADS</text>
+
+          <rect x="16" y="216" width="120" height="52" rx="2" class="bx"/>
+          <text x="76" y="238" text-anchor="middle" class="lbl-s">windows</text>
+          <text x="76" y="254" text-anchor="middle" class="sub">(B·T, 5, 768)</text>
+
+          <line x1="136" y1="242" x2="170" y2="242" class="ln" marker-end="url(#a6)"/>
+
+          <rect x="176" y="206" width="164" height="72" rx="2" class="bx-t"/>
+          <text x="258" y="230" text-anchor="middle" class="lbl">LSTM</text>
+          <text x="258" y="247" text-anchor="middle" class="sub-i">2 layers × 512 hidden</text>
+          <text x="258" y="263" text-anchor="middle" class="sub">unidirectional · dropout 0.2</text>
+          <text x="258" y="296" text-anchor="middle" class="tag">4,726,784 — 99.6% OF THE MODEL</text>
+
+          <line x1="340" y1="242" x2="374" y2="242" class="ln" marker-end="url(#a6)"/>
+          <rect x="380" y="216" width="112" height="52" rx="2" class="bx"/>
+          <text x="436" y="238" text-anchor="middle" class="lbl-s">last step</text>
+          <text x="436" y="254" text-anchor="middle" class="sub">h ∈ (B·T, 512)</text>
+
+          <path d="M492,242 H520 V196 H548" class="ln" marker-end="url(#a6)"/>
+          <path d="M520,242 V292 H548" class="ln" marker-end="url(#a6)"/>
+
+          <rect x="554" y="170" width="130" height="52" rx="2" class="bx-t"/>
+          <text x="619" y="192" text-anchor="middle" class="lbl-s">Linear 512→19</text>
+          <text x="619" y="208" text-anchor="middle" class="sub">9,747 · BCE pos_weight</text>
+
+          <rect x="554" y="266" width="130" height="52" rx="2" class="bx-f"/>
+          <text x="619" y="288" text-anchor="middle" class="lbl-s">Linear 512→15</text>
+          <text x="619" y="304" text-anchor="middle" class="sub">7,695 · aux steps</text>
+          <text x="700" y="297" class="tag">DISCARDED</text>
+
+          <line x1="684" y1="196" x2="712" y2="196" class="ln" marker-end="url(#a6)"/>
+          <rect x="718" y="170" width="102" height="52" rx="2" class="bx-w"/>
+          <text x="769" y="192" text-anchor="middle" class="lbl-s">per-class τ</text>
+          <text x="769" y="208" text-anchor="middle" class="sub">cross-fitted in TRAIN</text>
+
+          <line x1="820" y1="196" x2="848" y2="196" class="ln" marker-end="url(#a6)"/>
+          <rect x="854" y="170" width="96" height="52" rx="2" class="bx-w"/>
+          <text x="902" y="192" text-anchor="middle" class="lbl-s">cap at 2</text>
+          <text x="902" y="208" text-anchor="middle" class="sub">structural max</text>
+        </svg>
+      </figure>
+    </div>
+    <figcaption>Every position is decoded from the final hidden state of <em>its own</em> window, so the T
+    positions are independent given their windows — <b>that is what makes it strictly causal with no masking
+    machinery at all</b>, and unlike the step model it has no lag. The cap at two is not a tuned hyperparameter:
+    the annotation schema is a pair of columns, so no frame can carry three instruments.</figcaption>
+  </div>
+</section>
+
+<section id="baseline">
+  <p class="eyebrow">The floor</p>
+  <h2>Frame-wise linear probe</h2>
+  <div class="plate">
+    <div class="plate-head">
+      <span class="fignum">Figure 6</span>
+      <span class="figtitle">Baseline — no temporal context of any kind</span>
+      <span class="figmeta">30,735 params</span>
+    </div>
+    <div class="canvas">
+      <figure>
+        <svg viewBox="0 0 720 140" role="img" aria-label="Baseline: standardized cached features go straight into a single linear layer and an argmax, with no temporal component.">
+          <defs><marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker></defs>
+          <rect x="16" y="42" width="120" height="50" rx="2" class="bx"/>
+          <text x="76" y="63" text-anchor="middle" class="lbl-s">cache</text>
+          <text x="76" y="79" text-anchor="middle" class="sub">(T, 2048)</text>
+          <line x1="136" y1="67" x2="170" y2="67" class="ln" marker-end="url(#a7)"/>
+          <rect x="176" y="42" width="120" height="50" rx="2" class="bx"/>
+          <text x="236" y="63" text-anchor="middle" class="lbl-s">standardize</text>
+          <text x="236" y="79" text-anchor="middle" class="sub">train μ, σ</text>
+          <line x1="296" y1="67" x2="330" y2="67" class="ln" marker-end="url(#a7)"/>
+          <rect x="336" y="42" width="140" height="50" rx="2" class="bx-t"/>
+          <text x="406" y="63" text-anchor="middle" class="lbl-s">Linear 2048→15</text>
+          <text x="406" y="79" text-anchor="middle" class="sub">cross-entropy</text>
+          <line x1="476" y1="67" x2="510" y2="67" class="ln" marker-end="url(#a7)"/>
+          <rect x="516" y="42" width="100" height="50" rx="2" class="bx-w"/>
+          <text x="566" y="70" text-anchor="middle" class="lbl-s">argmax</text>
+          <line x1="616" y1="67" x2="650" y2="67" class="ln-a" marker-end="url(#a7)"/>
+          <text x="660" y="72" class="sub-i">step</text>
+          <text x="16" y="122" class="tag">NO RECURRENCE · NO CONVOLUTION OVER TIME · NO PREVIOUS PREDICTION</text>
+        </svg>
+      </figure>
+    </div>
+    <figcaption>Worth keeping because of <em>how</em> it fails, not how badly. The probe over-segments by
+    <b>13× to 34×</b> — 2,679 predicted segments against 78 real ones on video 1. ARST inverts that failure
+    entirely and under-segments at 0.2–0.7×. Neither number is visible in accuracy; both are exactly what the
+    edit score measures.</figcaption>
+  </div>
+</section>
+<hr class="div">
+
+<section id="budget">
+  <p class="eyebrow">Accounting</p>
+  <h2>Where the parameters actually are</h2>
+  <p>Read across a row and the shape of the project shows up: <b>the encoder is 77% of the system and the only
+  part with a general-purpose prior</b>, while the two task heads together are less than a quarter and were the
+  only parts anyone iterated on for the first three rounds.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>block</th><th>module</th><th class="num">params</th><th class="num">share</th><th>in → out</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>encoder</td><td class="nm">DINOv2 ViT-B/14 @224</td><td class="num">85,724,928</td><td class="num">74.3%</td><td class="nm">(3,224,224) → (768,)</td></tr>
+        <tr><td>· patch embed</td><td class="nm">Conv2d 14×14 s14</td><td class="num">452,352</td><td class="num">0.4%</td><td class="nm">→ 256 tokens</td></tr>
+        <tr><td>· 12 blocks</td><td class="nm">pre-norm, 12 heads × 64</td><td class="num">85,072,896</td><td class="num">73.8%</td><td class="nm">7,089,408 each</td></tr>
+        <tr><td>task 1 · stage 1</td><td class="nm">SpatialEmbedding</td><td class="num">401,423</td><td class="num">0.3%</td><td class="nm">(T,768) → (T,512)</td></tr>
+        <tr><td>task 1 · stage 2</td><td class="nm">TeCNO</td><td class="num">17,079,838</td><td class="num">14.8%</td><td class="nm">(T,512) → (T,512)</td></tr>
+        <tr><td>task 1 · stage 3</td><td class="nm">ARST</td><td class="num">7,364,111</td><td class="num">6.4%</td><td class="nm">(T,512) → (T,15)</td></tr>
+        <tr><td>task 2</td><td class="nm">SanoLSTM</td><td class="num">4,744,226</td><td class="num">4.1%</td><td class="nm">(T,768) → (T,19)</td></tr>
+        <tr class="total"><td>system</td><td class="nm">both tasks, one encoder</td><td class="num">115,314,526</td><td class="num">100%</td><td class="nm">mp4 → per-second labels</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>The same heads on the older 2048-d cache</h3>
+  <p>Only the first projection changes width, which is why a checkpoint carries its feature space as a tag —
+  and why two 2048-d spaces (<code>resnet50</code>, <code>resnet50_ft</code>) can be swapped without the load
+  failing.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>model</th><th class="num">on 2048-d</th><th class="num">on 768-d</th><th>what differs</th></tr></thead>
+      <tbody>
+        <tr><td class="nm">step cascade</td><td class="num">25,500,732</td><td class="num">24,845,372</td><td>Linear 2048→512 vs 768→512</td></tr>
+        <tr><td class="nm">SanoLSTM</td><td class="num">7,365,666</td><td class="num">4,744,226</td><td>LSTM input gate width</td></tr>
+        <tr><td class="nm">linear probe</td><td class="num">30,735</td><td class="num">11,535</td><td>the whole model</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="scores">
+  <h2>What each configuration scored</h2>
+  <p>Five validation videos (01, 12, 21, 24, 25), scored per video then mean-averaged — never pooled. The
+  encoder row is the one that moved both ends at once.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>task 1 configuration</th><th>encoder</th><th class="num">macro F1</th><th class="num">edit</th><th class="num">metric</th></tr></thead>
+      <tbody>
+        <tr><td>ARST reproduction</td><td class="nm">resnet50 frozen</td><td class="num">0.3083</td><td class="num">0.3767</td><td class="num">0.3425</td></tr>
+        <tr><td>+ masked argmax, class weights</td><td class="nm">dinov2 frozen</td><td class="num">0.4420</td><td class="num">0.4801</td><td class="num">0.4610</td></tr>
+        <tr><td>same, fine-tuned encoder <em>(run 1)</em></td><td class="nm">dinov2_ft 50 ep</td><td class="num">0.3631</td><td class="num">0.3369</td><td class="num">0.3500</td></tr>
+        <tr class="total"><td>same, fixed recipe <em>(run 2)</em></td><td class="nm">dinov2_ft 2 ep</td><td class="num">0.6147</td><td class="num">0.5068</td><td class="num">0.5608</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note"><b>Run 1 and run 2 are the same architecture.</b> Every box in Figure 2, Figure 3 and
+  Figure 4 is identical between them. The only difference is the optimisation recipe in Figure 3's lower band —
+  uniform 1e-4 for 50 epochs against layer-wise decay with warmup and early stopping, which stopped at epoch 2.
+  That difference is worth more than masking, class weights and the backbone swap combined.</div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>task 2 configuration</th><th>encoder</th><th class="num">macro F1</th><th class="num">aligned wtd</th><th class="num">official</th></tr></thead>
+      <tbody>
+        <tr><td>SANO reproduction</td><td class="nm">resnet50 frozen</td><td class="num">—</td><td class="num">—</td><td class="num">0.2321</td></tr>
+        <tr><td>+ pos_weight, per-class τ</td><td class="nm">dinov2 frozen</td><td class="num">0.3792</td><td class="num">0.7383</td><td class="num">0.5572</td></tr>
+        <tr class="total"><td>same, fine-tuned encoder</td><td class="nm">dinov2_ft 2 ep</td><td class="num">0.5333</td><td class="num">0.8416</td><td class="num">0.3220</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">The instrument metric's <b>official</b> column reads the fine-tuned encoder as the worst
+  model tried and both defect-free columns read it as the best by a wide margin. That is the vendored scorer's
+  column-ordering bug, not a trade-off: it fits separate binarizers to truths and predictions, so diverging
+  class sets are compared positionally. It is kept as the headline because the headline is the challenge's by
+  construction — and printed beside two aligned numbers that are not.</div>
+</section>
+
+<section id="reproduce">
+  <h2>Reproducing every number above</h2>
+  <p>The trace that produced the parameter counts and tensor shapes in this atlas is the repo's own smoke test.
+  It runs in about a second and needs no feature cache — it falls back to synthetic tensors of the right width.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>command</th><th>what it prints</th></tr></thead>
+      <tbody>
+        <tr><td class="nm">uv run pitvis-models</td><td>shapes and params through all three step stages</td></tr>
+        <tr><td class="nm">uv run pitvis-models --space dinov2_ft</td><td>the same trace at 768-d</td></tr>
+        <tr><td class="nm">uv run pitvis-train --list</td><td>what can be trained</td></tr>
+        <tr><td class="nm">uv run pitvis-predict --list-models</td><td>what has been trained on this machine</td></tr>
+        <tr><td class="nm">uv run pytest</td><td>136 tests, including the metric pinned to the vendored scorer</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:22px;color:var(--muted);font-size:14px">Figures drawn 2026-08-18 from
+  <code>claude/pitvis-phase-recognition-review-bkwgmc</code>. Encoders instantiated with random weights — the
+  architecture and parameter counts are identical to the pretrained build, only the values differ.</p>
+</section>
+</div>

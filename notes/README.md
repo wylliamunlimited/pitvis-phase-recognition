@@ -29,6 +29,7 @@ Consulted, not read. Each owns one lookup surface.
 | [data-dictionary.md](reference/data-dictionary.md) | every annotation column and what each integer means |
 | [metrics.md](reference/metrics.md) | what each metric measures and why the challenge picked it |
 | [citi-dataflow.md](reference/citi-dataflow.md) | the task-1 cascade as a shape trace, every hop |
+| [architecture-atlas.html](reference/architecture-atlas.html) | **every** network drawn to one grammar — both encoders, both task heads, the probe — with parameter counts. Open it in a browser. |
 | [inventory.md](reference/inventory.md) | **generated** by `pitvis-inventory` — do not hand-edit |
 
 ## [models/](models/) — what was built, and what beat it

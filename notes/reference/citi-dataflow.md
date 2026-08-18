@@ -8,6 +8,11 @@ each hop.
 All numbers here were read off the real artifacts, not copied from the code.
 Video 01 is the running example (it is the first validation video).
 
+For the same cascade *drawn* — alongside the two encoders, the task-2 model and
+the linear probe, with parameter counts — see
+[`architecture-atlas.html`](architecture-atlas.html). This file owns the per-hop
+numbers; the atlas owns the module shapes and the parameter budget.
+
 ---
 
 ## 0. The cascade at a glance
