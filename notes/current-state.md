@@ -174,6 +174,42 @@ file, so a browser cannot begin playback without a tail range request.
 `parse_range` is pinned by `tests/test_app_range.py` against video_25's real
 byte offsets.
 
+### What it looks like
+
+Both shots are **video_25 at 46:40**, the model mid *tumour excision*, from the
+current best checkpoints. The endoscopic image is blurred in every committed
+screenshot — the dataset is CC BY-NC-ND 4.0 and a UI composited around a
+surgical frame is arguably a derivative work. The interface text is untouched,
+which is what these are here to show.
+
+![the default view](../docs/app-default.png)
+
+**The default view answers "what is happening now".** The step is burned into
+the frame corners PACS-fashion — `[07] TUMOUR EXCISION` bottom-left, the
+instruments bottom-right — so the answer survives being photographed off a
+screen. The worklist on the left is the whole procedure at once: elapsed time
+per step, revisit counts (`×5`), and greyed rows for steps that have not
+happened. Nothing scrolls.
+
+![the detail view](../docs/app-detail.png)
+
+**`[ + DETAIL ]` reveals the analyst layer** — instrument usage totals, ground
+truth with a MATCH/MISS verdict, the four scores, and six timeline lanes
+(step, confidence, truth, errors, tools).
+
+Two things in that second image are worth pointing at in a demo, because they
+are the app arguing against its own authority:
+
+- **`this video alone — NOT the 5-video mean±std`**, sitting directly under the
+  scores rather than in a footer. A caveat belongs with the number it
+  qualifies.
+- **The POST-PROCESSING panel explaining itself**: *"CCI HOLD — the decoder
+  preferred SPHENOID SINUS CLEARANCE at 0.99, but the consistency constraint is
+  holding the previous step pending 10 s of agreement. The confidence shown is
+  the probability of the step actually displayed, which is why it reads low
+  here."* That is the pre-CCI confidence rule made visible at the moment it
+  bites, rather than documented somewhere the viewer will not look.
+
 ### What the surface actually does
 
 | | |
@@ -216,8 +252,10 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
 5. **`pitvis-eval` has no `--space`**, so it always loads ResNet-50 features and
    cannot score four of the five step checkpoints. Nothing above is affected —
    every number came through `pitvis-train`, which does take `--space`.
-6. **The README's two hero images do not exist** (`docs/app-default.png`,
-   `docs/app-detail.png`), so the repo's front page shows two broken images.
+6. **Panels overlap the burn-in at the default layout.** Visible in both
+   screenshots: the PROCEDURE STEPS panel covers the video's top-left `CASE 25`
+   label, and in the detail view INSTRUMENT USE clips the timecode. Panels are
+   draggable, so it is a default-position issue rather than a layout failure.
 
 Items 1 and 2 are the ones that affect a demo. The rest affect the repo.
 

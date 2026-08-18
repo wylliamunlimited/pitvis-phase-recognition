@@ -8,8 +8,11 @@ pituitary surgery, reproducing two winning models from the
 ![pitvis-app — the default view](docs/app-default.png)
 
 > `uv run pitvis-app` — a case plays while the model names the step it believes
-> the operation is in and the instruments it sees. The surgical frame is blurred
-> in these images; the dataset is CC BY-NC-ND. See [Licence](#licence).
+> the operation is in and the instruments it sees. Shown: **video_25 at 46:40**,
+> mid *tumour excision*. That is a **validation** case — no stage of the
+> pipeline, encoder included, was ever trained on it, so this is the model
+> generalising rather than recalling. The endoscopic image is blurred in these
+> images; the dataset is CC BY-NC-ND. See [Licence](#licence).
 
 <details>
 <summary><b>With <code>[ + DETAIL ]</code> — the analyst layer</b></summary>

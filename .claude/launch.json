@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pitvis-app",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "pitvis-app",
+        "--case",
+        "video_25",
+        "--no-open",
+        "--port",
+        "8420"
+      ],
+      "port": 8420
+    }
+  ]
+}
