@@ -108,6 +108,7 @@ inferred from the code's intent.
 | decision thresholds fitted on VAL | **clean** | `crossfit_thresholds(train, ...)`, 2-fold within TRAIN |
 | illegal normalised-time feature | **clean** | no `t/(T-1)` anywhere in `src/` — it needs the total duration, i.e. the end of the video |
 | model is strictly online | **fixed-lag, disclosed** | CCI emits frame *t* after observing *t+10*. The challenge permitted this (TSO-NCT smooths over 7). `--no-cci` gives the strictly causal variant, which scores lower |
+| checkpoint tags survive a save/load | **clean** | `checkpoints.read_tags` is the one decoder, and falls back to `args["mask_excluded"]` for reproductions written before the tag existed; pinned by `tests/test_checkpoints.py` |
 | argmax masking | **legal, and an exploit** | the official metric filters by ground truth only, so predicting an excluded class can only hurt. Masking 0/11/13 was the largest single lever in iteration 2. It is a scoring-rule exploit, not a modelling gain — say so |
 
 **The one real limitation, and it is not leakage.** The fine-tuned encoder was
@@ -237,11 +238,15 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
 
 ## 5. Known gaps — what a demo must not claim
 
-1. **The app's default models are not the best models.** `jobs.py` builds its
-   argv with no `--steps-model` / `--instruments-model`, so on-demand inference
-   uses `arst-v2:best` (0.4610) while `predictions/video_25/` holds
-   `arst-v2:best@dinov2_ft` (0.5608). Two different models under one label.
-   Demo the pre-computed case; do not generate a new one mid-demo.
+1. ~~**The app's default models are not the best models.**~~ **Fixed.**
+   `jobs.py` still builds its argv with no `--steps-model`, but the default no
+   longer resolves by name. `checkpoints.default()` now ranks by each
+   checkpoint's own recorded `macro_f1` (`result.json` beside the weights), so
+   `best@dinov2_ft` (0.6147) wins over `best` (0.4420) instead of losing to it
+   on alphabetical order. Macro rather than the official `metric` deliberately:
+   task 2's official number carries the column-ordering defect and would rank
+   the fine-tuned encoder last. `--list-models` prints the score that decided
+   it. Falls back to the old `:best` convention when nothing has been scored.
 2. **Staleness tracking ignores task-1 variants.** `_checkpoint_mtime()` globs
    `data/instruments/v2/*/model.pt` but not `data/arst/v2/*/model.pt`, so
    training a new step model leaves every prediction looking current.
@@ -249,15 +254,23 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
 4. **Four instrument classes are emitted but unusable** (roadmap 6.5): bipolar
    forceps is predicted 320 times against 49 true instances. "0 classes never
    predicted" flatters.
-5. **`pitvis-eval` has no `--space`**, so it always loads ResNet-50 features and
-   cannot score four of the five step checkpoints. Nothing above is affected —
-   every number came through `pitvis-train`, which does take `--space`.
+5. ~~**`pitvis-eval` has no `--space`.**~~ **Fixed, and it was worse than
+   "limited".** It loaded ResNet-50 features unconditionally *and* took its
+   standardisation stats from `data/arst/` regardless of which checkpoint was
+   named. Cross-width pairs failed loudly on `load_state_dict`, but
+   `resnet50`/`resnet50_ft` are both 2048-d and `dinov2_vitb14`/`dinov2_ft`
+   both 768-d — so scoring a fine-tuned checkpoint against frozen features
+   loaded cleanly and reported a wrong number silently. It now takes the space
+   from the checkpoint's tag, the stats from beside the weights, and honours
+   the `mask_excluded` and `logit_adjust` tags; `--space` still overrides and
+   warns when it disagrees with the tag. Nothing above is affected — every
+   number came through `pitvis-train`, which does take `--space`.
 6. **Panels overlap the burn-in at the default layout.** Visible in both
    screenshots: the PROCEDURE STEPS panel covers the video's top-left `CASE 25`
    label, and in the detail view INSTRUMENT USE clips the timecode. Panels are
    draggable, so it is a default-position issue rather than a layout failure.
 
-Items 1 and 2 are the ones that affect a demo. The rest affect the repo.
+Item 2 is the one that still affects a demo. The rest affect the repo.
 
 ---
 

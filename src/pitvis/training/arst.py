@@ -28,6 +28,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from pitvis.data import spaces
 from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL, load_split
 from pitvis.evaluation.metric import report
 from pitvis.models.arst import ARST, BAND_WIDTH, CCI_N, SpatialEmbedding, TeCNO
@@ -327,8 +328,17 @@ def main(argv: list[str] | None = None) -> None:
     arst = train_arst(f_train, args, dev)
     print(f"training done in {time.time() - t0:.0f}s")
 
+    # Tags at the TOP LEVEL, not only inside `args`. `checkpoints.read_tags`
+    # falls back to `args["mask_excluded"]` for checkpoints written before this,
+    # but a flag that inference must honour should not be buried in a record of
+    # the command line — `--mask-excluded` is worth ~0.076 on the official
+    # metric, and a checkpoint that forgets it reports its own name while
+    # discarding its advantage.
     torch.save({"spatial": spatial.state_dict(), "tecno": tecno.state_dict(),
-                "arst": arst.state_dict(), "args": vars(args)}, CKPT / "citi.pt")
+                "arst": arst.state_dict(), "args": vars(args),
+                "space": spaces.DEFAULT, "variant": "reproduction",
+                "mask_excluded": args.mask_excluded,
+                "prior_tau": 0.0, "logit_adjust": None}, CKPT / "citi.pt")
 
     preds = []
     for (vid, f, y) in f_val:

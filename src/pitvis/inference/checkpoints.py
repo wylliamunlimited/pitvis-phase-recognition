@@ -49,24 +49,33 @@ class Checkpoint:
     def exists(self) -> bool:
         return self.path.exists() and self.stats.exists()
 
-    def meta(self) -> dict:
-        """Tags recorded at training time.
+    @property
+    def result(self) -> Path:
+        """Where this checkpoint's own scoring lands. Beside the weights."""
+        return self.path.parent / "result.json"
 
-        Every key has a default that reproduces the original models, which
-        predate all of them: `space` defaults to resnet50, `mask_excluded` to
-        False, `thresholds` to None (meaning the caller's global bar).
+    def score(self) -> float | None:
+        """This checkpoint's recorded PRIMARY_METRIC, or None if never scored.
+
+        Read rather than recomputed: every trainer writes `result.json` beside
+        the weights it just saved, so the number and the weights cannot drift.
         """
+        import json
+        if not self.result.exists():
+            return None
+        try:
+            mean = json.loads(self.result.read_text()).get("mean") or {}
+            return float(mean[PRIMARY_METRIC])
+        except (ValueError, KeyError, TypeError):
+            return None
+
+    def meta(self) -> dict:
+        """Tags recorded at training time. See `read_tags` for the rules."""
         import torch
         if not self.path.exists():
             return {}
-        ck = torch.load(self.path, map_location="cpu", weights_only=False)
-        return {
-            "space": ck.get("space", spaces.DEFAULT),
-            "variant": ck.get("variant", "reproduction"),
-            "arch": ck.get("arch", "sano-lstm" if self.task == INSTRUMENTS else "arst"),
-            "mask_excluded": ck.get("mask_excluded", False),
-            "thresholds": ck.get("thresholds"),
-        }
+        return read_tags(
+            torch.load(self.path, map_location="cpu", weights_only=False), self.task)
 
 
 # name -> (task, root, reproduction filename). v2 families hang variants off
@@ -79,6 +88,47 @@ FAMILIES: dict[str, tuple[str, Path, str | None]] = {
 }
 
 DEFAULT_VARIANT = "best"
+
+# What ranks two trained checkpoints against each other. Macro F1, not the
+# official `metric`, and deliberately: task 2's official number carries the
+# vendored column-ordering defect, which reads the fine-tuned encoder as the
+# WORST model tried (0.3220) where macro reads it as the best (0.5333). Macro
+# is also the pre-registered primary in `crossval.Task` for both tasks, so this
+# agrees with how variants were selected in the first place.
+PRIMARY_METRIC = "macro_f1"
+
+
+def read_tags(ckpt: dict, task: str = STEPS) -> dict:
+    """Decode a loaded checkpoint dict into the tags inference must honour.
+
+    THE ONE PLACE THIS IS DECIDED. It used to be decided in three — here,
+    in `predict.load_checkpoint`, and implicitly in `evaluation/run.py` — and
+    they disagreed, which is how `pitvis-train arst --mask-excluded` came to
+    write a checkpoint that read back as unmasked.
+
+    Every key defaults to what the original reproductions, which predate all
+    of them, were trained with. Two rules are worth stating:
+
+    - `mask_excluded` falls back to `args["mask_excluded"]` before it falls
+      back to False. The reproduction trainer records the flag only inside
+      `args`, so reading the top level alone silently un-masks a model that
+      was trained masked — and masking is worth ~0.076 on the official metric.
+    - `logit_adjust` is the ARRAY, not the tau it came from. `tau * log(prior)`
+      is computed from the training labels of the split the model was fitted
+      on, so it cannot be reconstructed at inference from tau alone. `prior_tau`
+      rides along for provenance only.
+    """
+    args = ckpt.get("args") or {}
+    return {
+        "space": ckpt.get("space", spaces.DEFAULT),
+        "variant": ckpt.get("variant", "reproduction"),
+        "arch": ckpt.get("arch", "sano-lstm" if task == INSTRUMENTS else "arst"),
+        "mask_excluded": bool(ckpt.get("mask_excluded",
+                                       args.get("mask_excluded", False))),
+        "thresholds": ckpt.get("thresholds"),
+        "prior_tau": float(ckpt.get("prior_tau") or 0.0),
+        "logit_adjust": ckpt.get("logit_adjust"),
+    }
 
 
 def resolve(spec: str) -> Checkpoint:
@@ -121,15 +171,33 @@ def available(task: str | None = None) -> list[Checkpoint]:
 
 
 def default(task: str) -> Checkpoint | None:
-    """The best trained checkpoint for a task, preferring a v2 winner.
+    """The best trained checkpoint for a task, by its own recorded score.
 
-    A machine that only ran the reproductions still gets those; one that ran
-    the iteration gets the model the leaderboard selected, without having to
-    know either path.
+    WHY THIS IS NOT A NAME RULE. It was one — "the first checkpoint whose name
+    ends `:best`" — and `available()` returns names sorted, so `best` sorted
+    ahead of `best@dinov2_ft` and the default resolved to the model the
+    fine-tuned encoder beat by 0.0998 on steps. Both are legitimately called
+    "best"; one is best on frozen DINOv2 and the other best overall. A name
+    cannot express that, and the scores can.
+
+    So: rank by PRIMARY_METRIC read from each checkpoint's own `result.json`,
+    and fall back to the old name convention only when nothing on this machine
+    has been scored. Ties and unscored checkpoints keep `available()`'s sorted
+    order, so the answer is deterministic either way.
+
+    This picks among artifacts that already exist; it is NOT the variant
+    selection protocol. That is 5-fold cross-validation inside TRAIN
+    (`training/crossval.py`), and it stays that way — VAL is scored once, for
+    the winner. Choosing which already-trained file to load by default is a
+    convenience, and it is reported by `--list-models` rather than hidden.
     """
     have = available(task)
     if not have:
         return None
+    scored = [(c.score(), c) for c in have]
+    scored = [(s, c) for s, c in scored if s is not None]
+    if scored:
+        return max(scored, key=lambda sc: sc[0])[1]
     for c in have:
         if c.name.endswith(f":{DEFAULT_VARIANT}"):
             return c
@@ -150,6 +218,8 @@ def describe() -> str:
         for c in available(task):
             m = c.meta()
             mark = " (default)" if picked and c.name == picked.name else ""
+            sc = c.score()
+            score = f"  {PRIMARY_METRIC}={sc:.4f}" if sc is not None else "  (unscored)"
             lines.append(f"  {c.name:<{w}}  {c.task:<11} space={m.get('space','?')}"
-                         f"  variant={m.get('variant','?')}{mark}")
+                         f"  variant={m.get('variant','?')}{score}{mark}")
     return "trained checkpoints:\n" + "\n".join(lines)

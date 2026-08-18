@@ -100,13 +100,11 @@ def load_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int,
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     trained = ckpt["args"]
     w = width if width is not None else trained["width"]
-    # Tags recorded at training time, each defaulting to what citi.pt -- which
-    # predates all of them -- was trained with. `mask_excluded` matters: the
-    # step winner masks 0/11/13 out of the argmax, and ignoring that here would
-    # quietly discard most of its advantage.
-    meta = {"space": ckpt.get("space", spaces.DEFAULT),
-            "variant": ckpt.get("variant", "reproduction"),
-            "mask_excluded": bool(ckpt.get("mask_excluded", False))}
+    # Tags recorded at training time. Decoded by `checkpoints.read_tags`, which
+    # is the ONE place the fallbacks live — this used to keep its own copy of
+    # them and drifted from the writer.
+    from pitvis.inference.checkpoints import STEPS, read_tags
+    meta = read_tags(ckpt, STEPS)
 
     spatial = SpatialEmbedding(feature_dim, num_classes=NUM_CLASSES).to(device)
     tecno = TeCNO(num_classes=NUM_CLASSES).to(device)
@@ -123,17 +121,23 @@ def load_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int,
 @torch.no_grad()
 def predict(features: np.ndarray, spatial, tecno, arst, mean, std,
             device: torch.device, chunk: int, cci: bool,
-            mask_excluded: bool, *, return_probs: bool = False):
+            mask_excluded: bool, *, logit_adjust=None,
+            return_probs: bool = False):
     """Run the cascade. Returns (T,) encoded predictions (0 = background).
 
     With `return_probs`, also returns the decoder's (T, 15) softmax — see
     `cci_decode` for why that distribution is pre-CCI and what that means.
+
+    `logit_adjust` is the checkpoint's own `tau * log(prior)` array when it was
+    trained with one. Keyword-only and defaulted, so a checkpoint without the
+    tag decodes byte-for-byte as it did before this existed.
     """
     from pitvis.training.arst import cci_decode
     x = torch.from_numpy((features - mean) / std).to(device)
     z, _ = spatial(x)
     _, ft = tecno(z.unsqueeze(0))
-    opts = SimpleNamespace(chunk=chunk, cci=cci, mask_excluded=mask_excluded)
+    opts = SimpleNamespace(chunk=chunk, cci=cci, mask_excluded=mask_excluded,
+                           logit_adjust=logit_adjust)
     return cci_decode(arst, ft, opts, device, return_probs=return_probs)
 
 
@@ -160,8 +164,9 @@ def step_space(ckpt_path: Path) -> str:
     """
     if not ckpt_path.exists():
         return spaces.DEFAULT
+    from pitvis.inference.checkpoints import STEPS, read_tags
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    return ckpt.get("space", spaces.DEFAULT)
+    return read_tags(ckpt, STEPS)["space"]
 
 
 def instrument_space(ckpt_path: Path) -> str:
@@ -174,8 +179,9 @@ def instrument_space(ckpt_path: Path) -> str:
     """
     if not ckpt_path.exists():
         return spaces.DEFAULT
+    from pitvis.inference.checkpoints import INSTRUMENTS, read_tags
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    return ckpt.get("space", spaces.DEFAULT)
+    return read_tags(ckpt, INSTRUMENTS)["space"]
 
 
 def load_instrument_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int,

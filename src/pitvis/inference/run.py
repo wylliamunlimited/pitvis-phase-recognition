@@ -197,11 +197,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"        W={width}, CCI={'on' if args.cci else 'off'}, "
               f"mask-excluded={'on' if mask else 'off'}"
               + ("  (from the checkpoint)" if smeta["mask_excluded"]
-                 and not args.mask_excluded else ""))
+                 and not args.mask_excluded else "")
+              + (f", logit-adjust tau={smeta['prior_tau']:g}"
+                 if smeta["logit_adjust"] is not None else ""))
 
         t1 = time.time()
         out = P.predict(features, spatial, tecno, arst, mean, std, dev,
                         args.chunk, args.cci, mask,
+                        logit_adjust=smeta["logit_adjust"],
                         return_probs=args.probs)
         preds, sprobs = out if args.probs else (out, None)
         print(f"        {len(preds)} seconds in {time.time() - t1:.0f}s")

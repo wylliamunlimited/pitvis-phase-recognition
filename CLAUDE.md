@@ -367,13 +367,33 @@ is an artifact that may not exist yet: `pitvis-train --list` answers *what can
 I train*, `--list-models` answers *what have I trained*, and on any given
 machine those differ.
 
-Checkpoints carry their own tags — `space`, `variant`, and `mask_excluded`
-(steps) or `arch`/`thresholds` (instruments) — each defaulting to what the
-original reproductions, which predate all of them, were trained with.
-**Inference must honour those tags**: the step winner masks 0/11/13 out of the
-argmax, and ignoring the tag would discard most of its advantage while still
-reporting its name. Standardisation stats are never resolved separately from
-the weights.
+Checkpoints carry their own tags — `space`, `variant`, `mask_excluded` and
+`logit_adjust` (steps) or `arch`/`thresholds` (instruments) — each defaulting
+to what the original reproductions, which predate all of them, were trained
+with. **Inference must honour those tags**: the step winner masks 0/11/13 out
+of the argmax, and ignoring the tag would discard most of its advantage while
+still reporting its name. Standardisation stats are never resolved separately
+from the weights — `pitvis-eval` takes them from beside the checkpoint, not
+from a constant path.
+
+- **`checkpoints.read_tags` is the ONLY place a checkpoint dict is decoded.**
+  It was decoded in three places that disagreed, which is how
+  `pitvis-train arst --mask-excluded` came to write a file that read back as
+  unmasked — the flag was recorded only inside `args`. `read_tags` falls back
+  to `args` before it falls back to the default, so old checkpoints decode
+  correctly, and every writer now records the tag at the top level.
+- **`logit_adjust` is stored as the ARRAY, never as the tau.**
+  `tau * log(prior)` is computed from the training labels of the split the
+  model was fitted on, so tau alone does not reconstruct it. `prior_tau` rides
+  along for provenance only.
+- **The default checkpoint is chosen by recorded score, not by name.**
+  `checkpoints.default()` ranks on `macro_f1` from each `result.json`. It was a
+  name rule (`endswith(":best")`) and `available()` sorts, so `best` beat
+  `best@dinov2_ft` and the default was the model the fine-tuned encoder
+  outscored by 0.0998. Macro rather than the official `metric` because task 2's
+  official number carries the column-ordering defect and would rank backwards.
+  This picks among artifacts that already exist; it is **not** the variant
+  selection protocol, which is still CV inside TRAIN with VAL scored once.
 
 ## Layout
 

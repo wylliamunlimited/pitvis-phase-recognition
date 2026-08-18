@@ -243,6 +243,10 @@ def make_fit(variant: Variant):
 
         predict.parts = (spatial, tecno, arst)
         predict.stats = (mean, std)
+        # Carried out so the caller can PERSIST it. `tau * log(prior)` is
+        # computed from the training labels of this fit, so tau alone does not
+        # reconstruct it at inference — the array is the tag, not the tau.
+        predict.logit_adjust = opts.logit_adjust
         return predict
     return fit
 
@@ -310,10 +314,14 @@ def main(argv: list[str] | None = None) -> None:
     mean, std = fit.stats
     spatial, tecno, arst = fit.parts
     np.savez(out / "standardize.npz", mean=mean, std=std)
+    adjust = fit.logit_adjust
     torch.save({"spatial": spatial.state_dict(), "tecno": tecno.state_dict(),
                 "arst": arst.state_dict(), "args": vars(args),
                 "space": args.space, "variant": variant.name,
-                "mask_excluded": variant.mask}, out / "model.pt")
+                "mask_excluded": variant.mask,
+                "prior_tau": variant.prior_tau,
+                "logit_adjust": None if adjust is None else adjust.tolist()},
+               out / "model.pt")
 
     preds = [(vid, l, fit(f)) for vid, f, l in load_split(VAL, args.space)]
     m = report(preds, title=f"val ({variant.name}, space={args.space})",
