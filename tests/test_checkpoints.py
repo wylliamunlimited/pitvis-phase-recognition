@@ -6,8 +6,11 @@ different answer on any given machine. Without it `pitvis-predict` could only
 be pointed at raw paths, so using a model meant knowing the on-disk layout by
 heart — and layouts drift.
 
-These tests are path arithmetic and grammar only: no torch, no checkpoint
-files, nothing that depends on what happens to be trained here.
+Most of these are path arithmetic and grammar: no checkpoint files, nothing
+that depends on what happens to be trained here. The last group pins the CLI
+contracts that decide WHICH checkpoint gets used, so it reaches into the
+`pitvis-predict` and `pitvis-eval` parsers — that pulls in torch, but still
+touches no weights.
 """
 
 import pytest
@@ -230,3 +233,27 @@ def _eval_parser(eval_run):
     finally:
         argparse.ArgumentParser.parse_args = real_parse
     return holder["ap"]
+
+
+def test_list_models_answers_without_being_given_a_video(capsys):
+    """`--list-models` asks what is trained on this machine — a question with
+    no video in it. argparse enforces `required` before main() runs, so a
+    `required=True` on --video made the query flag exit 2 demanding a file it
+    would never open."""
+    from pitvis.inference import run as predict_run
+    assert predict_run.main(["--list-models"]) == 0
+    assert capsys.readouterr().out.strip()
+
+
+def test_video_is_still_required_for_an_actual_prediction(capsys):
+    """Relaxing the parser must not make the missing-video case quieter: same
+    message, same exit code 2, as argparse produced before."""
+    with pytest.raises(SystemExit) as e:
+        predict_main_without_video()
+    assert e.value.code == 2
+    assert "required: --video" in capsys.readouterr().err
+
+
+def predict_main_without_video():
+    from pitvis.inference import run as predict_run
+    return predict_run.main(["--no-instruments"])

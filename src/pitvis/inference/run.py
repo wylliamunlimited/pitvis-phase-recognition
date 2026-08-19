@@ -55,7 +55,12 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("--video", required=True, type=Path, help="path to a video file")
+    # NOT `required=True`. --list-models is a question about this machine, not
+    # about a video, and argparse enforces `required` before main() runs — so
+    # `pitvis-predict --list-models` exited 2 demanding a video it would never
+    # have opened. Enforced below instead, after the query flags short-circuit.
+    ap.add_argument("--video", type=Path,
+                    help="path to a video file (required unless --list-models)")
     ap.add_argument("--out", type=Path,
                     help="output directory (default: predictions/<video stem>/)")
     ap.add_argument("--labels", type=Path,
@@ -104,6 +109,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.list_models:
         print(C.describe())
         return 0
+
+    # Same message and same exit code argparse would have produced, so the
+    # failure every other invocation sees is unchanged.
+    if args.video is None:
+        ap.error("the following arguments are required: --video")
 
     # A named model resolves to paths; an explicit path always wins. The
     # default is whatever the leaderboard selected on this machine, falling

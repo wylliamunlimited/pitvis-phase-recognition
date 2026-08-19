@@ -272,6 +272,10 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
 
 Item 2 is the one that still affects a demo. The rest affect the repo.
 
+Also fixed alongside these: `pitvis-predict --list-models` required `--video`,
+so the one command that answers "which model is the default here" could not be
+run without naming a file it would never open.
+
 ---
 
 ## 6. Provenance of the shipped encoder
