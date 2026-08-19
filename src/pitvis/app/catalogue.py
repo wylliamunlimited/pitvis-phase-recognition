@@ -25,8 +25,7 @@ from pathlib import Path
 
 from pitvis.data.dataset import TRAIN, VAL
 from pitvis.data import spaces
-from pitvis.paths import (CKPT, CKPT_INSTRUMENTS, FEATURES, PREDICTIONS, RAW,
-                          manifest_path)
+from pitvis.paths import FEATURES, PREDICTIONS, RAW, manifest_path
 
 CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
@@ -106,17 +105,26 @@ def cache_state() -> str:
 
 
 def _checkpoint_mtime() -> float:
-    """Newest mtime across every task checkpoint, or 0 if none exists.
+    """Newest mtime across every trained checkpoint, or 0 if none exists.
 
-    Includes the task-2 variants under v2/. A prediction made before a better
-    instrument model was trained is stale in exactly the same way it is stale
-    after retraining SANO, and the staleness chip exists to say so.
+    A prediction made before a better model was trained is stale, and the
+    staleness chip exists to say so.
+
+    DERIVED, NOT LISTED. This used to name the paths itself — the two
+    reproductions plus `data/instruments/v2/*/model.pt` — and the task-1
+    variants under `data/arst/v2/` were simply missing from the list, so
+    training a new step model left every prediction reading as current. A
+    hand-maintained list of where checkpoints live is a second copy of
+    `inference/checkpoints.FAMILIES`, and the two drifted the moment a family
+    was added. Asking `available()` means a new family is covered the day it
+    is registered.
+
+    Still cheap enough for a per-request call: `available()` is `exists()`
+    checks and two globs, and imports torch only inside `meta()`, which this
+    never calls.
     """
-    candidates = [CKPT / "citi.pt", CKPT_INSTRUMENTS / "sano.pt"]
-    v2 = CKPT_INSTRUMENTS / "v2"
-    if v2.exists():
-        candidates += sorted(v2.glob("*/model.pt"))
-    return max((p.stat().st_mtime for p in candidates if p.exists()), default=0.0)
+    from pitvis.inference.checkpoints import available
+    return max((c.path.stat().st_mtime for c in available()), default=0.0)
 
 
 def _prediction_state(case_id: str) -> dict:

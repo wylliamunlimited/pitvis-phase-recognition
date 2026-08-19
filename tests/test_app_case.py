@@ -349,3 +349,56 @@ def test_paths_anchors_app_assets_on_the_package_not_the_repo():
     from pitvis.paths import APP_ASSETS, PACKAGE
 
     assert APP_ASSETS.is_relative_to(PACKAGE)
+
+
+# -- staleness: which checkpoints count as "newer than this prediction" -------
+
+def _plant_checkpoint(root, variant):
+    d = root / "v2" / variant
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "model.pt").write_bytes(b"")
+    (d / "standardize.npz").write_bytes(b"")
+    return d / "model.pt"
+
+
+def test_a_new_step_model_makes_a_prediction_stale(tmp_path, monkeypatch):
+    """THE BUG THIS EXISTS FOR. `_checkpoint_mtime` hand-listed the two
+    reproductions plus `data/instruments/v2/*/model.pt`, and the task-1
+    variants under `data/arst/v2/` were simply absent — so training a new step
+    model left every prediction on screen reading as current."""
+    from pitvis.app import catalogue
+    from pitvis.inference import checkpoints as C
+
+    steps, insts = tmp_path / "arst", tmp_path / "instruments"
+    monkeypatch.setitem(C.FAMILIES, "arst-v2", (C.STEPS, steps, None))
+    monkeypatch.setitem(C.FAMILIES, "arst", (C.STEPS, steps, "citi.pt"))
+    monkeypatch.setitem(C.FAMILIES, "instruments-v2", (C.INSTRUMENTS, insts, None))
+    monkeypatch.setitem(C.FAMILIES, "instruments", (C.INSTRUMENTS, insts, "sano.pt"))
+
+    assert catalogue._checkpoint_mtime() == 0.0
+
+    step_ckpt = _plant_checkpoint(steps, "best@dinov2_ft")
+    import os
+    os.utime(step_ckpt, (1_700_000_000, 1_700_000_000))
+    assert catalogue._checkpoint_mtime() == 1_700_000_000
+
+    inst_ckpt = _plant_checkpoint(insts, "best")
+    os.utime(inst_ckpt, (1_800_000_000, 1_800_000_000))
+    assert catalogue._checkpoint_mtime() == 1_800_000_000, "task 2 still counts too"
+
+
+def test_staleness_covers_every_registered_family(tmp_path, monkeypatch):
+    """Derived from the registry rather than listed, so a family added to
+    FAMILIES is covered without editing the app."""
+    from pitvis.app import catalogue
+    from pitvis.inference import checkpoints as C
+
+    root = tmp_path / "invented"
+    monkeypatch.setitem(C.FAMILIES, "invented-v2", (C.STEPS, root, None))
+    for name in list(C.FAMILIES):
+        if name != "invented-v2":
+            monkeypatch.setitem(C.FAMILIES, name, (C.FAMILIES[name][0],
+                                                   tmp_path / "absent", None))
+    import os
+    os.utime(_plant_checkpoint(root, "v1"), (1_600_000_000, 1_600_000_000))
+    assert catalogue._checkpoint_mtime() == 1_600_000_000

@@ -247,9 +247,14 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
    task 2's official number carries the column-ordering defect and would rank
    the fine-tuned encoder last. `--list-models` prints the score that decided
    it. Falls back to the old `:best` convention when nothing has been scored.
-2. **Staleness tracking ignores task-1 variants.** `_checkpoint_mtime()` globs
-   `data/instruments/v2/*/model.pt` but not `data/arst/v2/*/model.pt`, so
-   training a new step model leaves every prediction looking current.
+2. ~~**Staleness tracking ignores task-1 variants.**~~ **Fixed.**
+   `_checkpoint_mtime()` hand-listed the two reproductions plus
+   `data/instruments/v2/*/model.pt`, and `data/arst/v2/` was simply absent, so
+   training a new step model left every prediction reading as current. It now
+   derives the list from `checkpoints.available()` — the registry that already
+   knows where every family's weights live — so a family added there is covered
+   without touching the app. The hand-maintained list was a second copy of
+   `FAMILIES`, and the two drifted the moment a family was added.
 3. **No cross-validated number for `dinov2_ft`** — §3.
 4. **Four instrument classes are emitted but unusable** (roadmap 6.5): bipolar
    forceps is predicted 320 times against 49 true instances. "0 classes never
@@ -270,7 +275,9 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
    label, and in the detail view INSTRUMENT USE clips the timecode. Panels are
    draggable, so it is a default-position issue rather than a layout failure.
 
-Item 2 is the one that still affects a demo. The rest affect the repo.
+Every item above is now fixed except 3, 4 and 6 — the missing cross-validated
+number for `dinov2_ft`, the four unusable instrument classes, and the default
+panel positions. None of those is a correctness bug in the pipeline.
 
 Also fixed alongside these: `pitvis-predict --list-models` required `--video`,
 so the one command that answers "which model is the default here" could not be
