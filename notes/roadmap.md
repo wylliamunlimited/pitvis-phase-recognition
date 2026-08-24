@@ -97,7 +97,7 @@ loader.
 
 - [ ] **1.6 Generalised extraction path.** `extract_features.py` is hardcoded to
       `26531686/video_{n:02d}.mp4` and the `annotations_{n}.csv` convention
-      (`src/pitvis/data/extract_features.py:63`, `:116`). Accept an arbitrary video path with
+      (`src/pitvis/data/extract_features.py:377`, `extract_features.py:262`). Accept an arbitrary video path with
       optional labels. Required by `predict.py` in Phase 2 — an app cannot only
       work on the 25 videos we happen to have.
 

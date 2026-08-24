@@ -71,7 +71,7 @@ deposit ID.
 
 ### The annotation schema
 
-Five integer columns, no nulls, verified across all 24 files by `src/pitvis/data/inventory.py:50`.
+Five integer columns, no nulls, verified across all 24 files by `src/pitvis/data/inventory.py:51`.
 The first rows of `annotations_01.csv`:
 
 ```
@@ -119,7 +119,7 @@ unrecoverable** from the annotations. There is no way to tell "we haven't starte
 `map_instruments.csv` has the same problem at `0` (`no_visible_instrument` and
 `occluded_image_inside_patient`).
 
-This is why `data/inventory.py:100-102` builds the name lookup with `setdefault` rather than
+This is why `data/inventory.py:100-105` builds the name lookup with `setdefault` rather than
 a dict comprehension — a naive `dict(zip(ids, names))` would silently keep only the last
 name for each colliding key. If you load these maps yourself, handle the collision.
 
@@ -136,7 +136,7 @@ name for each colliding key. If you load these maps yourself, handle the collisi
 
 The consistency check worth knowing about: `int_step == -1` and `int_instrument1 == -1`
 coincide **exactly** — 10,476 rows, zero disagreement either way. Background is one coherent
-state across both label tracks, and `src/pitvis/data/inventory.py:58-60` asserts it. It also
+state across both label tracks, and `src/pitvis/data/inventory.py:59-61` asserts it. It also
 cross-checks: 9.06% of 115,586 labelled seconds = 10,476.
 
 ---
@@ -341,17 +341,17 @@ experiment loop for the temporal models, which are the actual point.
 It is not really a data-processing script; it is **a set of executable assertions about the
 dataset**, plus a generated report at `notes/reference/inventory.md`.
 
-- `probe()` at `inventory.py:30` shells out to `ffprobe` for width, height, `r_frame_rate`,
+- `probe()` at `inventory.py:31` shells out to `ffprobe` for width, height, `r_frame_rate`,
   packet count and duration. Note `-count_packets` — it counts actual packets rather than
   trusting the container's `nb_frames` header, which is often absent or wrong.
-- `load_annotations()` at `inventory.py:50` asserts the three invariants that everything
+- `load_annotations()` at `inventory.py:51` asserts the three invariants that everything
   downstream relies on:
-  - `inventory.py:55` — `int_video` matches the filename
-  - `inventory.py:56` — `int_time` is contiguous `0..N-1`, no gaps, no duplicates
-  - `inventory.py:58-60` — step `-1` and instrument `-1` coincide exactly
-- `inventory.py:95-96` asserts the off-by-one relation and that every video ends in
+  - `inventory.py:56` — `int_video` matches the filename
+  - `inventory.py:57-58` — `int_time` is contiguous `0..N-1`, no gaps, no duplicates
+  - `inventory.py:59-61` — step `-1` and instrument `-1` coincide exactly
+- `inventory.py:97-98` asserts the off-by-one relation and that every video ends in
   background, across all 24 files.
-- `inventory.py:100-102` is the map-collision handling described in §2.
+- `inventory.py:100-105` is the map-collision handling described in §2.
 
 **If you change anything about data loading, run this first.** An assertion failure here is
 much cheaper to diagnose than a silent label shift discovered three hours into extraction.
@@ -389,26 +389,26 @@ flowchart LR
 
 Reading order in the code:
 
-- `extract_features.py:49` `probe()` — a slimmer ffprobe than inventory's, returns
+- `extract_features.py:53` `probe()` — a slimmer ffprobe than inventory's, returns
   `(nb_frames, round(fps))`. **`round(fps)` per video** is what handles `video_24` being
   25 fps. Hard-coding 24 would shift that video's labels by up to 4% of its length.
-- `extract_features.py:51` `build_model()` — `timm.create_model("resnet50",
+- `extract_features.py:84` `build_model()` — `timm.create_model("resnet50",
   pretrained=True, num_classes=0)`. The `num_classes=0` is the important argument: it strips
   the classifier and returns the 2048-d global-pooled embedding instead of 1000 logits.
-- `extract_features.py:68-76` — the **resume check**. If `features.npy` exists and has the
+- `extract_features.py:384-407` — the **resume check**. If `features.npy` exists and has the
   expected length, skip the video. This makes an interrupted 3-hour run cheap to restart.
   Length mismatch triggers a redo, so a half-written file self-heals.
-- `extract_features.py:76-83` — the ffmpeg command. The `select` filter keeps frames
+- `extract_features.py:296-300` — the ffmpeg command. The `select` filter keeps frames
   `0, r, 2r, …`. Worth understanding: **ffmpeg still decodes every frame**; the filter only
   discards them afterwards. That's why this stage is slow, and why `-hwaccel videotoolbox`
   is the lever if you want it faster.
-- `extract_features.py:93-106` — the read loop. Frames arrive as a raw byte stream with no
+- `extract_features.py:313-320` — the read loop. Frames arrive as a raw byte stream with no
   delimiters, so the loop reads exactly `1280*720*3 = 2,764,800` bytes per frame and treats a
   short read as end-of-stream. Batches of 64 go to the model.
-- `extract_features.py:108-111` — asserts the extracted count equals
+- `extract_features.py:328-332` — asserts the extracted count equals
   `ceil(nb_frames / r)`. If ffmpeg's filter and our arithmetic ever disagree, this fails
   loudly rather than silently misaligning labels.
-- `extract_features.py:114-124` — labels. Reads `int_step`, asserts there are exactly
+- `extract_features.py:267-270` — labels. Reads `int_step`, asserts there are exactly
   `expected + 1` rows, asserts the dropped last row is background, truncates, and maps
   `-1 -> 0`.
 
@@ -452,7 +452,7 @@ whole seconds of frames.
 
 **Decision: truncate labels to the frame count.** Safe because every video ends in a run of
 background 6 to 147 seconds long, so the dropped row is verified background in all 24 videos
-— asserted at `extract_features.py:181`, not assumed.
+— asserted at `extract_features.py:268-270`, not assumed.
 
 The alternative (pad features with a duplicate frame) would invent data. Truncating discards
 one verified-background second per video: 24 seconds total out of 115,586.
@@ -485,7 +485,7 @@ Three things to note:
   situation changes.
 - **`video_24`, the 25 fps outlier, is in VAL.** So a per-video fps bug shows up as a
   validation anomaly, not a training one.
-- `load_video()` at `dataset.py:22` asserts features and labels have equal length. Cheap
+- `load_video()` at `dataset.py:57` asserts features and labels have equal length. Cheap
   guard against a stale half-extracted cache.
 
 The paper's separate 8-video *test* set was never publicly released. All 25 videos here are
@@ -574,7 +574,7 @@ the label set from the union of cleaned truths *and* predictions — so a class 
 predicts but that is never true still joins the macro average, at F1 = 0, dragging the mean
 down.
 
-`evaluation/metric.py:112` counts these as `leaked` and `report` prints them. The corollary is a free
+`evaluation/metric.py:103` counts these as `leaked` and `report` prints them. The corollary is a free
 win: **masking classes 0/11/13 out of the argmax at inference can only raise this metric.**
 `test_leaking_costs_more_than_an_equally_wrong_scored_prediction` shows one wrong frame costing
 0.667 when it leaks versus 0.822 when it is an equally-wrong guess at a scored class. It has since
@@ -591,14 +591,14 @@ be wrong. See `test_excluded_rows_merge_the_segments_around_them`.
 ### How `evaluation/metric.py` recovers the split
 
 The vendored function returns one number. We want the F1 and edit halves separately, so
-`evaluation/metric.py:91-99` replicates its two internal calls — then
-`evaluation/metric.py:101-103` **asserts** the
+`evaluation/metric.py:84-89` replicates its two internal calls — then
+`evaluation/metric.py:93-94` **asserts** the
 halves recombine to what the vendored one-shot function returns. If someone later "fixes" the
 `zero_division` or adds a `labels=`, that assert fires.
 
 ### Diagnostics vs the metric
 
-Per-class recall/F1 and the 15x15 confusion matrix (`evaluation/metric.py:131-143`) are **pooled** across
+Per-class recall/F1 and the 15x15 confusion matrix (`evaluation/metric.py:131-135`) are **pooled** across
 videos and use a fixed 12-class label set for stability. They are labelled
 `NOT the official metric` in the output. They are for debugging — which classes collapse into
 which — not for reporting.
@@ -606,7 +606,7 @@ which — not for reporting.
 ### The guard
 
 If every ground-truth row of a video is an excluded class, the official code divides by zero.
-`evaluation/metric.py:86-89` raises a clear `ValueError` rather than patching the vendored file. All 12
+`evaluation/metric.py:77-80` raises a clear `ValueError` rather than patching the vendored file. All 12
 scored classes appear in all 5 val videos, so this cannot arise on our split — verified.
 
 ---
@@ -707,7 +707,7 @@ That will teach you the metric faster than reading it.
 uv run pitvis-extract 7 25
 ```
 
-Watch the asserts at `extract_features.py:108` and `:119-121` pass on real data.
+Watch the asserts at `extract_features.py:328` and `extract_features.py:268-270` pass on real data.
 
 **E. Run the baseline on those two.** It will be a meaningless model — one training video —
 but it exercises `dataset.py`, `training/baseline.py` and `evaluation/metric.py` end to end. You will need to

@@ -92,7 +92,7 @@ Annotation rows are always exactly `T+1`. The extra row is the last second, for
 which no frame exists (a 172,812-frame video at 24 fps is 7,200.5 seconds long;
 you get 7,201 sampled frames indexed 0..7200, and 7,202 annotation rows).
 
-`data/extract_features.py:207-209` handles it by assertion, not by trust:
+`data/extract_features.py:268-270` handles it by assertion, not by trust:
 
 ```python
 assert len(steps) == expected + 1
@@ -180,7 +180,7 @@ validation videos happen to be long ones (7,201 / 4,942 / 6,767 / 7,649 /
 4,337).
 
 Standardisation statistics come from the train split only and are computed once
-in `training/arst.py:275`:
+in `training/arst.py:313-315`:
 
 ```
 X = concat over TRAIN            (84666, 2048)

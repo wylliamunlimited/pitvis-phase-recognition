@@ -56,7 +56,7 @@ answer to that same question.
 
 ## 2. How an embedding is generated
 
-Five stages, `src/pitvis/data/extract_features.py:138-173`.
+Five stages, `src/pitvis/data/extract_features.py:282-334`.
 
 ```mermaid
 flowchart TD
@@ -81,7 +81,7 @@ flowchart TD
 `ffmpeg` with the filter `select=not(mod(n\,r))` keeps frames `0, r, 2r, …` where
 `r` is the video's rounded fps. Frames arrive on a pipe as raw RGB with **no
 delimiters**, so the read loop takes exactly `1280 * 720 * 3 = 2,764,800` bytes at
-a time and treats a short read as end-of-stream (`extract_features.py:156-161`).
+a time and treats a short read as end-of-stream (`extract_features.py:313-320`).
 
 `r` is probed **per video**. `video_24` is 25 fps while every other video is 24.
 Hard-coding 24 would drift that video's labels by ~4% of its length — and
@@ -136,7 +136,7 @@ last block has. Each of the 2,048 values is roughly "how strongly does some visu
 pattern appear *anywhere* in this frame."
 
 `timm.create_model(BACKBONE, pretrained=True, num_classes=0)`
-(`extract_features.py:71`) removes the final `Linear`, so we get the 2,048-d pooled
+(`extract_features.py:97`) removes the final `Linear`, so we get the 2,048-d pooled
 vector instead of 1,000 ImageNet scores.
 
 Two consequences worth carrying forward:
@@ -151,10 +151,10 @@ Two consequences worth carrying forward:
 
 ### Stages 4 and 5 — batch, assert, save
 
-64 frames per forward pass (`:150-154`), concatenated to `(T, 2048)`. Then:
+64 frames per forward pass (`extract_features.py:304-310`), concatenated to `(T, 2048)`. Then:
 
 ```python
-assert len(features) == expected, ...   # extract_features.py:170
+assert len(features) == expected, ...   # extract_features.py:328
 ```
 
 If ffmpeg's `select` filter and our `ceil(nb_frames / r)` arithmetic ever disagree,

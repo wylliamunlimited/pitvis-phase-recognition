@@ -104,7 +104,7 @@ inferred from the code's intent.
 |---|---|---|
 | encoder saw validation videos | **clean** | `backbone.pt` records `trained_on = [2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18]`; `VAL ∩ trained_on = ∅` |
 | early stopping selected on VAL | **clean** | stopped on 3 videos carved from TRAIN (20, 22, 23), held out **by video**, not by frame |
-| standardisation fitted on VAL | **clean** | `arst_v2.py:304` / `instruments_v2.py:317` load TRAIN only; VAL is first touched at the scoring line |
+| standardisation fitted on VAL | **clean** | `arst_v2.py:308` / `instruments_v2.py:317` load TRAIN only; VAL is first touched at the scoring line |
 | decision thresholds fitted on VAL | **clean** | `crossfit_thresholds(train, ...)`, 2-fold within TRAIN |
 | illegal normalised-time feature | **clean** | no `t/(T-1)` anywhere in `src/` — it needs the total duration, i.e. the end of the video |
 | model is strictly online | **fixed-lag, disclosed** | CCI emits frame *t* after observing *t+10*. The challenge permitted this (TSO-NCT smooths over 7). `--no-cci` gives the strictly causal variant, which scores lower |
