@@ -162,6 +162,11 @@ This is the non-obvious part, and it changes how you'd model the pair.
 Twelve of the eighteen instruments **never** appear in slot 2. And of the
 17,026 two-instrument rows, **16,796 (98.6%) have suction as the secondary**:
 
+*"Two-instrument row" here means both slots hold a real instrument — `i2` is
+neither `-2` nor `0`, and `i1` is neither `-1` nor `0`. Counting `i2 != -2`
+alone gives 17,044, because it sweeps in the 4 rows where `i2 == 0` and the 14
+where `i1` is absent or occluded.*
+
 | pair | rows |
 |---|---|
 | ring curette + suction | 10,392 |

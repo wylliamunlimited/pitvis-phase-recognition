@@ -172,10 +172,11 @@ and closes about half the remaining gap.
 > between those commits and 2026-08-11 touched `arst_v2.py`, so the most likely
 > cause is run-to-run nondeterminism, and 0.042 sits inside the ±0.0565 spread.
 >
-> **It is not isolated.** All four checkpoints on this machine disagree with
-> their recorded numbers, and not all in the same direction — the instrument
-> variant reads higher on macro and lower on the official number. The table is
-> in [`current-state.md`](../current-state.md) §5, gap 8.
+> **It is not isolated**, though it is the larger half of the problem. The
+> instrument variant drifts the same way (0.5572 → 0.4962 official, while macro
+> goes *up*). The two reproductions do not: both match their owner notes
+> exactly. The full table is in [`current-state.md`](../current-state.md) §5,
+> gap 8.
 >
 > Two things follow. **Quote 0.4196 for anything the shipped artifact does**,
 > and 0.4610 only as the recorded result of the run this table describes. And

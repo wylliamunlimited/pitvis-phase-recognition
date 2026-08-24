@@ -282,28 +282,38 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
    with `best@dinov2_ft` missing, `checkpoints.default()` ranks what remains
    and `arst-v2:best` wins by default. §6 below describes an encoder that is
    not on disk.
-8. **No checkpoint on this machine matches its recorded number** — all four,
-   not just one. Every `result.json` describes its own `model.pt` correctly
-   (verified by re-scoring `arst-v2:best` with `pitvis-eval`, which reproduces
-   its file to four decimals), so these are later re-runs whose numbers were
-   never written back into the notes:
+8. **Every model here has more than one recorded score, and the notes do not
+   agree on which one to quote.** The cause is already documented — MPS
+   reduction kernels are not bit-deterministic, so `torch.manual_seed` does not
+   pin a run ([`citi-baseline.md`](models/citi-baseline.md) §6, "These numbers
+   are not bit-reproducible"). What is *not* documented is the consequence:
+   different notes quote different draws of the same configuration.
 
-   | checkpoint | on disk (metric / macro) | recorded in the notes |
-   |---|---|---|
-   | `data/arst` — steps reproduction | 0.3402 / 0.3255 | 0.3425 |
-   | `data/arst/v2/best` — steps iter 1+2 | 0.4196 / 0.3998 | 0.4610 / 0.4420 |
-   | `data/instruments` — inst reproduction | 0.2336 / 0.2513 | 0.2321 / 0.2556 |
-   | `data/instruments/v2/best` — inst iter 1+2 | 0.4962 / 0.3883 | 0.5572 / 0.3792 |
+   | model | on disk | owner note | quoted elsewhere |
+   |---|---|---|---|
+   | `data/arst` steps repro | 0.3402 / 0.3255 | 0.3349, re-run 0.3402 ✓ | **0.3425** (6 places) |
+   | `data/instruments` inst repro | 0.2336 / 0.2513 | 0.2336 / 0.2513 ✓ | 0.2321 / 0.2556 |
+   | `data/arst/v2/best` steps | 0.4196 / 0.3998 | 0.4610 / 0.4420 ✗ | — |
+   | `data/instruments/v2/best` | 0.4962 / 0.3883 | 0.5572 / 0.3792 ✗ | — |
 
-   The drift is not uniformly downward — the instrument variant reads *higher*
-   on macro and lower on the official number — so this is run-to-run variance,
-   not a systematic regression or a scoring bug. `--seed 0` was set throughout,
-   which means it is not pinning what it appears to pin.
+   Two different problems sit in that table:
 
-   **So quote the notes for what a run achieved, and re-score for what an
-   artifact will do.** The steps case has the full evidence trail in
-   `step-variants.md` §4. Gap 1 above quotes `best` at 0.4420 macro; the file
-   the app actually loads reads 0.3998.
+   - **The reproductions are fine.** Both owner notes match the artifacts
+     exactly, and `citi-baseline.md` explicitly records its re-run. The other
+     figures are stale copies in notes that should have linked instead. But
+     **0.3425 matches nothing** — not the table, not the re-run, not the
+     artifact — and it is the baseline in the README's headline
+     `0.3425 → 0.5608` and in every iteration delta. It needs a source or a
+     correction to 0.3402.
+   - **The two v2 winners genuinely drift**, and by more than the reproductions
+     do: 0.041 and 0.061 against 0.005. Re-scoring `arst-v2:best` reproduces
+     its own `result.json` to four decimals, so the file is honest and the
+     *training* run differed. Details in
+     [`step-variants.md`](models/step-variants.md) §4.
+
+   **So: quote an owner note for what a run achieved, and re-score for what an
+   artifact will do.** Gap 1 quotes `best` at 0.4420 macro; the file the app
+   loads reads 0.3998.
 
 Every item above is now fixed except 3, 4, 6, 7 and 8 — the missing
 cross-validated number for `dinov2_ft`, the four unusable instrument classes,
