@@ -179,9 +179,11 @@ That sparsity and the wildly different per-dimension scales are why
 the train split before the linear layer. Feeding raw embeddings to a linear model
 would let a few high-variance dimensions dominate the gradient.
 
-> Saving those mean/std values as a real artifact is roadmap item **1.3**, and it
-> is a correctness blocker: any inference path must apply the *same* transform, and
-> today `training/baseline.py:45` computes them inline and discards them on exit.
+> Any inference path must apply the *same* transform, so those mean/std values
+> are saved as a real artifact — `standardize.npz`, written beside the weights
+> and loaded with them, never resolved separately (roadmap **1.3**). The linear
+> probe here is the exception: `training/baseline.py:45` computes them inline
+> and discards them on exit, because it produces no checkpoint to pair them with.
 
 ---
 

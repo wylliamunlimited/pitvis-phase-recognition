@@ -63,12 +63,16 @@ loader.
       different feature space, so mixed-backbone caches fail loudly instead of
       silently. Checkpoints (2.3) should record `space.id`.
 
-- [ ] **1.3 Normalisation statistics as a saved artifact.** `training/baseline.py`
-      computes train-split mean/std inline (`src/pitvis/training/baseline.py:45`) and
-      discards them when the process exits. Any inference path must apply the
-      *same* transform, so these have to become a saved artifact keyed to the
-      cache + split. This is a correctness blocker for the app, not a
-      convenience.
+- [x] **1.3 Normalisation statistics as a saved artifact.** `standardize.npz`
+      (`mean`, `std`, one value per feature dimension), written beside the
+      weights by every trainer that fits them — `training/arst.py:319`,
+      `arst_v2.py:316`, `instruments.py:133`, `instruments_v2.py:324`. Inference
+      never resolves them separately from the checkpoint: `checkpoints.py`
+      pairs each checkpoint with the `standardize.npz` in its own directory, so
+      a model cannot be loaded with another run's statistics.
+      `training/baseline.py:45` still computes them inline and discards them —
+      it is the throwaway linear probe and produces no checkpoint to pair them
+      with.
 
 - [ ] **1.4 Sequence dataset.** `src/pitvis/data/dataset.py` is 37 lines of whole-array
       loading. Temporal models need: full-video sequences (an MS-TCN trains on
