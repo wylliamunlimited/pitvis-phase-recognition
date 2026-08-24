@@ -237,9 +237,16 @@ is the difference between the worst result in this note and the best. Both are
 | edit score | 0.4801 | 0.4193 | 0.3369 | **0.5068** |
 
 **Run 2 is the largest single gain in the project — +0.0998 on the challenge
-metric, +0.173 macro** — and it is larger than every modelling change in §4
-combined (masking, class weights and the backbone swap together moved 0.3425 →
-0.4610, or +0.119).
+metric, +0.173 macro.** No single change in §4 comes close; the largest there
+was masking, at +0.073 metric.
+
+Against §4's changes *combined* the two metrics disagree, and the disagreement
+is worth keeping rather than rounding away. Masking, class weights and the
+backbone swap together moved macro 0.3083 → 0.4420 (+0.134) and the challenge
+metric 0.3425 → 0.4610 (+0.119). So fine-tuning beats all of them combined on
+macro (+0.173 against +0.134) but **not** on the challenge metric (+0.0998
+against +0.119). Macro is the primary here, so "largest gain in the project"
+stands — but it is a claim about macro, not about the headline number.
 
 ### Run 1 — why it failed
 

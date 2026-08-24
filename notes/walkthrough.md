@@ -668,15 +668,18 @@ averages both.
 
 ## 14. Suggested trace plan
 
-The pipeline has never been run end to end — `data/features/` does not exist yet. So the
-tracing order below doubles as the order to actually execute things.
+The pipeline has since been run end to end many times, and `data/features/`
+holds 1.3 GB across two feature spaces. The order below is still the order to
+*trace* it in, and on a fresh clone it is still the order to execute it in —
+but nothing here is hypothetical any more, so you can check each step's output
+against the numbers in [`embeddings.md`](embeddings.md) as you go.
 
 **A. Read the data by hand first.** Nothing beats looking at it.
 
 ```sh
 head -20 26531686/annotations_01.csv
 cat 26531686/map_steps.csv
-cat notes/inventory.md
+cat notes/reference/inventory.md
 ```
 
 **B. Verify the invariants.** No side effects beyond rewriting `notes/reference/inventory.md`.
@@ -728,20 +731,27 @@ justified.
 
 ## 15. What is not built yet
 
-Roughly in order of value:
+This section used to list six things, and **five of them have since been
+built** — the temporal models, argmax masking, task 2, backbone fine-tuning,
+and the vendored instrument metric. It is kept as a pointer rather than a list
+because [`roadmap.md`](roadmap.md) owns what is left, and a second copy here is
+how the first version came to be wrong about everything.
 
-1. **Nothing downstream of `inventory.py` has ever run.** `data/features/` does not exist.
-   Everything else here is unexecuted code, verified only against synthetic inputs.
-2. **No temporal model.** The obvious ladder: smoothing the probe's logits (median filter, or
-   Viterbi with a transition prior — §5 says only 77 of 210 transitions ever occur, and §3
-   says the steps are near-monotonic, so a prior is cheap and well-founded), then MS-TCN or a
-   small transformer over the per-video feature sequences.
-3. **Argmax masking of classes 0/11/13** at inference. Free score under the official metric,
-   for the reasons in §12. Should be measured, not assumed.
-4. **Instruments are unused.** `int_instrument1/2` are parsed nowhere in `src/`. The paper's
-   main finding is that multitask step+instrument models win.
-5. **No fine-tuning.** The backbone is frozen everywhere. The organisers' own example
-   fine-tunes end to end, so a frozen probe is a floor, not a ceiling.
-6. **The instrument and multitask metrics are not vendored** — only
-   `evaluation_steps.py`. Add `evaluation_instruments.py` and `evaluation_multitask.py` when
-   instruments come into scope.
+What that walk through the roadmap will tell you, in one line each:
+
+- **Modelling.** MS-TCN and the Bi-GRU/transformer alternatives (3.2, 3.3) are
+  still untried; so is segment smoothing with an order prior (3.7) — the
+  Viterbi idea this section originally proposed, still cheap and still
+  well-founded, since §5 shows only 77 of 210 transitions ever occur.
+- **Plumbing.** A shared config and training loop (2.1, 2.2), the sequence
+  dataset (1.4), and a reproducibility check (2.6).
+- **The multitask metric** is still not vendored. `evaluation_steps.py` and
+  `evaluation_instruments.py` both are; `evaluation_multitask.py` is not,
+  because no multitask model exists to score.
+
+Two things that are *built* but whose artifacts are not on this machine, which
+matters more than any of the above if you are about to run something:
+`arst-v2:best` on disk scores 0.4196 rather than the 0.4610 on record, and the
+fine-tuned encoder is absent entirely. Both are recorded in
+[`step-variants.md`](models/step-variants.md) §4 and
+[`current-state.md`](current-state.md) §5.

@@ -14,7 +14,7 @@ thing *is*, read this first.
 ## 1. One video, on disk
 
 ```
-$ ls data/features/video_07/
+$ ls data/features/resnet50/video_07/
 features.npy   labels.npy
 ```
 
@@ -211,7 +211,7 @@ x = create_transform(**cfg)(Image.fromarray(frame))
 with torch.no_grad():
     emb = model(x.unsqueeze(0)).numpy()[0]
 
-cached = np.load('data/features/video_07/features.npy')[0]
+cached = np.load('data/features/resnet50/video_07/features.npy')[0]
 print('max abs difference: %.3e' % np.abs(cached - emb).max())
 ```
 
@@ -240,16 +240,29 @@ small, every downstream experiment is cheap. That is the entire reason the backb
 is frozen at this stage: it buys a fast experiment loop for the temporal models,
 which are the actual point.
 
-The price is that we are stuck with whatever an ImageNet network happens to notice
-about tissue and instruments it has never seen. Which is why:
+The price is that the model is stuck with whatever the encoder happens to notice
+about tissue and instruments — and when this was written, that encoder was an
+ImageNet ResNet-50 that had never seen an endoscope.
 
-- roadmap **3.6** (fine-tune the backbone end to end) is flagged as the
-  highest-expected-gain item, and
-- roadmap **1.7** is the decision that gates it — extraction saves embeddings and
-  **throws the pixels away**, so there is no data path to fine-tuning today. Either
-  frames get written to disk (~4 GB at 256 px, ~25 GB at native 720p) or a
-  `Dataset` decodes them on the fly.
+**That prediction was tested, and it held.** It was flagged here as the
+cross-cutting risk: everything builds on the encoder, so if temporal modelling
+plateaued well below the paper, the encoder would be why. It did, and it was.
+Fine-tuning the encoder is the single largest gain in the project — +0.173
+macro F1 on the step task, more than every architecture and loss change
+combined. See [`step-variants.md`](models/step-variants.md) §7 for the numbers
+and the one metric on which that comparison does *not* hold, and
+[`roadmap.md`](roadmap.md) for the cross-task "backbone last" finding.
 
-The cross-cutting risk in `roadmap.md` states it plainly: everything except 3.6
-builds on a backbone that has never seen an endoscope. If temporal modeling
-plateaus well below the paper, this is the reason.
+Two things followed, both now done:
+
+- **Roadmap 1.7** was the gate — extraction saves embeddings and throws the
+  pixels away, so there was no data path to fine-tuning at all. Resolved in
+  favour of a JPEG cache: `pitvis-frames` writes 1 fps centre-square 384 px
+  frames to `data/frames/384/` (120,018 frames, 3.6 GB).
+- **Roadmap 3.6 / 3.6b** then fine-tuned ResNet-50 and DINOv2 on those frames.
+
+So the cache is no longer single-space: `data/features/` holds one directory per
+feature space (`resnet50` at 940 MB, `dinov2_vitb14` at 354 MB — DINOv2's 768
+dimensions are smaller than ResNet's 2,048), and `--space` selects. Everything
+above about *how* an embedding is made still holds for each of them; only the
+backbone and the width change.

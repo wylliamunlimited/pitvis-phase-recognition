@@ -152,14 +152,18 @@ version, and the two are worth reporting side by side.
 ### The deviation that matters: the backbone is frozen
 
 ARST fine-tunes ResNet-50 on the surgical data for 50 epochs with SGD, random
-crops, flips, rotation and colour jitter. **We cannot.** `extract_features.py`
-saves embeddings and discards the pixels, so there is no data path to
-backpropagate into the backbone (roadmap 1.7). Our spatial stage trains only
-the `2048 -> 512` projection on cached frozen ImageNet features.
+crops, flips, rotation and colour jitter. **This reproduction cannot** —
+`extract_features.py` saves embeddings and discards the pixels, so there is no
+data path to backpropagate into the backbone. Its spatial stage trains only the
+`2048 -> 512` projection on cached frozen ImageNet features.
 
-This is expected to be the single largest source of gap to the published
-number. The cached features come from a network that has never seen an
-endoscope — the cross-cutting risk already flagged in `roadmap.md`.
+This was expected to be the single largest source of gap to the published
+number, and that turned out to be right. Roadmap 1.7 opened the data path (a
+1 fps JPEG cache) and 3.6/3.6b then fine-tuned both encoders; fine-tuning
+DINOv2 is the largest single gain in the project. The reproduction stays frozen
+on purpose — it is what CITI's *published* configuration scores here, and
+moving it would mean the baseline no longer measures the baseline. The
+improvements live in [`step-variants.md`](step-variants.md) §6–7.
 
 Note also that CITI's *PitVis* submission used a Swin transformer spatial
 encoder rather than ResNet-50 (Das et al. 2024 §5.2). We follow the ARST paper,
