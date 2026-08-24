@@ -50,7 +50,7 @@ the whole reason `infra/` exists.
 
 | | what changed | steps | instruments (official / macro) |
 |---|---|---|---|
-| start | published reproductions | 0.3402 | 0.2321 / 0.2556 |
+| start | published reproductions | 0.3402 | 0.2336 / 0.2513 |
 | iter 1+2 | loss, decision rule, DINOv2 | 0.4610 | **0.5572** / 0.3792 |
 | iter 3 | fine-tuned ResNet-50 encoder | 0.4425 | 0.3805 / 0.4783 |
 | iter 4a | fine-tuned DINOv2 — bad recipe | 0.3500 | 0.2803 / — |

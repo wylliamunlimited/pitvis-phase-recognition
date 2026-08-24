@@ -77,7 +77,7 @@ and loss change combined.
 
 | | steps (challenge metric) | instruments (macro / aligned-w) |
 |---|---|---|
-| published reproductions | 0.3402 | 0.2556 / 0.6234 |
+| published reproductions | 0.3402 | 0.2513 / 0.6309 |
 | **current best** | **0.5608** ±0.052 | **0.5333** / **0.8416** |
 
 Both on the 5 validation videos, scored once. Per-class movement, what each
@@ -311,11 +311,13 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
      `citi-baseline.md` §6 declares it. The other two remain in that note as
      the evidence for the non-determinism, and nowhere else.
 
-   - **The instrument reproduction is fine** — `instruments.md` §5 matches its
-     artifact exactly. The 0.2321 / 0.2556 pair in `instrument-variants.md`
-     and `where-we-are.md` is a second draw of the same kind, and task 2 has
-     **not** had the equivalent decision made. Doing so would shift
-     instrument-variants' baseline row and every delta computed from it.
+   - **The instrument reproduction had the same split, and it is now closed
+     the same way.** A second draw (0.2321 / 0.6234 / 0.2556) was circulating
+     in `instrument-variants.md` and `where-we-are.md`. **0.2336 / 0.6309 /
+     0.2513 is the published task-2 baseline**, because it is what
+     `data/instruments/result.json` holds; `instruments.md` §5 declares it and
+     the iteration deltas are recomputed from it (official +0.324, aligned
+     +0.107, macro +0.128).
    - **The two v2 winners genuinely drift**, and by more than the reproductions
      do: 0.041 and 0.061 against 0.005. Re-scoring `arst-v2:best` reproduces
      its own `result.json` to four decimals, so the file is honest and the

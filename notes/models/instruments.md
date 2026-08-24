@@ -214,6 +214,16 @@ experiment. The model clears every constant baseline on both the official
 (0.2336 vs 0.1383) and the aligned (0.6309 vs 0.3376) reading, so it is
 genuinely learning rather than exploiting the metric.
 
+> **This row is the published task-2 baseline**, and this note is where that is
+> decided — the counterpart to `citi-baseline.md` §6 for steps. A second draw of
+> the identical configuration (0.2321 official / 0.6234 aligned / 0.2556 macro)
+> was circulating in the iteration notes; the two differ by 0.0015 to 0.0075,
+> the same MPS non-determinism `citi-baseline.md` §6 documents.
+>
+> **0.2336 / 0.6309 / 0.2513 wins because it is the draw an artifact
+> reproduces** — it is what `data/instruments/result.json` holds. Every task-2
+> delta elsewhere is computed from it. The other draw is quoted nowhere.
+
 ### It learned four classes and gave up on the rest
 
 Per-instrument F1, pooled across the val videos:

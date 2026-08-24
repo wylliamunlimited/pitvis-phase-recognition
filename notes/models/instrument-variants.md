@@ -12,8 +12,8 @@ Code: `src/pitvis/training/instruments_v2.py`, `src/pitvis/training/crossval.py`
 
 ## 1. What was wrong
 
-SANO reproduces at **0.2321** official / **0.6234** name-aligned weighted /
-**0.2556** macro on the five validation videos. Table 8 of Das et al.
+SANO reproduces at **0.2336** official / **0.6309** name-aligned weighted /
+**0.2513** macro on the five validation videos. Table 8 of Das et al.
 benchmarks *those same five videos* at **SANO 81, SDS-HD 89, CITI 88**.
 
 The per-class breakdown says exactly where it goes:
@@ -169,7 +169,7 @@ flowchart TD
 
 *Hypothesis:* the frozen ImageNet backbone is the bottleneck. It is the one
 deviation both our reproductions share from their published counterparts, and
-both sit near 50% of Table 8 (instruments 0.2556 vs 81; steps 34.0 vs 70).
+both sit near 50% of Table 8 (instruments 0.2513 vs 81; steps 34.0 vs 70).
 *Falsified if:* macro and the official metric are both within the fold spread
 of control — which would also refute the shared explanation for the ARST gap.
 
@@ -261,9 +261,9 @@ Run once, after the leaderboard was frozen: `best` on `dinov2_vitb14`.
 
 | | SANO (control) | winner | delta |
 |---|---|---|---|
-| official `metric` | 0.2321 | **0.5572**±0.225 | **+0.325** |
-| aligned weighted | 0.6234 | **0.7383**±0.041 | +0.115 |
-| macro F1 | 0.2556 | **0.3792**±0.044 | +0.124 |
+| official `metric` | 0.2336 | **0.5572**±0.225 | **+0.324** |
+| aligned weighted | 0.6309 | **0.7383**±0.041 | +0.107 |
+| macro F1 | 0.2513 | **0.3792**±0.044 | +0.128 |
 | classes never predicted | 9 / 19 | **0 / 19** | — |
 
 For scale, Table 8 benchmarks SANO at **81** on these same five videos. If that
