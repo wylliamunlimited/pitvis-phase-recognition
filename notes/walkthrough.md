@@ -461,11 +461,11 @@ one verified-background second per video: 24 seconds total out of 115,586.
 
 ## 10. Stage 3 — dataset and split
 
-`src/pitvis/data/dataset.py` — only 37 lines, and deliberately dumb.
+`src/pitvis/data/dataset.py` — 108 lines, and deliberately dumb.
 
 ```python
-VAL   = [1, 12, 21, 24, 25]                                          # dataset.py:15
-TRAIN = [2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,20,22,23]           # dataset.py:16
+VAL   = [1, 12, 21, 24, 25]                                          # dataset.py:16
+TRAIN = [2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,20,22,23]           # dataset.py:17
 ```
 
 The split is from Das et al. 2024, verbatim: *"A 20-training to 5-validation (01, 12, 21, 24,

@@ -31,7 +31,7 @@ What already exists and has been verified by running it, not just by reading it.
 - [x] Evaluation aligned to the challenge: per video, mean-averaged, with the
       three official quirks preserved — `evaluation/metric.py`, pinned by
       `tests/test_eval.py`
-      (23 tests, all passing).
+      (24 tests, all passing).
 - [x] Frame-wise linear probe baseline written — `src/pitvis/training/baseline.py`.
 - [x] **First full feature extraction run.** Completed 2026-08-04: all 25
       videos, 120,018 frames, 939 MB. Verified end to end by
