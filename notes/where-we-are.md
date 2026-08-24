@@ -1,6 +1,6 @@
 # Where we are — orientation snapshot
 
-*Snapshot: 2026-08-16. Read this first after time away, then follow the links.*
+*Snapshot: 2026-08-24. Read this first after time away, then follow the links.*
 
 **For the system as it stands** — what is trained, what is wired to what, how
 a case flows through the app, and what may be claimed in a demo — see
@@ -231,12 +231,10 @@ instrument metric.
 4. **Roadmap 6.8** — a prior-corrected argmax for steps. Tried and it lost
    (`step-variants.md` §8); listed here only so it is not retried by accident.
 
-**One repo defect surfaced while writing this up:** `pitvis-eval` has no
-`--space` flag, so it always loads `resnet50` features and cannot score any
-checkpoint trained on another space. Every result above was produced through
-`pitvis-train`, which does take `--space`, so nothing is wrong with the numbers
-— but the standalone scorer is unusable on four of the five checkpoints in
-`data/arst/`.
+*(A `pitvis-eval` defect recorded here — no `--space`, so it always loaded
+`resnet50` features — was fixed, and it was worse than described: it also took
+its standardisation stats from `data/arst/` regardless of the checkpoint named.
+See [`current-state.md`](current-state.md) §5, item 5.)*
 
 The same list against `roadmap.md`, for anyone reading it alongside:
 
@@ -255,3 +253,85 @@ The honest framing on 7.x: 0.561 served at 200 Hz is still 0.561. The
 deployment path was worth building because it proved the auto-regressive
 rollout survives the port; extending it competes with making the model better,
 and 3.6b is the item that does that.
+
+---
+
+## 5. TODO — what needs to be *run*
+
+§4 is what to build next. This is the shorter list of things that need a
+machine rather than a decision, surfaced by the documentation audit on
+2026-08-24. They are ordered because the first one changes how you read the
+rest.
+
+**⚠️ Every training command below overwrites the checkpoint directory it
+writes to.** `data/instruments/sano.pt` is protected by convention; nothing
+else is. Copy the directory aside before re-running anything you still want.
+
+### 1. Bound the run-to-run spread — roadmap 2.6
+
+*Blocks the interpretation of every other number here.* `--seed 0` does not pin
+a run on this machine: the ARST reproduction has three recorded draws
+(0.3349 / 0.3402 / 0.3425) and the two v2 winners sit 0.041 and 0.061 from
+their recorded scores. Nobody knows whether that second figure is the same
+noise or something worse, and until someone does, no variant delta smaller
+than ~0.06 can be defended.
+
+```sh
+cp -r data/arst /tmp/arst-keep               # it will be overwritten
+for i in 1 2 3 4 5; do
+  uv run pitvis-train arst
+  cp data/arst/result.json /tmp/arst-run-$i.json   # else run i+1 eats it
+done
+```
+
+~15 min per run. Record the five metrics and their spread; that number is the
+threshold every future claim has to clear.
+
+### 2. Re-run the two v2 winners
+
+Do this *after* 1, because 1 tells you what the answer means. The question is
+whether 0.4610 (steps) and 0.5572 (instruments official) reproduce, or whether
+the artifacts on disk are the honest expectation and the recorded numbers were
+lucky draws.
+
+```sh
+mkdir -p /tmp/v2-keep && cp -r data/arst/v2 /tmp/v2-keep/arst \
+                       && cp -r data/instruments/v2 /tmp/v2-keep/instruments
+uv run pitvis-train arst-v2 --variant best --space dinov2_vitb14
+uv run pitvis-train instruments-v2 --variant best --space dinov2_vitb14
+```
+
+Whichever way it lands, update `step-variants.md` §4 and
+`instrument-variants.md` §4 — they own those numbers — and delete the drift
+blockquote in the former if it resolves.
+
+### 3. Restore the fine-tuned encoder, or stop citing it
+
+`data/backbone/`, `data/features/dinov2_ft/` and every `@dinov2_ft` /
+`@resnet50_ft` checkpoint are **absent from this machine**. They came from the
+cloud job and were never copied back. Until they return:
+
+- the README headline `0.3402 → 0.5608` cannot be reproduced here,
+- `current-state.md` §6 describes an encoder that is not on disk,
+- `checkpoints.default()` falls back to `arst-v2:best`, so "the best model"
+  in the app is not the best model in the notes.
+
+Cheapest fix is a copy from wherever the job wrote them (96 MB of backbone is
+the load-bearing part). Regenerating costs ~62 min on an L4 plus ~25 min of
+extraction — [`infra/README.md`](../infra/README.md).
+
+### 4. Regenerate `predictions/video_25/` after any of the above
+
+The app's only predicted case, and it is generated from whichever checkpoint
+was current. It is already one model behind what `app.md` describes.
+
+```sh
+uv run pitvis-predict --video 26531686/video_25.mp4 \
+                      --labels 26531686/annotations_25.csv
+```
+
+### 5. Then §4's list
+
+The honest CV for `dinov2_ft` (item 1 there) needs the per-fold harness change
+written first, and that change is free — it is the one thing on either list
+that costs nothing but an afternoon.
