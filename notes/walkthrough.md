@@ -655,14 +655,21 @@ Now vary it to build intuition:
 | prediction | edit | macro F1 | metric | why |
 |---|---|---|---|---|
 | `1 1 2 2` | 1.000 | 1.000 | 1.000 | exact |
-| `1 1 1 2` | 1.000 | — | — | segments `[1,2]` match; edit ignores *duration* |
+| `1 1 1 2` | 1.000 | 0.733 | 0.867 | segments `[1,2]` match; edit ignores *duration* |
 | `1 1 1 1` | 0.500 | 0.333 | 0.417 | worked above |
-| `1 2 1 2` | <0.5 | — | — | flicker: 4 segments against 2 |
+| `1 2 1 2` | 0.500 | 0.500 | 0.500 | flicker: 4 segments against 2 |
 
-The second row is the one worth sitting with: **the edit score is blind to how long each
-segment lasts.** It only cares about the *order and identity* of segments. Frame-wise
-accuracy and edit score measure genuinely different failures, which is why the challenge
-averages both.
+Two rows are worth sitting with.
+
+**The second**: the edit score is blind to how long each segment lasts. It only cares about
+the *order and identity* of segments, so a prediction that gets the duration badly wrong
+still scores a perfect 1.000.
+
+**The fourth**: flickering scores *exactly the same edit* as never transitioning at all —
+both 0.500. `[1,2,1,2]` needs two deletions against a 4-segment sequence
+(`1 - 2/max(4,2)`); `[1]` needs one insertion against a 2-segment one (`1 - 1/max(1,2)`).
+The metric separates them only because macro F1 does (0.500 against 0.333). Neither half
+of the challenge metric is sufficient alone, which is why it averages both.
 
 ---
 
