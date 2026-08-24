@@ -172,13 +172,22 @@ writes `step_probs.npy` (T, 15) and `instrument_probs.npy` (T, 19).
 
 The change is purely additive, and that is tested rather than asserted:
 `predictions.csv` for video_25 is **byte-identical** before and after, and the
-scores are unmoved at 0.3311 / 0.2699.
+scores are unmoved.
 
 **The caveat that matters.** The recorded distribution is the decoder's belief
 *before* the consistency constraint. CCI can revert a predicted transition, so
 on those seconds `probs[t].argmax()` disagrees with the label actually emitted.
-Measured: **164 of 4,337 seconds (3.8%)** on video_25, 160 of 4,456 (3.6%) on
-video_19.
+That fraction is **a property of the run, not a constant** — it depends on the
+checkpoint, so do not quote a number from here for a prediction you did not
+generate. Every run records its own: `summary.json` carries `steps.probs.held`
+and `held_frac`.
+
+The run measured when this was written held 164 of 4,337 seconds (3.8%) on
+video_25 and 160 of 4,456 (3.6%) on video_19. The `predictions/video_25/`
+currently on disk was generated later, from `arst-v2:best`, and records
+**57 of 4,337 (1.3%)** with scores of 0.3237 / macro 0.2029. Both are real; they
+are different runs. The checkpoints on this machine no longer match their
+recorded numbers either — [`current-state.md`](../current-state.md) §5, gap 8.
 
 Two ways to define confidence there, and the choice is the whole point:
 

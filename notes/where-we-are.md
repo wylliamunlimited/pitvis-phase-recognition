@@ -61,8 +61,9 @@ Instruments carry a second column because the official number and the honest
 one disagree — see below.
 
 **Iteration 4b is the largest single gain in the project.** Steps +0.0998 on
-the challenge metric outright, which is more than everything in iterations 1+2
-combined. Eleven of twelve scored step classes improve and durotomy comes back
+the challenge metric and +0.173 macro — larger than any single change before
+it, and larger than iterations 1+2 *combined* on macro (+0.134) though not on
+the challenge metric (+0.119). Eleven of twelve scored step classes improve and durotomy comes back
 from 0.000 F1 to 0.573 — a class the frozen encoder never once predicted
 correctly.
 

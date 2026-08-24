@@ -282,10 +282,28 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
    with `best@dinov2_ft` missing, `checkpoints.default()` ranks what remains
    and `arst-v2:best` wins by default. §6 below describes an encoder that is
    not on disk.
-8. **The shipped `arst-v2:best` scores 0.4196, not the 0.4610 on record** —
-   a later unrecorded re-run, verified by re-scoring the weights. See
-   `step-variants.md` §4, which owns the number and the evidence. Gap 1 quotes
-   `best` as 0.4420 macro; the artifact actually loaded reads 0.3998.
+8. **No checkpoint on this machine matches its recorded number** — all four,
+   not just one. Every `result.json` describes its own `model.pt` correctly
+   (verified by re-scoring `arst-v2:best` with `pitvis-eval`, which reproduces
+   its file to four decimals), so these are later re-runs whose numbers were
+   never written back into the notes:
+
+   | checkpoint | on disk (metric / macro) | recorded in the notes |
+   |---|---|---|
+   | `data/arst` — steps reproduction | 0.3402 / 0.3255 | 0.3425 |
+   | `data/arst/v2/best` — steps iter 1+2 | 0.4196 / 0.3998 | 0.4610 / 0.4420 |
+   | `data/instruments` — inst reproduction | 0.2336 / 0.2513 | 0.2321 / 0.2556 |
+   | `data/instruments/v2/best` — inst iter 1+2 | 0.4962 / 0.3883 | 0.5572 / 0.3792 |
+
+   The drift is not uniformly downward — the instrument variant reads *higher*
+   on macro and lower on the official number — so this is run-to-run variance,
+   not a systematic regression or a scoring bug. `--seed 0` was set throughout,
+   which means it is not pinning what it appears to pin.
+
+   **So quote the notes for what a run achieved, and re-score for what an
+   artifact will do.** The steps case has the full evidence trail in
+   `step-variants.md` §4. Gap 1 above quotes `best` at 0.4420 macro; the file
+   the app actually loads reads 0.3998.
 
 Every item above is now fixed except 3, 4, 6, 7 and 8 — the missing
 cross-validated number for `dinov2_ft`, the four unusable instrument classes,
