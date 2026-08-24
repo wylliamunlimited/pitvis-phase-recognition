@@ -298,13 +298,19 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
 
    Two different problems sit in that table:
 
-   - **The reproductions are fine.** Both owner notes match the artifacts
-     exactly, and `citi-baseline.md` explicitly records its re-run. The other
-     figures are stale copies in notes that should have linked instead. But
-     **0.3425 matches nothing** — not the table, not the re-run, not the
-     artifact — and it is the baseline in the README's headline
-     `0.3425 → 0.5608` and in every iteration delta. It needs a source or a
-     correction to 0.3402.
+   - **The reproductions are fine, and so is 0.3425** — it is a *third* draw
+     of the same configuration, measured on 2026-08-09 when `arst_v2`'s
+     control variant was first run (commit `719b056`: "ARST reproduces at
+     0.3425"). Three draws of one config span 0.3349 / 0.3402 / 0.3425, a
+     range of 0.008 — well inside the ±0.048 per-video spread, exactly as
+     `citi-baseline.md` §6 predicts.
+
+     The problem is not the number, it is that **different notes silently pick
+     different draws.** The README headline `0.3425 → 0.5608` and every
+     iteration delta use the 08-09 draw; `metrics.md` and the artifact use
+     0.3402. Pick one draw as the published baseline and make the rest link to
+     it, or the deltas are computed against a figure the repo cannot
+     reproduce on demand.
    - **The two v2 winners genuinely drift**, and by more than the reproductions
      do: 0.041 and 0.061 against 0.005. Re-scoring `arst-v2:best` reproduces
      its own `result.json` to four decimals, so the file is honest and the
