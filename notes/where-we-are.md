@@ -50,7 +50,7 @@ the whole reason `infra/` exists.
 
 | | what changed | steps | instruments (official / macro) |
 |---|---|---|---|
-| start | published reproductions | 0.3425 | 0.2321 / 0.2556 |
+| start | published reproductions | 0.3402 | 0.2321 / 0.2556 |
 | iter 1+2 | loss, decision rule, DINOv2 | 0.4610 | **0.5572** / 0.3792 |
 | iter 3 | fine-tuned ResNet-50 encoder | 0.4425 | 0.3805 / 0.4783 |
 | iter 4a | fine-tuned DINOv2 — bad recipe | 0.3500 | 0.2803 / — |
@@ -62,8 +62,8 @@ one disagree — see below.
 
 **Iteration 4b is the largest single gain in the project.** Steps +0.0998 on
 the challenge metric and +0.173 macro — larger than any single change before
-it, and larger than iterations 1+2 *combined* on macro (+0.134) though not on
-the challenge metric (+0.119). Eleven of twelve scored step classes improve and durotomy comes back
+it, and larger than iterations 1+2 *combined* on macro (+0.117) though not on
+the challenge metric (+0.121). Eleven of twelve scored step classes improve and durotomy comes back
 from 0.000 F1 to 0.573 — a class the frozen encoder never once predicted
 correctly.
 

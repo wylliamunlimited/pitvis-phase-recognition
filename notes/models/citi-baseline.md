@@ -202,7 +202,7 @@ and `standardize.npz` — the train-split feature mean/std, which closes roadmap
 
 > **Superseded in part.** [`step-variants.md`](step-variants.md) applies the
 > instrument-variant protocol to task 1: argmax masking plus class weights on
-> DINOv2 features lifts the challenge metric from 0.3425 to 0.4610 on val, and
+> DINOv2 features lifts the challenge metric from 0.3402 to 0.4610 on val, and
 > a fine-tuned DINOv2 encoder takes it to **0.5608**. The reproduction below is
 > unchanged and still what `pitvis-train arst` produces.
 
@@ -232,7 +232,19 @@ across the 5 val videos. The frozen feature cache is what buys that.
 
 Re-running the faithful config after the package restructure gave **0.3402 ±
 0.0484** (macro-F1 0.3255, edit 0.3548, 1,249 leaked) against the 0.3349 ±
-0.0473 in the table — same seed, same data, same code path.
+0.0473 in the table — same seed, same data, same code path. A third run on
+2026-08-09, when `arst_v2`'s control variant was introduced, gave 0.3425.
+
+> **0.3402 is the published baseline**, and this note is where that is decided.
+> Three real draws of the identical configuration exist — 0.3349, 0.3402,
+> 0.3425 — spanning 0.008, comfortably inside the ±0.048 per-video spread. They
+> were being quoted interchangeably across the notes, so the headline delta
+> depended on which one a given file happened to use.
+>
+> 0.3402 wins because it is the only draw an artifact reproduces: it is what
+> `data/arst/result.json` holds and what `pitvis-eval --ckpt data/arst/citi.pt`
+> prints today. Every delta elsewhere is computed from it. The other two stay
+> here, as the evidence for the non-determinism, and are quoted nowhere else.
 
 The gap is 0.005, an order of magnitude below the ±0.048 per-video spread. MPS
 reduction kernels are not bit-deterministic across runs, so `torch.manual_seed`

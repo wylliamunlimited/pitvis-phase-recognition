@@ -169,7 +169,7 @@ flowchart TD
 
 *Hypothesis:* the frozen ImageNet backbone is the bottleneck. It is the one
 deviation both our reproductions share from their published counterparts, and
-both sit near 50% of Table 8 (instruments 0.2556 vs 81; steps 34.3 vs 70).
+both sit near 50% of Table 8 (instruments 0.2556 vs 81; steps 34.0 vs 70).
 *Falsified if:* macro and the official metric are both within the fold spread
 of control — which would also refute the shared explanation for the ARST gap.
 

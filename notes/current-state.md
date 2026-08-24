@@ -77,7 +77,7 @@ and loss change combined.
 
 | | steps (challenge metric) | instruments (macro / aligned-w) |
 |---|---|---|
-| published reproductions | 0.3425 | 0.2556 / 0.6234 |
+| published reproductions | 0.3402 | 0.2556 / 0.6234 |
 | **current best** | **0.5608** ±0.052 | **0.5333** / **0.8416** |
 
 Both on the 5 validation videos, scored once. Per-class movement, what each
@@ -137,8 +137,8 @@ gap is: it reports a **−47-point val→test collapse for instruments** against
 −7 for steps, and SDS-HD scored **89 on validation and 41.7 on test**.
 
 The defensible statement for a demo is therefore *not* "we are 14 points behind
-CITI". It is: **the reproduction scored 0.3425 and the current model scores
-0.5608 on held-out video, a 64% relative improvement, under stricter conditions
+CITI". It is: **the reproduction scored 0.3402 and the current model scores
+0.5608 on held-out video, a 65% relative improvement, under stricter conditions
 than the published validation figures were measured under.** The private
 8-video test set was never released, so no comparison to the actual leaderboard
 is possible in either direction.
@@ -289,28 +289,33 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
    are not bit-reproducible"). What is *not* documented is the consequence:
    different notes quote different draws of the same configuration.
 
-   | model | on disk | owner note | quoted elsewhere |
+   | model | on disk | owner note | status |
    |---|---|---|---|
-   | `data/arst` steps repro | 0.3402 / 0.3255 | 0.3349, re-run 0.3402 ✓ | **0.3425** (6 places) |
-   | `data/instruments` inst repro | 0.2336 / 0.2513 | 0.2336 / 0.2513 ✓ | 0.2321 / 0.2556 |
-   | `data/arst/v2/best` steps | 0.4196 / 0.3998 | 0.4610 / 0.4420 ✗ | — |
-   | `data/instruments/v2/best` | 0.4962 / 0.3883 | 0.5572 / 0.3792 ✗ | — |
+   | `data/arst` steps repro | 0.3402 / 0.3255 | 0.3402 ✓ | **resolved** — see below |
+   | `data/instruments` inst repro | 0.2336 / 0.2513 | 0.2336 / 0.2513 ✓ | matches |
+   | `data/arst/v2/best` steps | 0.4196 / 0.3998 | 0.4610 / 0.4420 ✗ | drifts |
+   | `data/instruments/v2/best` | 0.4962 / 0.3883 | 0.5572 / 0.3792 ✗ | drifts |
 
-   Two different problems sit in that table:
+   Two different problems sat in that table, and one is now closed:
 
-   - **The reproductions are fine, and so is 0.3425** — it is a *third* draw
-     of the same configuration, measured on 2026-08-09 when `arst_v2`'s
-     control variant was first run (commit `719b056`: "ARST reproduces at
-     0.3425"). Three draws of one config span 0.3349 / 0.3402 / 0.3425, a
-     range of 0.008 — well inside the ±0.048 per-video spread, exactly as
-     `citi-baseline.md` §6 predicts.
+   - **The steps reproduction had three draws in circulation** — 0.3349 (the
+     original table), 0.3402 (the documented re-run, and the artifact) and
+     0.3425 (2026-08-09, commit `719b056`). All three are real measurements
+     spanning 0.008, well inside the ±0.048 per-video spread, exactly as
+     `citi-baseline.md` §6 predicts. The problem was that different notes
+     silently picked different ones, so the headline delta was computed
+     against a figure no artifact backed.
 
-     The problem is not the number, it is that **different notes silently pick
-     different draws.** The README headline `0.3425 → 0.5608` and every
-     iteration delta use the 08-09 draw; `metrics.md` and the artifact use
-     0.3402. Pick one draw as the published baseline and make the rest link to
-     it, or the deltas are computed against a figure the repo cannot
-     reproduce on demand.
+     **Resolved: 0.3402 is the published baseline**, because it is the draw an
+     artifact reproduces. Every delta and the README headline now use it, and
+     `citi-baseline.md` §6 declares it. The other two remain in that note as
+     the evidence for the non-determinism, and nowhere else.
+
+   - **The instrument reproduction is fine** — `instruments.md` §5 matches its
+     artifact exactly. The 0.2321 / 0.2556 pair in `instrument-variants.md`
+     and `where-we-are.md` is a second draw of the same kind, and task 2 has
+     **not** had the equivalent decision made. Doing so would shift
+     instrument-variants' baseline row and every delta computed from it.
    - **The two v2 winners genuinely drift**, and by more than the reproductions
      do: 0.041 and 0.061 against 0.005. Re-scoring `arst-v2:best` reproduces
      its own `result.json` to four decimals, so the file is honest and the

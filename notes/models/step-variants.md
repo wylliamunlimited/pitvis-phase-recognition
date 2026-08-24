@@ -10,7 +10,7 @@ Code: `src/pitvis/training/arst_v2.py`, `src/pitvis/training/crossval.py`.
 
 ## 1. What was wrong
 
-ARST reproduces at **0.3425** on the five validation videos. Table 8 benchmarks
+ARST reproduces at **0.3402** on the five validation videos. Table 8 benchmarks
 CITI at **70** on those same five. That is the same ~50% shortfall instrument
 recognition had, and the two reproductions share exactly one deviation from
 their published counterparts: a frozen ImageNet backbone.
@@ -150,9 +150,9 @@ taking; a support-weighted reading would not.
 
 | | ARST (control) | winner | delta |
 |---|---|---|---|
-| challenge `metric` | 0.3425 | **0.4610**±0.043 | **+0.119** |
-| macro F1 | 0.3083 | **0.4420**±0.079 | +0.134 |
-| edit score | 0.3767 | **0.4801**±0.041 | +0.103 |
+| challenge `metric` | 0.3402 | **0.4610**±0.043 | **+0.121** |
+| macro F1 | 0.3255 | **0.4420**±0.079 | +0.117 |
+| edit score | 0.3548 | **0.4801**±0.041 | +0.125 |
 
 Against Table 8's **70** for CITI on these same five videos, 46.1 is still well
 short — the frozen backbone was the untested lever at this point. §7 tests it,
@@ -248,10 +248,10 @@ was masking, at +0.073 metric.
 
 Against §4's changes *combined* the two metrics disagree, and the disagreement
 is worth keeping rather than rounding away. Masking, class weights and the
-backbone swap together moved macro 0.3083 → 0.4420 (+0.134) and the challenge
-metric 0.3425 → 0.4610 (+0.119). So fine-tuning beats all of them combined on
-macro (+0.173 against +0.134) but **not** on the challenge metric (+0.0998
-against +0.119). Macro is the primary here, so "largest gain in the project"
+backbone swap together moved macro 0.3255 → 0.4420 (+0.117) and the challenge
+metric 0.3402 → 0.4610 (+0.121). So fine-tuning beats all of them combined on
+macro (+0.173 against +0.117) but **not** on the challenge metric (+0.0998
+against +0.121). Macro is the primary here, so "largest gain in the project"
 stands — but it is a claim about macro, not about the headline number.
 
 ### Run 1 — why it failed

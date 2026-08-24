@@ -83,7 +83,7 @@ Two-stage pipeline, standard for surgical phase recognition:
 Both published architectures are reproduced first, then iterated on — loss,
 decision rule, and encoder, each isolated and cross-validated over the 19
 training videos before the 5 validation videos are scored once. The step metric
-has gone **0.3425 → 0.5608** across four iterations; the largest single gain
+has gone **0.3402 → 0.5608** across four iterations; the largest single gain
 came from fine-tuning the encoder, and only on the second attempt, after the
 first destroyed the representation. Results, and what each iteration tested,
 live in [`notes/models/`](notes/models/) — start with
