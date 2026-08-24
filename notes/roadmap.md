@@ -63,7 +63,7 @@ loader.
       different feature space, so mixed-backbone caches fail loudly instead of
       silently. Checkpoints (2.3) should record `space.id`.
 
-- [ ] **1.3 Normalisation statistics as a saved artifact.** `train_baseline.py`
+- [ ] **1.3 Normalisation statistics as a saved artifact.** `training/baseline.py`
       computes train-split mean/std inline (`src/pitvis/training/baseline.py:45`) and
       discards them when the process exits. Any inference path must apply the
       *same* transform, so these have to become a saved artifact keyed to the
@@ -119,12 +119,12 @@ model-specific.
 - [ ] **2.2 Shared training loop.** Seeding, device selection, epoch loop,
       validation, early stopping / best-checkpoint selection on the official
       metric, and logging — written once, reused by every model. Currently
-      `train_baseline.py` inlines all of it in 60 lines and any second model
+      `training/baseline.py` inlines all of it in 60 lines and any second model
       would copy-paste it.
 
 - [ ] **2.3 Checkpointing.** Save model weights **plus** normalisation stats,
       config, label encoding, and the feature-cache manifest hash in one
-      artifact. `train_baseline.py` currently trains, prints, and discards the
+      artifact. `training/baseline.py` currently trains, prints, and discards the
       model — no run so far has produced anything reusable. This is the single
       blocker shared by both the modeling and app tracks.
 

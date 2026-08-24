@@ -175,13 +175,13 @@ frame only triggers a small fraction of the 2,048 detectors, so embeddings are
 sparse and low-mean.
 
 That sparsity and the wildly different per-dimension scales are why
-`train_baseline.py` standardizes each dimension (subtract mean, divide by std) on
+`training/baseline.py` standardizes each dimension (subtract mean, divide by std) on
 the train split before the linear layer. Feeding raw embeddings to a linear model
 would let a few high-variance dimensions dominate the gradient.
 
 > Saving those mean/std values as a real artifact is roadmap item **1.3**, and it
 > is a correctness blocker: any inference path must apply the *same* transform, and
-> today `train_baseline.py:45` computes them inline and discards them on exit.
+> today `training/baseline.py:45` computes them inline and discards them on exit.
 
 ---
 

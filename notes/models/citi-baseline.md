@@ -192,7 +192,7 @@ uv run pitvis-train arst --mask-excluded   # drop 0/11/13 from the argmax
 
 Artifacts land in `data/arst/`: `citi.pt` (all three stages), `result.json`,
 and `standardize.npz` — the train-split feature mean/std, which closes roadmap
-1.3 (previously computed inline in `train_baseline.py` and thrown away).
+1.3 (previously computed inline in `training/baseline.py` and thrown away).
 
 ---
 

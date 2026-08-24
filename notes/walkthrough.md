@@ -504,12 +504,12 @@ cached features           standardize          Linear(2048 -> 15)      argmax
                           stats from TRAIN     AdamW, 10 epochs        no temporal context
 ```
 
-- `train_baseline.py:45` — mean/std computed on the **train split only**, then reused for val
-  at `train_baseline.py:75`. Computing them over val too would leak.
-- `train_baseline.py:49` — `nn.Linear(2048, 15)`. **15 outputs, trained on all 15 classes**,
+- `training/baseline.py:45` — mean/std computed on the **train split only**, then reused for val
+  at `training/baseline.py:75`. Computing them over val too would leak.
+- `training/baseline.py:49` — `nn.Linear(2048, 15)`. **15 outputs, trained on all 15 classes**,
   including the rare 11 and 13 and background. Rarity exclusion happens at evaluation time
   only; we never drop rows from training. This matches the challenge baseline.
-- `train_baseline.py:71-78` — inference per video, collecting `(vid, labels, preds)` tuples.
+- `training/baseline.py:71-78` — inference per video, collecting `(vid, labels, preds)` tuples.
   This shape matters: evaluation is per video, so predictions are never concatenated.
 
 **Why bother with a model this weak?** It establishes the floor. Every temporal model gets
@@ -710,7 +710,7 @@ uv run pitvis-extract 7 25
 Watch the asserts at `extract_features.py:108` and `:119-121` pass on real data.
 
 **E. Run the baseline on those two.** It will be a meaningless model — one training video —
-but it exercises `dataset.py`, `train_baseline.py` and `evaluation/metric.py` end to end. You will need to
+but it exercises `dataset.py`, `training/baseline.py` and `evaluation/metric.py` end to end. You will need to
 temporarily narrow `TRAIN`/`VAL`, or just call the functions from a REPL.
 
 **F. Then commit to the full extraction.** Hours, resumable, run it in the background.
