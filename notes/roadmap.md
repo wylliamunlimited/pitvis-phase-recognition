@@ -74,12 +74,15 @@ loader.
       it is the throwaway linear probe and produces no checkpoint to pair them
       with.
 
-- [ ] **1.4 Sequence dataset.** `src/pitvis/data/dataset.py` is 37 lines of whole-array
-      loading. Temporal models need: full-video sequences (an MS-TCN trains on
-      one whole video per batch — 8,645 × 2048 fits in memory comfortably),
-      fixed-length windows with stride and padding, and a collate that handles
-      variable lengths with a mask. Build all three behind one interface so
-      model code never touches `.npy` paths.
+- [ ] **1.4 Sequence dataset.** `src/pitvis/data/dataset.py` is 108 lines and
+      still whole-array only — it grew by adding `STEP_NAMES` and the two
+      instrument loaders, not by gaining any sequence support. Temporal models
+      need: full-video sequences (an MS-TCN trains on one whole video per batch
+      — 8,645 × 2048 fits in memory comfortably), fixed-length windows with
+      stride and padding, and a collate that handles variable lengths with a
+      mask. Build all three behind one interface so model code never touches
+      `.npy` paths. The cost of not doing it is now visible: `arst.py:155` and
+      `arst_v2.py:201` build the same window list independently.
 
 - [~] **1.5 Imbalance utilities.** Done for task 2, still open for task 1.
       `training/instruments_v2.py` computes capped inverse-frequency
