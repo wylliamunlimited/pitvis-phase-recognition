@@ -158,6 +158,26 @@ Against Table 8's **70** for CITI on these same five videos, 46.1 is still well
 short — the frozen backbone was the untested lever at this point. §7 tests it,
 and closes about half the remaining gap.
 
+> **The checkpoint on disk is not this model.** `data/arst/v2/best/` holds a
+> later, unrecorded re-run (2026-08-11 12:02) that lands at **0.4196 ±0.0565**
+> — macro 0.3998, edit 0.4394 — against the 0.4610 ±0.043 recorded above. It is
+> also the default: `pitvis-predict --list-models` resolves `arst-v2:best` to
+> it, so the app and every prediction use the weaker model.
+>
+> The gap is in *training*, not in bookkeeping. `result.json` describes its own
+> `model.pt` faithfully — re-scoring the weights with
+> `uv run pitvis-eval --ckpt data/arst/v2/best/model.pt` reproduces all three
+> numbers to four decimals. The recorded 0.4610 is equally real: `4d56a7c`
+> established it and `3fcb8cc` retrained the winner and reproduced it. Nothing
+> between those commits and 2026-08-11 touched `arst_v2.py`, so the most likely
+> cause is run-to-run nondeterminism, and 0.042 sits inside the ±0.0565 spread.
+>
+> Two things follow. **Quote 0.4196 for anything the shipped artifact does**,
+> and 0.4610 only as the recorded result of the run this table describes. And
+> the seed is not currently pinning what it appears to pin — `--seed 0` was set
+> for both runs, so a re-run is not reproducible on this machine. Neither is
+> resolved by editing a note; both need a re-run, ideally more than one.
+
 ---
 
 ## 5. What this did not test

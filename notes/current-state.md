@@ -275,9 +275,23 @@ runtime, verified exactly per second — 4337 of 4337 on video_25.
    label, and in the detail view INSTRUMENT USE clips the timecode. Panels are
    draggable, so it is a default-position issue rather than a layout failure.
 
-Every item above is now fixed except 3, 4 and 6 — the missing cross-validated
-number for `dinov2_ft`, the four unusable instrument classes, and the default
-panel positions. None of those is a correctness bug in the pipeline.
+7. **This machine does not hold the models this note describes.** Absent:
+   `data/backbone/`, `data/features/dinov2_ft/`, and every `@dinov2_ft` /
+   `@resnet50_ft` checkpoint directory — they were produced by the cloud job
+   and never synced back. So gap 1 above is *code*-fixed but currently inert:
+   with `best@dinov2_ft` missing, `checkpoints.default()` ranks what remains
+   and `arst-v2:best` wins by default. §6 below describes an encoder that is
+   not on disk.
+8. **The shipped `arst-v2:best` scores 0.4196, not the 0.4610 on record** —
+   a later unrecorded re-run, verified by re-scoring the weights. See
+   `step-variants.md` §4, which owns the number and the evidence. Gap 1 quotes
+   `best` as 0.4420 macro; the artifact actually loaded reads 0.3998.
+
+Every item above is now fixed except 3, 4, 6, 7 and 8 — the missing
+cross-validated number for `dinov2_ft`, the four unusable instrument classes,
+the default panel positions, the absent cloud artifacts, and the step
+checkpoint's drift from its recorded score. None of those is a correctness bug
+in the pipeline, but 7 and 8 both change what a demo may claim.
 
 Also fixed alongside these: `pitvis-predict --list-models` required `--video`,
 so the one command that answers "which model is the default here" could not be
