@@ -129,16 +129,34 @@ model-specific.
       `training/baseline.py` inlines all of it in 60 lines and any second model
       would copy-paste it.
 
-- [ ] **2.3 Checkpointing.** Save model weights **plus** normalisation stats,
-      config, label encoding, and the feature-cache manifest hash in one
-      artifact. `training/baseline.py` currently trains, prints, and discards the
-      model — no run so far has produced anything reusable. This is the single
-      blocker shared by both the modeling and app tracks.
+- [x] **2.3 Checkpointing.** Every trainer but the linear probe writes
+      `model.pt` (weights plus the `space` / `variant` / `mask_excluded` /
+      `logit_adjust` tags), `standardize.npz` (1.3) and `result.json` into one
+      directory keyed by variant and space. `inference/checkpoints.py` is the
+      only decoder — `read_tags` falls back to `args` before the default, so
+      checkpoints written before the tags existed still resolve correctly. The
+      linear probe still discards its model, deliberately: it is the floor
+      measurement, not a candidate.
 
-- [ ] **2.4 Run artifacts.** Per-run directory: `config.json`, `metrics.json`
-      (the full dict from `metric.evaluate`, per video and aggregate),
-      per-video predictions as `.npy`, and the console report. Makes runs
-      diffable instead of scrollback-dependent.
+      Not yet covered by the artifact: the feature-cache manifest hash. A
+      checkpoint records the space by *name*, so it cannot detect being run
+      against a cache rebuilt with different transform settings under the same
+      name.
+
+- [~] **2.4 Run artifacts.** Partly done. The per-run directory exists and
+      `result.json` carries the full `args` dict (so config is covered) plus
+      the **aggregate** mean/std. Three pieces are still missing, and the third
+      has now cost something real:
+
+      - **per-video** scores — `result.json` keeps only mean/std, so the
+        per-video spread that every caveat in this repo depends on has to be
+        recomputed by re-running `pitvis-eval`
+      - per-video predictions as `.npy`
+      - the console report
+
+      Without per-video rows a recorded score cannot be checked against the
+      checkpoint sitting next to it except by re-scoring — which is exactly how
+      the `arst-v2:best` drift in `step-variants.md` §4 went unnoticed.
 
 - [x] **2.5 `pitvis/inference/predict.py`.** ✅ Now runs BOTH tasks off one
       feature pass — steps (ARST) and instruments (SANO). Video path → features (1.6) → checkpoint (2.3) →
