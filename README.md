@@ -135,6 +135,7 @@ tests/test_eval_instruments.py  pins the task-2 metric, incl. its upstream defec
 tests/test_app_range.py     pins HTTP Range — whether a case plays at all
 tests/test_app_case.py      pins the case document and the probability outputs
 tests/test_doc_pointers.py  pins every `file.py:NN` in notes/ to what it names
+                            (one test per pointer, so the total tracks the notes)
 notes/README.md             the map — which layer each document belongs to
 notes/where-we-are.md       dated snapshot: where the numbers got to, what to run next
 notes/walkthrough.md        the domain, the data, and the pipeline — start here
