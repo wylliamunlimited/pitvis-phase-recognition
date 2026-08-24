@@ -38,8 +38,9 @@ What already exists and has been verified by running it, not just by reading it.
       `src/pitvis/data/verify_cache.py --probe` (every check passing).
 
 Getting evaluation provably correct *before* any model exists is the right
-order, and it is the strongest part of the foundation. The weakest part is that
-nothing downstream of feature extraction has ever produced an artifact.
+order, and it is the strongest part of the foundation. It stayed strong: the
+vendored metric is still the headline on both tasks, and every number in the
+notes since has gone through it.
 
 ---
 
@@ -84,22 +85,29 @@ loader.
       `.npy` paths. The cost of not doing it is now visible: `arst.py:155` and
       `arst_v2.py:201` build the same window list independently.
 
-- [~] **1.5 Imbalance utilities.** Done for task 2, still open for task 1.
+- [x] **1.5 Imbalance utilities.** Done on both tasks.
       `training/instruments_v2.py` computes capped inverse-frequency
-      `pos_weight` from the fold's own training videos, and it is the single
-      largest win measured so far: macro F1 0.296 → 0.401 out of fold, with
-      classes never predicted going 7/19 → 0/19. The steps model still trains
-      on unweighted cross-entropy over a 23.9% / 0.06% distribution while being
-      scored macro, so the same mismatch remains there.
+      `pos_weight` from the fold's own training videos: macro F1 0.296 → 0.401
+      out of fold, classes never predicted 7/19 → 0/19. `training/arst_v2.py`
+      then did the same for steps — capped inverse-frequency class weights at
+      all three stages (`Variant(..., weighted=True)`, capped at 10 because
+      nasal packing is 0.06% of frames). The `weighted` variant alone moves
+      macro 0.4047 → 0.4393 out of fold, and the winner carries it.
       No balanced *sampler* was needed — `pos_weight` reweights the loss without
       changing the effective epoch length, which keeps a variant comparable to
       its control on the same compute budget.
 
-- [ ] **1.6 Generalised extraction path.** `extract_features.py` is hardcoded to
-      `26531686/video_{n:02d}.mp4` and the `annotations_{n}.csv` convention
-      (`src/pitvis/data/extract_features.py:377`, `extract_features.py:262`). Accept an arbitrary video path with
-      optional labels. Required by `predict.py` in Phase 2 — an app cannot only
-      work on the 25 videos we happen to have.
+- [~] **1.6 Generalised extraction path.** The part Phase 2 needed is done:
+      `embed_video` takes any video path and assumes nothing about naming or
+      resolution, which is what lets `pitvis-predict --video case.mp4` work on
+      a file the challenge never shipped. It is the single path from pixels to
+      features, shared with cache extraction, so a prediction is always
+      computed in the checkpoint's own feature space.
+
+      Still challenge-keyed is the *cache* path around it —
+      `extract_features.py:377` builds `26531686/video_{n:02d}.mp4` and `:262`
+      the matching `annotations_{n}.csv`, so populating the cache for an
+      outside video still means going through `embed_video` by hand.
 
 - [x] **1.7 (D) Frame access for end-to-end fine-tuning.** Resolved in favour
       of a JPEG cache on disk: `pitvis-frames` writes 1 fps centre-square 384 px
@@ -166,8 +174,15 @@ model-specific.
       experiment into something that can be pointed at a new case.
 
 - [ ] **2.6 Reproducibility check.** Same seed + same config → same metric.
-      Worth one test, because MPS non-determinism is easy to mistake for a real
-      model improvement.
+      Still open, and no longer hypothetical: `--seed 0` demonstrably does not
+      pin a run on this machine. The ARST reproduction has three recorded draws
+      (0.3349 / 0.3402 / 0.3425) and the two v2 winners drift further than that
+      — far enough that a re-run could be mistaken for a variant. Both baselines
+      are now pinned to the draw an artifact reproduces
+      ([`citi-baseline.md`](models/citi-baseline.md) §6,
+      [`instruments.md`](models/instruments.md) §5), which is a convention, not
+      a fix. The fix is this item: bound the spread by re-running one config n
+      times, so a claimed improvement can be checked against it.
 
 ---
 
@@ -176,12 +191,14 @@ model-specific.
 Ordered cheapest-first. Each step gets a row in the results table (Phase 4)
 before the next one starts, so we always know what an idea actually bought.
 
-- [ ] **3.1 Baseline, completed.** Record the linear probe's official metric as
-      the floor, then add the three known gaps: class weighting (1.5),
-      checkpointing (2.3), and masking classes 0/11/13 out of the argmax at
-      inference. `CLAUDE.md` already establishes that the last one *can only
-      raise* the official metric, since exclusion filters by ground truth only —
-      it is a free win that no model currently takes.
+- [x] **3.1 Baseline, completed.** All four parts landed. The linear probe's
+      floor is recorded at 0.1599 / macro 0.3060 / edit 0.0138
+      ([`citi-baseline.md`](models/citi-baseline.md) §6); class weighting is
+      1.5; checkpointing is 2.3; and masking is no longer "a free win no model
+      takes" — it became the `masked` variant and then part of the winner, and
+      was the largest single lever in that iteration at +0.062 macro out of
+      fold. Measured on a fixed checkpoint it is worth +0.100
+      ([`metrics.md`](reference/metrics.md) §7).
 
 - [ ] **3.2 Temporal model over frozen features — MS-TCN.** The standard strong
       baseline for surgical phase recognition, and the natural next step: the
@@ -260,11 +277,19 @@ The metric itself is done and tested; what is missing is everything *around* it.
 
 - [ ] **4.1 Results table.** One row per run in `notes/models/results.md`: config, macro
       F1, edit score, official metric ± std, date, commit. Append-only.
-- [ ] **4.2 Error analysis.** Which steps get confused (the confusion matrix
-      exists but has never been looked at on real predictions), where segment
-      boundaries drift, and which of the 5 val videos drive the variance.
-- [ ] **4.3 Ablations.** Temporal context length, class weighting on/off,
-      post-processing on/off.
+- [~] **4.2 Error analysis.** Partly done. The confusion matrix has been read
+      on real predictions — per-class movement tables are in
+      [`step-variants.md`](models/step-variants.md) §4 and
+      [`instruments.md`](models/instruments.md) §5, and they are what identified
+      the three regressing step classes and the nine dead instrument ones. Not
+      done: where segment boundaries drift, and which val videos drive the
+      variance.
+- [~] **4.3 Ablations.** Two of three done: temporal context length
+      (`--width 0` against W=5) and post-processing on/off (`--no-cci`) are both
+      in [`citi-baseline.md`](models/citi-baseline.md) §6, and class weighting
+      on/off is the `control`-vs-`weighted` pair in
+      [`step-variants.md`](models/step-variants.md) §4. Not done: any of these
+      under cross-validation rather than on the single VAL scoring.
 - [x] **4.4 Split-variance caveat.** `data/folds.py` + `training/crossval.py`.
       Variants are ranked by 5-fold cross-validation over the 19 training
       videos — each held out exactly once, scored per-video-then-mean — and VAL
