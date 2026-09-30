@@ -151,7 +151,7 @@ Two consequences worth carrying forward:
 
 ### Stages 4 and 5 — batch, assert, save
 
-64 frames per forward pass (`extract_features.py:320-326`), concatenated to `(T, 2048)`. Then:
+64 frames per forward pass (`extract_features.py:329-335`), concatenated to `(T, 2048)`. Then:
 
 ```python
 assert len(features) == expected, ...   # extract_features.py:328

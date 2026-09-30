@@ -66,6 +66,12 @@ def main(argv: list[str] | None = None) -> None:
     argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args(argv)
     rows = []
     step_totals = {k: 0 for k in STEP_IDS}
+    # Which steps each video contains, recorded while its CSV is already open.
+    # The distribution table below used to count videos per step with a
+    # generator that re-ran `load_annotations` for all 24 files once per step
+    # id — 360 redundant parses, each re-running its three assertions, in a
+    # command whose only other work is 25 ffprobes.
+    steps_present: dict[int, set[int]] = {}
     for vid in range(1, 26):
         video = RAW / f"video_{vid:02d}.mp4"
         p = probe(video)
@@ -87,6 +93,7 @@ def main(argv: list[str] | None = None) -> None:
             row["tail_bg"] = int(ann["int_step"].iloc[-1]) == -1
             for k, n in ann["int_step"].value_counts().items():
                 step_totals[int(k)] += int(n)
+            steps_present[vid] = {int(k) for k in ann["int_step"].unique()}
         rows.append(row)
         print(f'video {vid:02d}: {p["duration"]:7.0f}s {row["res"]} '
               f'{p["fps"]:.3f}fps frames={p["nb_frames"]} '
@@ -122,11 +129,7 @@ def main(argv: list[str] | None = None) -> None:
         f.write("| step | name | seconds | % | videos |\n|---|---|---|---|---|\n")
         for k in STEP_IDS:
             n = step_totals[k]
-            nvid = sum(
-                1 for vid in range(1, 26)
-                if (df := load_annotations(vid)) is not None
-                and (df["int_step"] == k).any()
-            )
+            nvid = sum(1 for present in steps_present.values() if k in present)
             f.write(f'| {k} | {step_names[k]} | {n} | {100 * n / total:.2f} | {nvid} |\n')
     print(f"\nAll checks passed. Wrote {OUT.relative_to(ROOT)}")
 

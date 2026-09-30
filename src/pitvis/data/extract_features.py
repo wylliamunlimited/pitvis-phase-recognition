@@ -296,16 +296,25 @@ def write_annotations(vid: int, out_dir: Path, expected: int) -> bool:
 
 @torch.no_grad()
 def embed_video(video: Path, model, transform, device: torch.device,
-                tag: str | None = None) -> tuple[np.ndarray, int]:
+                tag: str | None = None,
+                probed: tuple[int, int, int, int] | None = None
+                ) -> tuple[np.ndarray, int]:
     """Decode `video` at 1 fps and embed every frame. Returns (features, fps).
 
     The one path from pixels to a feature matrix — used both by cache
     extraction and by `pitvis.inference.predict`, so a prediction is computed
     from exactly the feature space the model was trained on. Accepts any video
     file; nothing here assumes the challenge's naming or resolution.
+
+    `probed` is this video's `probe()` result when the caller already has one.
+    `probe` passes `-count_packets`, which reads the whole container to count
+    packets, so probing twice means an extra full pass over the file —
+    `extract_video` probes to decide whether to resume and then called this,
+    which probed again: 25 extra passes over the 40 GB download on a cold
+    extraction. Omitting it probes here, as `pitvis-predict` does.
     """
     tag = tag or video.stem
-    nb_frames, r, width, height = probe(video)
+    nb_frames, r, width, height = probed if probed is not None else probe(video)
     expected = math.ceil(nb_frames / r)
     frame_bytes = width * height * 3
 
@@ -393,7 +402,8 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
     video = RAW / f"video_{vid:02d}.mp4"
     out_dir = video_dir(name, vid)
     mpath = manifest_path(name)
-    nb_frames, r, _, _ = probe(video)
+    probed = probe(video)
+    nb_frames, r = probed[0], probed[1]
     expected = math.ceil(nb_frames / r)
 
     feat_path = out_dir / "features.npy"
@@ -433,7 +443,7 @@ def extract_video(vid: int, model, transform, device: torch.device, manifest: di
             )
     else:
         features, r = embed_video(video, model, transform, device,
-                                  tag=f"video {vid:02d}")
+                                  tag=f"video {vid:02d}", probed=probed)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     np.save(feat_path, features)
