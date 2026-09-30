@@ -79,6 +79,49 @@ def test_dinov2_is_pinned_to_224_not_its_native_518():
     assert spaces.get("dinov2_vitb14").model_kwargs == {"img_size": 224}
 
 
+# -- the declared width ------------------------------------------------------
+
+def test_every_space_declares_its_feature_width():
+    """Declared, so the width is readable without a cache.
+
+    The hashed payload still takes the width from `model.num_features`, but
+    that only exists after the backbone is built with pretrained weights.
+    Anything reasoning about a space on a fresh clone needs the number without
+    a download, and `models/run.py` is exactly that case.
+    """
+    for space in spaces.SPACES.values():
+        assert space.feature_dim > 0
+
+
+def test_the_declared_widths_are_the_two_the_cache_holds():
+    """Two spaces at 2048 and two at 768 — the checkpoint tag is what tells
+    a loader which, which is why both widths must be stated rather than
+    inferred from the name."""
+    assert spaces.get("resnet50").feature_dim == 2048
+    assert spaces.get("resnet50_ft").feature_dim == 2048
+    assert spaces.get("dinov2_vitb14").feature_dim == 768
+    assert spaces.get("dinov2_ft").feature_dim == 768
+
+
+def test_the_trace_falls_back_to_the_SPACE_width_not_a_hardcoded_one():
+    """The bug this pins: `manifest_dim` returned 2048 for every space when no
+    manifest existed, so `pitvis-models --space dinov2_ft` on a fresh clone
+    traced the 2048-d cascade (25,500,732 params) and printed it as the 768-d
+    one (24,845,372). The command the architecture atlas names for seeing the
+    768-d model showed the wrong model, with no warning.
+
+    Asserted against a space with no cache on this machine, which is the only
+    situation where the fallback is reached at all.
+    """
+    from pitvis.models.run import manifest_dim
+
+    for name, want in [("resnet50", 2048), ("dinov2_vitb14", 768),
+                       ("dinov2_ft", 768), ("resnet50_ft", 2048)]:
+        if paths.manifest_path(name).exists():
+            continue                     # a real cache outranks the declaration
+        assert manifest_dim(name) == want
+
+
 # -- the path layout ---------------------------------------------------------
 
 def test_every_cache_path_hangs_off_the_space():

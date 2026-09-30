@@ -50,13 +50,26 @@ def params(m) -> int:
     return sum(p.numel() for p in m.parameters())
 
 
-def manifest_dim(space: str, default: int = 2048) -> int:
-    """Feature width for a space, read from its manifest when one exists."""
+def manifest_dim(space: str) -> int:
+    """Feature width for a space: the cache's if there is one, else declared.
+
+    The manifest is authoritative when it exists, because it records what was
+    actually extracted. But it is a CACHE artifact, so on a fresh clone -- the
+    exact case the synthetic fallback exists for -- there is none, and this
+    used to return a hardcoded 2048. `--space dinov2_ft` then traced the
+    2048-d cascade and printed it as the 768-d one: 25,500,732 parameters
+    instead of 24,845,372, with no warning, in the command the architecture
+    atlas tells you to run to see the 768-d model.
+
+    `spaces.Space.feature_dim` is declared in the registry and needs no cache,
+    no download and no GPU. `extract_features.build_model` asserts it against
+    `model.num_features`, so the two cannot disagree.
+    """
     import json
     mpath = manifest_path(space)
     if mpath.exists():
         return json.loads(mpath.read_text())["space"]["feature_dim"]
-    return default
+    return spaces.get(space).feature_dim
 
 
 def load(video: int, fallback_len: int, space: str = spaces.DEFAULT,

@@ -106,6 +106,20 @@ def build_model(device: torch.device, space: spaces.Space):
               + (f" ({len(missing)} head keys absent, as expected)" if missing else ""))
     model.eval().to(device)
 
+    # The registry DECLARES this width so the width is readable without a
+    # cache; the hashed payload below still takes it from the built model.
+    # Pinning them together here is what keeps the declaration honest -- a
+    # backbone swap that changed the width would otherwise leave the registry
+    # describing the old one, and the trace would mislead exactly where it is
+    # relied on as a smoke test.
+    if model.num_features != space.feature_dim:
+        raise SystemExit(
+            f"space {space.name!r} declares feature_dim={space.feature_dim} "
+            f"but {space.backbone} built {model.num_features}. Fix the "
+            f"registry entry in data/spaces.py; the cache's id is derived "
+            f"from the built width, not the declared one."
+        )
+
     # `resolve_data_config` reports the CHECKPOINT's native config, not the
     # model we just built. DINOv2's weights ship at 518, so without this
     # override the transform resizes to 518 and the 224 model rejects it:
