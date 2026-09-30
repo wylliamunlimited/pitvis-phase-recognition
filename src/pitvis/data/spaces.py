@@ -41,6 +41,16 @@ class Space:
     name: str
     backbone: str
     summary: str
+    # Declared, not discovered. The hashed payload still takes the width from
+    # `model.num_features` at extraction time, so `space_id` is untouched by
+    # this field -- but that number only exists once the backbone has been
+    # built with pretrained weights, i.e. after a download, and only survives
+    # in the cache's manifest.json. Anything that needs the width WITHOUT a
+    # cache (the `pitvis-models` trace on a fresh clone) had nowhere to read
+    # it and fell back to a hardcoded 2048, silently tracing the wrong model
+    # for a 768-d space. `build_model` asserts the two agree, so the
+    # declaration cannot drift from the backbone it describes.
+    feature_dim: int
     target_fps: int = 1
     model_kwargs: dict = field(default_factory=dict)
     # Fine-tuned weights, relative to data/. None means the timm pretrained
@@ -59,11 +69,13 @@ SPACES: dict[str, Space] = {
     for s in [
         Space(
             name="resnet50",
+            feature_dim=2048,
             backbone="resnet50",
             summary="ImageNet ResNet-50, 2048-d, 224px — the original cache",
         ),
         Space(
             name="resnet50_ft",
+            feature_dim=2048,
             backbone="resnet50",
             summary="ResNet-50 fine-tuned on PitVis frames — surgical-specific",
             checkpoint="backbone/resnet50-5ep/backbone.pt",
@@ -71,6 +83,7 @@ SPACES: dict[str, Space] = {
         ),
         Space(
             name="dinov2_vitb14",
+            feature_dim=768,
             backbone="vit_base_patch14_dinov2.lvd142m",
             summary="DINOv2 ViT-B/14, 768-d, 224px — self-supervised, 16x16 grid",
             model_kwargs={"img_size": 224},
@@ -89,6 +102,7 @@ SPACES: dict[str, Space] = {
         #       --img-size 224 --tag dinov2-50ep --epochs 50 --device cuda
         Space(
             name="dinov2_ft",
+            feature_dim=768,
             backbone="vit_base_patch14_dinov2.lvd142m",
             summary="DINOv2 ViT-B/14 fine-tuned on PitVis frames — 768-d, 224px",
             model_kwargs={"img_size": 224},

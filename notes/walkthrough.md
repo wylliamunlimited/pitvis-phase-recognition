@@ -395,7 +395,7 @@ Reading order in the code:
 - `extract_features.py:84` `build_model()` — `timm.create_model("resnet50",
   pretrained=True, num_classes=0)`. The `num_classes=0` is the important argument: it strips
   the classifier and returns the 2048-d global-pooled embedding instead of 1000 logits.
-- `extract_features.py:384-407` — the **resume check**. If `features.npy` exists and has the
+- `extract_features.py:398-421` — the **resume check**. If `features.npy` exists and has the
   expected length, skip the video. This makes an interrupted 3-hour run cheap to restart.
   Length mismatch triggers a redo, so a half-written file self-heals.
 - `extract_features.py:296-300` — the ffmpeg command. The `select` filter keeps frames
