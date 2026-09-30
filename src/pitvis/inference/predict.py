@@ -195,16 +195,23 @@ def load_instrument_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int
     Three tags decide how the checkpoint is used, and all three are absent from
     SANO's original sano.pt, which is why each has a default that reproduces
     it: `arch` (sano-lstm), `space` (resnet50) and `thresholds` (None, meaning
-    the caller's global threshold).
+    the caller's global threshold). Those defaults live in
+    `checkpoints.read_tags`, which is the only place a checkpoint dict is
+    decoded. This function used to decode them itself, and the two copies had
+    drifted: an untagged `sano.pt` read as variant "sano" here and
+    "reproduction" there, so the same file was named differently in
+    `summary.json` and in `--list-models`.
     """
     if not ckpt_path.exists() or not std_path.exists():
         return None
 
+    from pitvis.inference.checkpoints import INSTRUMENTS, read_tags
     from pitvis.models.lstm import SanoLSTM
 
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     a = ckpt["args"]
-    arch = ckpt.get("arch", "sano-lstm")
+    meta = read_tags(ckpt, INSTRUMENTS)
+    arch = meta["arch"]
     if arch != "sano-lstm":
         raise SystemExit(
             f"{ckpt_path} declares arch {arch!r}, which this inference path "
@@ -217,10 +224,6 @@ def load_instrument_checkpoint(ckpt_path: Path, std_path: Path, feature_dim: int
     model.load_state_dict(ckpt["model"])
     model.eval()
     stats = np.load(std_path)
-    taus = ckpt.get("thresholds")
-    meta = {"arch": arch, "space": ckpt.get("space", spaces.DEFAULT),
-            "thresholds": np.asarray(taus, dtype=np.float32) if taus else None,
-            "variant": ckpt.get("variant", "sano")}
     return model, stats["mean"], stats["std"], a, meta
 
 

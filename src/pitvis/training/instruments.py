@@ -29,6 +29,7 @@ import torch
 from pitvis.device import device_of, seed_everything
 import torch.nn as nn
 
+from pitvis.data import spaces
 from pitvis.data.dataset import TRAIN, VAL, load_split, load_split_instruments
 from pitvis.evaluation.instruments import multihot, multihot_to_pairs, report
 from pitvis.models.lstm import HIDDEN, LAYERS, WINDOW, SanoLSTM, causal_windows, decide
@@ -165,7 +166,15 @@ def main(argv: list[str] | None = None) -> None:
     print(f"training done in {time.time() - t0:.0f}s")
 
     model.eval()
-    torch.save({"model": model.state_dict(), "args": vars(args)},
+    # Tags at the TOP LEVEL, not only inside `args`. CLAUDE.md records why:
+    # `pitvis-train arst --mask-excluded` once wrote a file that read back as
+    # unmasked because the flag lived only in `args`. This writer recorded no
+    # tags at all, so `read_tags` had to supply every one of them from its
+    # defaults — which is fine for the reproduction it describes and silently
+    # wrong for anything else trained through this path.
+    torch.save({"model": model.state_dict(), "args": vars(args),
+                "arch": "sano-lstm", "variant": "reproduction",
+                "space": spaces.DEFAULT, "thresholds": None},
                CKPT_INSTRUMENTS / "sano.pt")
 
     preds = []

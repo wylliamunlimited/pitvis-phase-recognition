@@ -31,6 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 from pitvis.data import spaces
 from pitvis.paths import CKPT, CKPT_INSTRUMENTS
 
@@ -125,7 +127,13 @@ def read_tags(ckpt: dict, task: str = STEPS) -> dict:
         "arch": ckpt.get("arch", "sano-lstm" if task == INSTRUMENTS else "arst"),
         "mask_excluded": bool(ckpt.get("mask_excluded",
                                        args.get("mask_excluded", False))),
-        "thresholds": ckpt.get("thresholds"),
+        # Normalised HERE, so every consumer gets one type. It is stored as a
+        # list and `inference/run.py` calls `.min()`/`.max()` on it, which
+        # worked only because the task-2 path had its own decoder that coerced
+        # it — routing that call through `Checkpoint.meta()`, the obvious
+        # thing, raised AttributeError on a list.
+        "thresholds": (None if ckpt.get("thresholds") is None
+                       else np.asarray(ckpt["thresholds"], dtype=np.float32)),
         "prior_tau": float(ckpt.get("prior_tau") or 0.0),
         "logit_adjust": ckpt.get("logit_adjust"),
     }

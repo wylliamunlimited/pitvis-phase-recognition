@@ -382,6 +382,17 @@ from a constant path.
   unmasked — the flag was recorded only inside `args`. `read_tags` falls back
   to `args` before it falls back to the default, so old checkpoints decode
   correctly, and every writer now records the tag at the top level.
+  *(The task-2 path was the straggler: `predict.load_instrument_checkpoint`
+  kept a fourth private decoder until 2026-09-30, and the two had already
+  drifted — an untagged `sano.pt` read as variant `sano` there and
+  `reproduction` here, so one file was named two ways depending on which
+  command asked. `training/instruments.py` recorded no top-level tags at all.
+  Both fixed; the rule now holds everywhere.)*
+- **`read_tags` also NORMALISES: `thresholds` comes back as a float32 array or
+  None, never the stored list.** It is stored as a list, and `inference/run.py`
+  calls `.min()`/`.max()` on it — which worked only through the private task-2
+  decoder that happened to coerce it, and raised `AttributeError` through
+  `Checkpoint.meta()`. One decoder means one type.
 - **`logit_adjust` is stored as the ARRAY, never as the tau.**
   `tau * log(prior)` is computed from the training labels of the split the
   model was fitted on, so tau alone does not reconstruct it. `prior_tau` rides
