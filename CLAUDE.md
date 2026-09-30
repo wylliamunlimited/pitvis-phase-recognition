@@ -467,6 +467,8 @@ src/pitvis/
 tests/test_eval.py             pins evaluation/metric.py to the official metric
 tests/test_app_range.py        pins HTTP Range parsing (see below)
 tests/test_app_case.py         pins the case document + the probability additions
+tests/test_doc_pointers.py     pins every `file.py:NN` pointer in the notes
+tests/test_doc_counts.py       pins every test count the docs state (see below)
 
 rust/pitvis-serve/             the step cascade without a Python runtime.
                                ort 2.0 over front.onnx + decode.onnx; the
@@ -680,6 +682,23 @@ Do not merge them. Each has a different reader in a different moment:
 `walkthrough.md` §8 and `embeddings.md` deliberately cover the same extraction stage
 at two depths. They are cross-linked, not deduplicated. When adding docs, pick the
 layer first.
+
+### A number the docs restate gets pinned, not just corrected
+
+Two facts here are owned by the code and restated in prose, and both rotted in
+under six weeks: `file.py:NN` pointers, and the test count (136 -> 151 -> 203,
+while `architecture-atlas.html` sat at 136 the whole time; 151 was stale within
+hours, superseded by the 52 pointer tests added later in the same sweep).
+
+Correcting them buys weeks. `tests/test_doc_pointers.py` and
+`tests/test_doc_counts.py` make them fail loudly instead — the count is read
+from collection, never hardcoded, and a partial run skips rather than fails.
+**A test count may be written in prose, but only where those patterns see it**:
+next to `uv run pytest` for a suite total, or as `tests/test_x.py ... (N tests)`
+for one file. Written any other way it is unpinned, and it will go stale.
+
+The general rule: when a document restates something the code owns, the choice
+is to pin it or to link to it — never to fix the copy and move on.
 
 ### Every fact has exactly one owner; everywhere else links
 
