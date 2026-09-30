@@ -127,7 +127,7 @@ def _checkpoint_mtime() -> float:
     return max((c.path.stat().st_mtime for c in available()), default=0.0)
 
 
-def _prediction_state(case_id: str) -> dict:
+def _prediction_state(case_id: str, ckpt_mtime: float) -> dict:
     d = PREDICTIONS / case_id
     summary = d / "summary.json"
     if not summary.exists():
@@ -142,12 +142,20 @@ def _prediction_state(case_id: str) -> dict:
         # A checkpoint newer than the prediction means the numbers on screen
         # came from a model that no longer exists on disk. Not an error — but
         # the UI must offer a re-run rather than present them as current.
-        "stale": _checkpoint_mtime() > mtime,
+        "stale": ckpt_mtime > mtime,
     }
 
 
 def cases() -> dict[str, CaseRef]:
     """Every addressable case, keyed by id, in id order."""
+    # Taken ONCE. `_prediction_state` used to call `_checkpoint_mtime()` itself,
+    # which walks all four checkpoint families — every `exists()`, two globs and
+    # a `stat()` per surviving checkpoint, roughly 50 filesystem operations —
+    # although the answer does not depend on the case. With 25 cases that was
+    # ~1,250 operations per call, against ~8 per case for the work this function
+    # actually does. One snapshot per call is also more self-consistent than 25
+    # taken within the same millisecond.
+    ckpt_mtime = _checkpoint_mtime()
     manifest = _manifest()
     videos: dict[str, Path] = {p.stem: p for p in sorted(RAW.glob("video_*.mp4"))}
     videos.update(_extra)
@@ -170,7 +178,7 @@ def cases() -> dict[str, CaseRef]:
             seconds=entry["frames"] if cached else None,
             features_cached=cached,
             truth=truth if truth and truth.exists() else None,
-            prediction=_prediction_state(case_id),
+            prediction=_prediction_state(case_id, ckpt_mtime),
         )
     return dict(sorted(out.items()))
 

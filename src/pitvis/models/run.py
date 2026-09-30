@@ -72,8 +72,16 @@ def manifest_dim(space: str) -> int:
     return spaces.get(space).feature_dim
 
 
-def load(video: int, fallback_len: int, space: str = spaces.DEFAULT,
-         dim: int = 2048) -> tuple[np.ndarray, np.ndarray | None, str]:
+def load(video: int, fallback_len: int, space: str,
+         dim: int) -> tuple[np.ndarray, np.ndarray | None, str]:
+    """Cached features for `video` in `space`, or synthetic ones of width `dim`.
+
+    `dim` is REQUIRED, and `space` has no default either. Both used to carry
+    one, and the `dim` default was 2048 — the hardcoded width that made
+    `pitvis-models --space dinov2_ft` trace the wrong model on a machine with
+    no cache. The only call site always passes both, so the defaults were dead
+    weight that left the trap re-enterable.
+    """
     d = video_dir(space, video)
     if (d / "features.npy").exists():
         f = np.load(d / "features.npy")

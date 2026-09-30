@@ -170,8 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     m = report(preds, title=title, show_confusion=args.confusion)
 
     if args.json:
-        from pathlib import Path as _P
-        _P(args.json).write_text(json.dumps(
+        Path(args.json).write_text(json.dumps(
             {"mean": m["mean"], "std": m["std"], "split": args.split,
              "ckpt": str(ckpt_path), "space": space, "width": width,
              "cci": args.cci, "mask_excluded": mask}, indent=2) + "\n")

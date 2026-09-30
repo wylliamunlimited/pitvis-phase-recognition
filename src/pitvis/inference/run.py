@@ -192,7 +192,6 @@ def main(argv: list[str] | None = None) -> int:
 
     features = features_for(step_space if args.steps else inst_space)
     summary = {"video": str(args.video), "tasks": []}
-    n_frames = len(features)
 
     # ---- task 1: steps -----------------------------------------------------
     if args.steps:
@@ -287,7 +286,6 @@ def main(argv: list[str] | None = None) -> int:
                   f"        train one with `uv run pitvis-train instruments`")
         else:
             imodel, imean, istd, iargs, imeta = loaded
-            n_frames = len(ifeatures)
             print(f"\ntask 2  {inst_name}  ({args.instrument_ckpt.name}, "
                   f"variant={imeta['variant']}, space={imeta['space']}, "
                   f"window={iargs['window']}, seed={iargs['seed']})")
