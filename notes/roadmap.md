@@ -66,7 +66,7 @@ loader.
 
 - [x] **1.3 Normalisation statistics as a saved artifact.** `standardize.npz`
       (`mean`, `std`, one value per feature dimension), written beside the
-      weights by every trainer that fits them — `training/arst.py:319`,
+      weights by every trainer that fits them — `training/arst.py:321`,
       `arst_v2.py:316`, `instruments.py:133`, `instruments_v2.py:324`. Inference
       never resolves them separately from the checkpoint: `checkpoints.py`
       pairs each checkpoint with the `standardize.npz` in its own directory, so

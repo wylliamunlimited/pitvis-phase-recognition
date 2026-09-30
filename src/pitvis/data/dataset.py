@@ -19,6 +19,33 @@ TRAIN = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 20, 22, 23]
 NUM_CLASSES = 15
 BACKGROUND = 0
 
+# Task 2's label space, owned here for the same reason as the step names: this
+# module defines both key spaces and pulls in nothing heavier than numpy.
+# `NUM_INSTRUMENTS` was declared in three modules (`evaluation/instruments.py`,
+# `models/lstm.py`, `training/instruments_v2.py`) and written as a bare 19 in
+# four more places; `crossval.py` records what that costs — hardcoding 19 there
+# once reported "7/19 never predicted" for a 15-class task.
+#
+# The names moved here too, and that has a second effect worth knowing:
+# `app/names.py` needs them and used to import them from
+# `evaluation/instruments.py`, which imports sklearn. So a 19-entry dict was
+# pulling scikit-learn and scipy into `pitvis-app`'s startup — 0.93 s of its
+# 1.28 s import, for a server that scores nothing (case.py imports the
+# evaluators lazily, where scoring actually happens).
+#
+# Ids 0..18; id 0 is a real class ("no visible instrument"), not a sentinel.
+NUM_INSTRUMENTS = 19
+
+INSTRUMENT_NAMES = {
+    0: "no visible instrument / occluded", 1: "bipolar forceps", 2: "cottle",
+    3: "cup forceps", 4: "dural scissors", 5: "freer elevator",
+    6: "haemostatic foam", 7: "irrigation syringe", 8: "kerrisons",
+    9: "micro doppler", 10: "nasal cutting forceps", 11: "pituitary rongeurs",
+    12: "retractable knife", 13: "ring curette", 14: "spatula dissector",
+    15: "stealth pointer", 16: "suction", 17: "surgical drill",
+    18: "tissue glue",
+}
+
 # The one definition. These strings existed twice — once keyed by the encoded
 # label and once by the raw one — which is two chances for them to drift and no
 # way to tell which copy a caller meant. They live here because both key spaces

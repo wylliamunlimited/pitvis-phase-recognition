@@ -32,11 +32,13 @@ import torch.nn.functional as F
 
 from pitvis.data import spaces
 from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL, load_split
-from pitvis.evaluation.metric import report
+from pitvis.evaluation.metric import EXCLUDED, report
 from pitvis.models.arst import ARST, BAND_WIDTH, CCI_N, SpatialEmbedding, TeCNO
 from pitvis.paths import CKPT
 
-EXCLUDED = [0, 11, 13]      # encoded; scored classes are the other 12
+# Imported, not redeclared: evaluation/metric.py owns the exclusion list, and
+# it is a rule that must not change. export.py wrote the ONNX bundle's
+# meta["excluded"] from this copy while the metric filtered with the other one.
 
 
 # --------------------------------------------------------------------------

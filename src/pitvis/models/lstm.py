@@ -49,8 +49,10 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-NUM_INSTRUMENTS = 19        # ids 0..18 survive the official column popping
-NUM_STEPS = 15              # auxiliary head, 15-way encoded
+# Both owned by data/dataset.py. NUM_STEPS is NUM_CLASSES under the name this
+# model's auxiliary head uses.
+from pitvis.data.dataset import NUM_CLASSES as NUM_STEPS
+from pitvis.data.dataset import NUM_INSTRUMENTS
 WINDOW = 5                  # "5-window LSTM", SANO §5.5
 HIDDEN = 512
 LAYERS = 2

@@ -485,7 +485,7 @@ Three things to note:
   situation changes.
 - **`video_24`, the 25 fps outlier, is in VAL.** So a per-video fps bug shows up as a
   validation anomaly, not a training one.
-- `load_video()` at `dataset.py:57` asserts features and labels have equal length. Cheap
+- `load_video()` at `dataset.py:84` asserts features and labels have equal length. Cheap
   guard against a stale half-extracted cache.
 
 The paper's separate 8-video *test* set was never publicly released. All 25 videos here are

@@ -43,13 +43,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from pitvis.data.dataset import TRAIN, VAL
+from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL
 from pitvis.data import spaces
 from pitvis.paths import RAW, manifest_path, video_dir
 
 ALL_VIDEOS = list(range(1, 26))
 LABELED = set(TRAIN) | set(VAL)  # 24 videos; 19 has no annotations
-NUM_CLASSES = 15
 FINITE_CHUNK = 50_000  # rows per np.isfinite pass over the memmap
 
 

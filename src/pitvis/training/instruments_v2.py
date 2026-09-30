@@ -57,7 +57,6 @@ from pitvis.paths import CKPT_INSTRUMENTS
 from pitvis.training.crossval import cross_validate, load_entries, summarise
 from pitvis.training.instruments import gather_windows
 
-NUM_INSTRUMENTS = 19
 OUT_ROOT = CKPT_INSTRUMENTS / "v2"
 
 # Thresholds are searched on this grid. Starts well below 0.5 because that is

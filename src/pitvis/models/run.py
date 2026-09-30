@@ -37,9 +37,9 @@ from pitvis.models.arst import (
     banded_causal_mask,
 )
 from pitvis.data import spaces
+from pitvis.data.dataset import NUM_CLASSES
 from pitvis.paths import manifest_path, video_dir
 
-NUM_CLASSES = 15
 
 
 def shape(t) -> str:

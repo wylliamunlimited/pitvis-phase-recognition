@@ -42,6 +42,7 @@ from __future__ import annotations
 import numpy as np
 from sklearn.metrics import f1_score
 
+from pitvis.data.dataset import INSTRUMENT_NAMES, NUM_INSTRUMENTS
 from pitvis.evaluation.official_instruments import (
     calculate_insts_evaluation_metric,
     hot_encode_insts,
@@ -49,22 +50,13 @@ from pitvis.evaluation.official_instruments import (
 
 # 19 scored classes, ids 0..18 — what survives after the vendored code pops the
 # -1 and -2 columns. Class 0 is SCORED, not a sentinel.
-NUM_INSTRUMENTS = 19
+
 INSTRUMENT_IDS = list(range(NUM_INSTRUMENTS))
 
 # Sentinels, all three distinct. See notes/data-dictionary.md §4.
 OUT_OF_PATIENT = -1     # slot 1 only: scope outside the patient
 NO_SECONDARY = -2       # slot 2 only: this column is unused
 
-INSTRUMENT_NAMES = {
-    0: "no visible instrument / occluded", 1: "bipolar forceps", 2: "cottle",
-    3: "cup forceps", 4: "dural scissors", 5: "freer elevator",
-    6: "haemostatic foam", 7: "irrigation syringe", 8: "kerrisons",
-    9: "micro doppler", 10: "nasal cutting forceps", 11: "pituitary rongeurs",
-    12: "retractable knife", 13: "ring curette", 14: "spatula dissector",
-    15: "stealth pointer", 16: "suction", 17: "surgical drill",
-    18: "tissue glue",
-}
 
 METRICS = ("metric", "weighted", "macro_f1")
 

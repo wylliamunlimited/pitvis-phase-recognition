@@ -22,7 +22,7 @@ from __future__ import annotations
 import colorsys
 
 from pitvis.data.dataset import STEP_NAMES, step_name  # noqa: F401  (re-exported)
-from pitvis.evaluation.instruments import INSTRUMENT_NAMES
+from pitvis.data.dataset import INSTRUMENT_NAMES
 
 # Raw challenge encoding: background is -1, then steps 1..14 in surgical order.
 STEP_ORDER = [-1, *range(1, 15)]
