@@ -43,12 +43,10 @@ hypothesis, twice."*
 
 ## 2. Why the null was a lie — mechanism, not statistics
 
-The task-2 control never emits **nine of its nineteen classes at all** — on
-VAL, per [`instrument-variants.md`](models/instrument-variants.md) §1 and the
-§4 VAL table. (Read the split before quoting any of these: the out-of-fold
-leaderboard in §4 reports a different count for the same variant because it
-averages over folds, and §6 counts only the classes the probe examines. Three
-numbers, three measurements, one easy conflation.)
+The task-2 control never emits **nine of its nineteen classes at all on VAL**,
+seven of them out of fold — [`instrument-variants.md`](models/instrument-variants.md)
+§1 and §4, which now label which split each count belongs to, because the two
+are easy to quote interchangeably and are not the same measurement.
 
 ```
    frame ──► encoder ──► features ──► loss + threshold ──► prediction

@@ -28,8 +28,11 @@ The per-class breakdown says exactly where it goes:
 | 5 | freer elevator | 226 | 54 | 0.229 |
 | 1, 4, 6, 7, 12, 14, 17 | seven others | 49–412 | **0** | **0.000** |
 
-**Nine of nineteen classes are never predicted at all**, and the four that work
-carry ~91% of positives. Everything collapses toward the prior — the signature
+**Nine of nineteen classes are never predicted at all on VAL**, and the four
+that work carry ~91% of positives. (Every count in this section is on the five
+validation videos, per the scores above. Out of fold the same variant reads
+seven — §4's leaderboard — because it is a different split, not a different
+finding. Name the split whenever you quote one of these.) Everything collapses toward the prior — the signature
 of unweighted BCE under a 360:1 imbalance, decided at a flat 0.5 threshold.
 
 Neither the loss weighting nor the threshold is specified by the paper, and
@@ -204,6 +207,9 @@ flowchart TD
 
 ### The leaderboard — 19 out-of-fold training videos
 
+`dead` and `never predicted` are counted **out of fold**, over these 19 videos.
+They are not the VAL counts in §1 and below, which run higher for the control.
+
 | variant | space | macro_f1 | official metric | aligned-w | dead | never predicted |
 |---|---|---|---|---|---|---|
 | **best @ dinov2** | dinov2_vitb14 | **0.4554**±0.048 | **0.5281**±0.217 | **0.7404**±0.040 | **0** | **0** |
@@ -264,7 +270,7 @@ Run once, after the leaderboard was frozen: `best` on `dinov2_vitb14`.
 | official `metric` | 0.2336 | **0.5572**±0.225 | **+0.324** |
 | aligned weighted | 0.6309 | **0.7383**±0.041 | +0.107 |
 | macro F1 | 0.2513 | **0.3792**±0.044 | +0.128 |
-| classes never predicted | 9 / 19 | **0 / 19** | — |
+| classes never predicted (on VAL) | 9 / 19 | **0 / 19** | — |
 
 For scale, Table 8 benchmarks SANO at **81** on these same five videos. If that
 figure is the weighted reading, our 73.8 is ~91% of it; if it is macro, 37.9
@@ -300,9 +306,16 @@ to whether the model actually improved.
 
 ## 6. The probe that says the encoder is next
 
-Six classes were never predicted at all, and the headline metric cannot say
-why — it only ever reports *decisions*, so "the features do not carry this
-class" and "the decision rule throws it away" look identical.
+Nine of nineteen classes are never predicted on VAL, seven out of fold (§1
+and §4), and the headline metric cannot say why — it only ever reports
+*decisions*, so "the features do not carry this class" and "the decision rule
+throws it away" look identical.
+
+Those counts are not the **six** below. Six is how many classes the probe finds
+the encoder cannot see, and the distinction between the two numbers is the
+entire point of this section: a class can be missing from the output because
+the features lack it, or because the loss discarded it. Conflating them is what
+the probe exists to prevent.
 
 **Average precision can separate them.** It is computed from the ranking, so it
 is independent of both the threshold and the class's base rate. AP near the base
