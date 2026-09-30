@@ -144,6 +144,8 @@ tr.total td{font-weight:600;color:var(--ink);background:var(--surface-2)}
   max-width:78ch
 }
 .note b{color:var(--ink)}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)}
+a:hover{border-bottom-color:var(--accent-line)}
 .legend{
   display:flex;flex-wrap:wrap;gap:20px;padding:14px 20px;border-top:1px solid var(--rule-2);
   font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);background:var(--surface-2)
@@ -1520,46 +1522,47 @@ hr.div{border:none;border-top:1px solid var(--rule);margin:56px 0 0}
 </section>
 
 <section id="scores">
-  <h2>What each configuration scored</h2>
-  <p>Five validation videos (01, 12, 21, 24, 25), scored per video then mean-averaged — never pooled. The
-  encoder row is the one that moved both ends at once.</p>
-  <div class="tbl-wrap">
-    <table>
-      <thead><tr><th>task 1 configuration</th><th>encoder</th><th class="num">macro F1</th><th class="num">edit</th><th class="num">metric</th></tr></thead>
-      <tbody>
-        <tr><td>ARST reproduction</td><td class="nm">resnet50 frozen</td><td class="num">0.3083</td><td class="num">0.3767</td><td class="num">0.3425</td></tr>
-        <tr><td>+ masked argmax, class weights</td><td class="nm">dinov2 frozen</td><td class="num">0.4420</td><td class="num">0.4801</td><td class="num">0.4610</td></tr>
-        <tr><td>same, fine-tuned encoder <em>(run 1)</em></td><td class="nm">dinov2_ft 50 ep</td><td class="num">0.3631</td><td class="num">0.3369</td><td class="num">0.3500</td></tr>
-        <tr class="total"><td>same, fixed recipe <em>(run 2)</em></td><td class="nm">dinov2_ft 2 ep</td><td class="num">0.6147</td><td class="num">0.5068</td><td class="num">0.5608</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="note"><b>Run 1 and run 2 are the same architecture.</b> Every box in Figure 2, Figure 3 and
-  Figure 4 is identical between them. The only difference is the optimisation recipe in Figure 3's lower band —
-  uniform 1e-4 for 50 epochs against layer-wise decay with warmup and early stopping, which stopped at epoch 2.
-  That difference is worth more than masking, class weights and the backbone swap combined.</div>
+  <h2>What changed between these figures — and where the numbers live</h2>
+  <p>This atlas does not keep a scoreboard. It held one until 2026-09-30, restating four results it
+  does not own, and by then two of them had been retired by a documentation audit it was never revised
+  by. Every fact in this repo has exactly one owner and everywhere else links; a scoreboard kept in
+  five files is a scoreboard that goes stale in four. What belongs here is the <em>architectural</em>
+  claim — which boxes above differ between two configurations — with the scores one click away.</p>
 
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>task 2 configuration</th><th>encoder</th><th class="num">macro F1</th><th class="num">aligned wtd</th><th class="num">official</th></tr></thead>
+      <thead><tr><th>configuration</th><th>encoder</th><th>which figure differs</th><th>results owned by</th></tr></thead>
       <tbody>
-        <tr><td>SANO reproduction</td><td class="nm">resnet50 frozen</td><td class="num">—</td><td class="num">—</td><td class="num">0.2321</td></tr>
-        <tr><td>+ pos_weight, per-class τ</td><td class="nm">dinov2 frozen</td><td class="num">0.3792</td><td class="num">0.7383</td><td class="num">0.5572</td></tr>
-        <tr class="total"><td>same, fine-tuned encoder</td><td class="nm">dinov2_ft 2 ep</td><td class="num">0.5333</td><td class="num">0.8416</td><td class="num">0.3220</td></tr>
+        <tr><td>ARST reproduction</td><td class="nm">resnet50 frozen</td><td>the baseline every row below is measured against</td><td class="nm"><a href="../models/citi-baseline.md">citi-baseline.md</a> §6</td></tr>
+        <tr><td>+ masked argmax, class weights</td><td class="nm">dinov2 frozen</td><td>Figure 1's encoder; nothing in Figures 2–4. Masking is an argmax rule, class weights a loss term — neither is a box</td><td class="nm"><a href="../models/step-variants.md">step-variants.md</a> §4</td></tr>
+        <tr class="total"><td>same, fine-tuned encoder <em>(runs 1 and 2)</em></td><td class="nm">dinov2_ft</td><td>Figure 3's lower band only — the optimisation recipe. Run 1 and run 2 are <b>architecturally identical</b></td><td class="nm"><a href="../models/step-variants.md">step-variants.md</a> §7</td></tr>
+        <tr><td>SANO reproduction, and its variants</td><td class="nm">resnet50 → dinov2_ft</td><td>Figure 1's encoder; Figure 5 is unchanged throughout</td><td class="nm"><a href="../models/instruments.md">instruments.md</a> §5, <a href="../models/instrument-variants.md">instrument-variants.md</a> §4</td></tr>
       </tbody>
     </table>
   </div>
-  <div class="note">The instrument metric's <b>official</b> column reads the fine-tuned encoder as the worst
-  model tried and both defect-free columns read it as the best by a wide margin. That is the vendored scorer's
-  column-ordering bug, not a trade-off: it fits separate binarizers to truths and predictions, so diverging
-  class sets are compared positionally. It is kept as the headline because the headline is the challenge's by
-  construction — and printed beside two aligned numbers that are not.</div>
+
+  <div class="note"><b>Run 1 and run 2 are the same architecture.</b> Every box in Figure 2, Figure 3
+  and Figure 4 is identical between them. The only difference is the optimisation recipe in Figure 3's
+  lower band — uniform 1e-4 for 50 epochs against layer-wise decay with warmup and early stopping,
+  which stopped at epoch 2. That difference is worth more than masking, class weights and the backbone
+  swap combined, which is the single most useful thing this page can tell you and the reason the row
+  is highlighted: <em>a diagram cannot distinguish the best configuration tried from one of the
+  worst.</em> The magnitudes are in <a href="../models/step-variants.md">step-variants.md</a> §7.</div>
+
+  <div class="note"><b>Two cautions before you quote anything from the owner notes.</b> The instrument
+  metric's <b>official</b> column reads the fine-tuned encoder as the worst model tried while both
+  defect-free columns read it as the best by a wide margin — that is the vendored scorer's
+  column-ordering defect, not a trade-off, and
+  <a href="../models/instruments.md">instruments.md</a> §3 owns it. And an owner note records what a
+  <em>run</em> achieved, which for the two v2 winners is not what the checkpoint on disk now scores;
+  <a href="../current-state.md">current-state.md</a> §5, gap 8 owns that drift and the rule it implies
+  — quote the note for a run, re-score for an artifact.</div>
 </section>
 
 <section id="reproduce">
   <h2>Reproducing every number above</h2>
   <p>The trace that produced the parameter counts and tensor shapes in this atlas is the repo's own smoke test.
-  It runs in about a second and needs no feature cache — it falls back to synthetic tensors of the right width.</p>
+  It runs in about a second and needs no feature cache — it falls back to synthetic tensors of the width the space declares, which <span class="nm">tests/test_spaces.py</span> pins. Until 2026-09-30 that fallback was a hardcoded 2,048, so the <span class="nm">--space</span> row below traced the 2,048-d cascade and printed it as the 768-d one.</p>
   <div class="tbl-wrap">
     <table>
       <thead><tr><th>command</th><th>what it prints</th></tr></thead>
@@ -1568,12 +1571,17 @@ hr.div{border:none;border-top:1px solid var(--rule);margin:56px 0 0}
         <tr><td class="nm">uv run pitvis-models --space dinov2_ft</td><td>the same trace at 768-d</td></tr>
         <tr><td class="nm">uv run pitvis-train --list</td><td>what can be trained</td></tr>
         <tr><td class="nm">uv run pitvis-predict --list-models</td><td>what has been trained on this machine</td></tr>
-        <tr><td class="nm">uv run pytest</td><td>136 tests, including the metric pinned to the vendored scorer</td></tr>
+        <tr><td class="nm">uv run pytest</td><td>206 tests, including both metrics pinned to the vendored scorers and every <span class="nm">file.py:NN</span> pointer in these notes</td></tr>
       </tbody>
     </table>
   </div>
   <p style="margin-top:22px;color:var(--muted);font-size:14px">Figures drawn 2026-08-18 from
   <code>claude/pitvis-phase-recognition-review-bkwgmc</code>. Encoders instantiated with random weights — the
   architecture and parameter counts are identical to the pretrained build, only the values differ.</p>
+  <p style="margin-top:10px;color:var(--muted);font-size:14px">Revised 2026-09-30: the scores section was
+  replaced with links after an audit found it restating two results that had since been retired. The figures
+  and every parameter count were re-verified against the code on that date and none had moved — encoder
+  85,724,928, step cascade 24,845,372 at 768-d and 25,500,732 at 2,048-d, SANO 4,744,226, system
+  115,314,526. The architecture half of this page held for six weeks; only the half it did not own drifted.</p>
 </section>
 </div>
