@@ -41,10 +41,12 @@ import numpy as np
 import pandas as pd
 
 from pitvis.data import spaces
-from pitvis.data.dataset import step_name
-from pitvis.evaluation.instruments import INSTRUMENT_NAMES
-from pitvis.evaluation.instruments import report as ireport
-from pitvis.evaluation.metric import decode, report
+from pitvis.data.dataset import INSTRUMENT_NAMES, decode, step_name
+# The two scorers and `decode` are imported where they are used, not here:
+# `evaluation.instruments` imports sklearn, and `--list-models` short-circuits
+# before any of it is reached. Module-scope imports cost that query flag 0.82 s
+# of scikit-learn it never touches. INSTRUMENT_NAMES is pure data and comes
+# from `data.dataset`, which pulls in nothing heavier than numpy.
 from pitvis.inference import checkpoints as C
 from pitvis.inference import predict as P
 from pitvis.device import device_of
@@ -266,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.labels:
             labels = P.load_labels(args.labels, len(preds))
+            from pitvis.evaluation.metric import report
             m = report([(args.video.stem, labels, preds)],
                        title=f"steps — {args.video.name} vs {args.labels.name}",
                        show_confusion=args.confusion)
@@ -349,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
                     print("\nnote: --labels carries no instrument columns, so task 2 "
                           "is unscored.\n      Pass an annotations_NN.csv to score both.")
                 else:
+                    from pitvis.evaluation.instruments import report as ireport
                     im = ireport([(args.video.stem, truth, inst)],
                                  title=f"instruments — {args.video.name}")
                     summary["instruments"]["metric"] = im["mean"]

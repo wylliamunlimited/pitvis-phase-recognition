@@ -19,6 +19,35 @@ TRAIN = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 20, 22, 23]
 NUM_CLASSES = 15
 BACKGROUND = 0
 
+
+def decode(y: np.ndarray) -> list[int]:
+    """15-way encoded labels -> raw step labels (background 0 -> -1) as ints.
+
+    The vendored official code takes plain Python ints and compares against the
+    literal list [-1, 11, 13], so hand it exactly that.
+
+    Lives here rather than in `evaluation/metric.py` because this module owns
+    both key spaces, and because that one imports sklearn: `inference/predict.py`
+    needs only this six-line conversion and was paying 0.93 s of scikit-learn
+    for it on every import, which reached `pitvis-predict --list-models` — a
+    flag that scores nothing.
+    """
+    raw = np.asarray(y).astype(np.int64).copy()
+    raw[raw == BACKGROUND] = -1
+    return raw.tolist()
+
+
+def encode(y) -> "np.ndarray":
+    """Raw step labels (background -1) -> the 15-way encoding, as int64.
+
+    The inverse of `decode`, and it had no owner: the same two lines were
+    inlined in `app/case.py` twice and in `predict.load_labels` once. The
+    encoding is the one in CLAUDE.md — -1 becomes 0, k stays k.
+    """
+    enc = np.asarray(y).astype(np.int64).copy()
+    enc[enc == -1] = BACKGROUND
+    return enc
+
 # Task 2's label space, owned here for the same reason as the step names: this
 # module defines both key spaces and pulls in nothing heavier than numpy.
 # `NUM_INSTRUMENTS` was declared in three modules (`evaluation/instruments.py`,

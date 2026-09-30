@@ -36,7 +36,7 @@ import pandas as pd
 import torch
 
 from pitvis.data.dataset import NUM_CLASSES
-from pitvis.evaluation.metric import decode
+from pitvis.data.dataset import decode
 from pitvis.models.arst import ARST, SpatialEmbedding, TeCNO
 from pitvis.data import spaces
 from pitvis.paths import CKPT, CKPT_INSTRUMENTS, manifest_path, video_dir

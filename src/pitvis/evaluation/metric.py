@@ -36,7 +36,11 @@ k = step k). `decode` maps back to the raw space the official code expects.
 import numpy as np
 from sklearn.metrics import confusion_matrix, f1_score
 
-from pitvis.data.dataset import BACKGROUND, NUM_CLASSES, STEP_NAMES
+# `decode` is re-exported: it moved to data/dataset.py (which owns both key
+# spaces and imports nothing heavy), and every existing caller of
+# `evaluation.metric.decode` keeps working.
+from pitvis.data.dataset import (BACKGROUND, NUM_CLASSES, STEP_NAMES,  # noqa: F401
+                                 decode, encode)
 from pitvis.evaluation.official import (
     calculate_edit_score,
     calculate_steps_evaluation_metric,
@@ -48,17 +52,6 @@ EXCLUDED_RAW = [-1, 11, 13]
 SCORED = [k for k in range(NUM_CLASSES) if k not in EXCLUDED]
 
 METRICS = ("macro_f1", "edit_score", "metric")
-
-
-def decode(y: np.ndarray) -> list[int]:
-    """15-way encoded labels -> raw step labels (background 0 -> -1) as ints.
-
-    The vendored official code takes plain Python ints and compares against the
-    literal list [-1, 11, 13], so hand it exactly that.
-    """
-    raw = np.asarray(y).astype(np.int64).copy()
-    raw[raw == BACKGROUND] = -1
-    return raw.tolist()
 
 
 def evaluate_video(y_true: np.ndarray, y_pred: np.ndarray) -> dict:

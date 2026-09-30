@@ -485,7 +485,7 @@ Three things to note:
   situation changes.
 - **`video_24`, the 25 fps outlier, is in VAL.** So a per-video fps bug shows up as a
   validation anomaly, not a training one.
-- `load_video()` at `dataset.py:84` asserts features and labels have equal length. Cheap
+- `load_video()` at `dataset.py:113` asserts features and labels have equal length. Cheap
   guard against a stale half-extracted cache.
 
 The paper's separate 8-video *test* set was never publicly released. All 25 videos here are
@@ -591,7 +591,7 @@ be wrong. See `test_excluded_rows_merge_the_segments_around_them`.
 ### How `evaluation/metric.py` recovers the split
 
 The vendored function returns one number. We want the F1 and edit halves separately, so
-`evaluation/metric.py:84-89` replicates its two internal calls — then
+`evaluation/metric.py:77-82` replicates its two internal calls — then
 `evaluation/metric.py:93-94` **asserts** the
 halves recombine to what the vendored one-shot function returns. If someone later "fixes" the
 `zero_division` or adds a `labels=`, that assert fires.

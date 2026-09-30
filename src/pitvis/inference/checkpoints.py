@@ -76,8 +76,14 @@ class Checkpoint:
         import torch
         if not self.path.exists():
             return {}
+        # mmap=True: `read_tags` touches only scalars, strings and short lists,
+        # so the weight tensors are never faulted in. `--list-models` calls this
+        # for every checkpoint to print two tags per row, and the step cascade
+        # alone is ~25 M parameters — roughly 100 MB of float32 read and
+        # deserialised into tensors that were discarded a line later.
         return read_tags(
-            torch.load(self.path, map_location="cpu", weights_only=False), self.task)
+            torch.load(self.path, map_location="cpu", weights_only=False,
+                       mmap=True), self.task)
 
 
 # name -> (task, root, reproduction filename). v2 families hang variants off

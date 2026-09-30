@@ -19,25 +19,36 @@ To add a model:
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
-
-from pitvis.training import arst, arst_v2, baseline, instruments, instruments_v2
 
 
 @dataclass(frozen=True)
 class Model:
     """One trainable model.
 
-    `main` is the module's own argparse entry point, so the model owns its
-    flags and `pitvis-train <name> --help` shows them. `ablations` names
-    variants worth running together; each value is extra flags for `main`.
+    `module` names the module whose `main(argv)` trains it, and `main`
+    imports it on first use. The module is NOT imported when this registry is
+    built: `pitvis-train --list` and `--dry-run` need only `name`, `summary`
+    and `ablations`, and eagerly importing all five trainers cost them 2.25 s
+    of torch and scikit-learn to print a table. Adding a model is still one
+    `Model(...)` entry — that rule is unchanged, only the import is deferred.
+
+    The module owns its own argparse, so `pitvis-train <name> --help` shows
+    that model's flags. `ablations` names variants worth running together;
+    each value is extra flags for `main`.
     """
 
     name: str
     summary: str
-    main: Callable[[list[str] | None], None]
+    module: str
     ablations: dict[str, list[str]] = field(default_factory=dict)
+
+    @property
+    def main(self) -> Callable[[list[str] | None], None]:
+        """The module's entry point, imported on first access."""
+        return importlib.import_module(self.module).main
 
 
 REGISTRY: dict[str, Model] = {
@@ -46,12 +57,12 @@ REGISTRY: dict[str, Model] = {
         Model(
             name="baseline",
             summary="frame-wise linear probe on frozen features — the floor",
-            main=baseline.main,
+            module="pitvis.training.baseline",
         ),
         Model(
             name="instruments",
             summary="SANO's PitVis task-2 joint winner: frozen features + causal LSTM",
-            main=instruments.main,
+            module="pitvis.training.instruments",
             ablations={
                 "no-aux-step": ["--no-aux-step"],
             },
@@ -59,7 +70,7 @@ REGISTRY: dict[str, Model] = {
         Model(
             name="arst-v2",
             summary="step variants — argmax masking, class weights, DINOv2",
-            main=arst_v2.main,
+            module="pitvis.training.arst_v2",
             ablations={
                 "masked": ["--variant", "masked"],
                 "weighted": ["--variant", "weighted"],
@@ -69,7 +80,7 @@ REGISTRY: dict[str, Model] = {
         Model(
             name="instruments-v2",
             summary="instrument variants — weighted loss, per-class thresholds, DINOv2",
-            main=instruments_v2.main,
+            module="pitvis.training.instruments_v2",
             ablations={
                 "weighted": ["--variant", "weighted"],
                 "thresholds": ["--variant", "thresholds"],
@@ -79,7 +90,7 @@ REGISTRY: dict[str, Model] = {
         Model(
             name="arst",
             summary="CITI's PitVis-2023 task-1 winner: spatial + TeCNO + ARST",
-            main=arst.main,
+            module="pitvis.training.arst",
             ablations={
                 "no-cci": ["--no-cci"],
                 "width-0": ["--width", "0"],
