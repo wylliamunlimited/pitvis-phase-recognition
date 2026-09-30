@@ -44,6 +44,7 @@ from pitvis.data import spaces
 from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL, load_split
 from pitvis.evaluation.metric import report
 from pitvis.models.arst import ARST, SpatialEmbedding, TeCNO
+from pitvis.device import device_of
 from pitvis.paths import CKPT
 
 
@@ -71,9 +72,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", metavar="PATH", help="also write the result as JSON")
     args = ap.parse_args(argv)
 
-    # imported here: training imports evaluation.metric, so a module-level
-    # import would make the dependency look circular to a reader.
-    from pitvis.training.arst import cci_decode, device_of
+    # cci_decode is imported here rather than at module scope: training
+    # imports evaluation.metric, so a module-level import would make the
+    # dependency look circular to a reader. device_of no longer comes from
+    # training at all — pitvis.device is a leaf module, imported at the top.
+    from pitvis.training.arst import cci_decode
 
     from pathlib import Path
     from pitvis.inference.checkpoints import STEPS, read_tags

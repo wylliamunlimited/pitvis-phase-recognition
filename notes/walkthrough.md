@@ -389,16 +389,16 @@ flowchart LR
 
 Reading order in the code:
 
-- `extract_features.py:53` `probe()` — a slimmer ffprobe than inventory's, returns
+- `extract_features.py:55` `probe()` — a slimmer ffprobe than inventory's, returns
   `(nb_frames, round(fps))`. **`round(fps)` per video** is what handles `video_24` being
   25 fps. Hard-coding 24 would shift that video's labels by up to 4% of its length.
-- `extract_features.py:84` `build_model()` — `timm.create_model("resnet50",
+- `extract_features.py:86` `build_model()` — `timm.create_model("resnet50",
   pretrained=True, num_classes=0)`. The `num_classes=0` is the important argument: it strips
   the classifier and returns the 2048-d global-pooled embedding instead of 1000 logits.
-- `extract_features.py:398-421` — the **resume check**. If `features.npy` exists and has the
+- `extract_features.py:400-423` — the **resume check**. If `features.npy` exists and has the
   expected length, skip the video. This makes an interrupted 3-hour run cheap to restart.
   Length mismatch triggers a redo, so a half-written file self-heals.
-- `extract_features.py:296-300` — the ffmpeg command. The `select` filter keeps frames
+- `extract_features.py:298-302` — the ffmpeg command. The `select` filter keeps frames
   `0, r, 2r, …`. Worth understanding: **ffmpeg still decodes every frame**; the filter only
   discards them afterwards. That's why this stage is slow, and why `-hwaccel videotoolbox`
   is the lever if you want it faster.
@@ -408,7 +408,7 @@ Reading order in the code:
 - `extract_features.py:328-332` — asserts the extracted count equals
   `ceil(nb_frames / r)`. If ffmpeg's filter and our arithmetic ever disagree, this fails
   loudly rather than silently misaligning labels.
-- `extract_features.py:267-270` — labels. Reads `int_step`, asserts there are exactly
+- `extract_features.py:269-272` — labels. Reads `int_step`, asserts there are exactly
   `expected + 1` rows, asserts the dropped last row is background, truncates, and maps
   `-1 -> 0`.
 

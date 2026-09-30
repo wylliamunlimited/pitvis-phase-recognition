@@ -47,6 +47,7 @@ from pitvis.evaluation.instruments import report as ireport
 from pitvis.evaluation.metric import decode, report
 from pitvis.inference import checkpoints as C
 from pitvis.inference import predict as P
+from pitvis.device import device_of
 from pitvis.paths import CKPT, CKPT_INSTRUMENTS, PREDICTIONS
 
 
@@ -145,8 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--no-steps and --no-instruments leaves nothing to predict")
 
     import torch
-    from pitvis.training.arst import device_of
-    dev = torch.device(args.device) if args.device else device_of()
+    dev = device_of(args.device)
 
     # PREDICTIONS, not Path("predictions") — the old form was CWD-relative, so
     # running this from a subdirectory quietly wrote somewhere nothing else

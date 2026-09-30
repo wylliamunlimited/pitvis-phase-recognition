@@ -41,6 +41,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+
+from pitvis.device import device_of
 from PIL import Image
 
 from pitvis.data import spaces
@@ -466,10 +468,7 @@ def main(argv: list[str] | None = None) -> None:
     if bad:
         raise SystemExit(f"video numbers must be in 1..25, got {bad}")
 
-    device = torch.device(args.device) if args.device else torch.device(
-        "mps" if torch.backends.mps.is_available()
-        else "cuda" if torch.cuda.is_available() else "cpu"
-    )
+    device = device_of(args.device)
     space = spaces.get(args.space)
     print(f"device: {device}, space: {space.name} ({space.backbone}), videos: {vids}")
     model, transform, payload = build_model(device, space)

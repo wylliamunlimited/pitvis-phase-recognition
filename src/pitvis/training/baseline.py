@@ -13,6 +13,8 @@ import argparse
 
 import numpy as np
 import torch
+
+from pitvis.device import device_of, seed_everything
 import torch.nn as nn
 
 from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL, load_split
@@ -29,11 +31,8 @@ def main(argv: list[str] | None = None) -> None:
                     help="print the 15-way confusion matrix")
     args = ap.parse_args(argv)
 
-    torch.manual_seed(args.seed)
-    device = torch.device(
-        "mps" if torch.backends.mps.is_available()
-        else "cuda" if torch.cuda.is_available() else "cpu"
-    )
+    seed_everything(args.seed)      # was torch only; numpy's RNG was unseeded
+    device = device_of()
 
     train = load_split(TRAIN)
     val = load_split(VAL)

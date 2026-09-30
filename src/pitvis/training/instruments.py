@@ -25,20 +25,14 @@ import time
 
 import numpy as np
 import torch
+
+from pitvis.device import device_of, seed_everything
 import torch.nn as nn
 
 from pitvis.data.dataset import TRAIN, VAL, load_split, load_split_instruments
 from pitvis.evaluation.instruments import multihot, multihot_to_pairs, report
 from pitvis.models.lstm import HIDDEN, LAYERS, WINDOW, SanoLSTM, causal_windows, decide
 from pitvis.paths import CKPT_INSTRUMENTS
-
-
-def device_of() -> torch.device:
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
 
 
 def gather_windows(feats: list[torch.Tensor], idx: np.ndarray, window: int,
@@ -116,8 +110,7 @@ def main(argv: list[str] | None = None) -> None:
                     help="print the per-instrument F1 table")
     args = ap.parse_args(argv)
 
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    seed_everything(args.seed)
     dev = device_of()
     print(f"device: {dev}  window={args.window}  aux-step="
           f"{'on' if args.aux_step else 'off'}  threshold={args.threshold}")

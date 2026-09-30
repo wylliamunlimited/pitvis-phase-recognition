@@ -180,7 +180,7 @@ validation videos happen to be long ones (7,201 / 4,942 / 6,767 / 7,649 /
 4,337).
 
 Standardisation statistics come from the train split only and are computed once
-in `training/arst.py:313-315`:
+in `training/arst.py:306-308`:
 
 ```
 X = concat over TRAIN            (84666, 2048)

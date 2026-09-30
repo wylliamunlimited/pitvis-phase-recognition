@@ -44,6 +44,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import torch
+
+from pitvis.device import device_of, seed_everything
 import torch.nn as nn
 
 from pitvis.data import spaces
@@ -53,7 +55,7 @@ from pitvis.models.lstm import (HIDDEN, LAYERS, WINDOW, SanoLSTM, causal_windows
                                 decide, decide_per_class)
 from pitvis.paths import CKPT_INSTRUMENTS
 from pitvis.training.crossval import cross_validate, load_entries, summarise
-from pitvis.training.instruments import device_of, gather_windows
+from pitvis.training.instruments import gather_windows
 
 NUM_INSTRUMENTS = 19
 OUT_ROOT = CKPT_INSTRUMENTS / "v2"
@@ -290,8 +292,7 @@ def main(argv: list[str] | None = None) -> None:
 
     variant = VARIANTS[args.variant]
     args.space = args.space or variant.space
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    seed_everything(args.seed)
     dev = device_of()
     print(f"variant: {variant.name} — {variant.summary}")
     print(f"device: {dev}  space: {args.space}  pos_weight: {variant.pos_weight}  "

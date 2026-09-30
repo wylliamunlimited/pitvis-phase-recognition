@@ -25,6 +25,8 @@ import time
 
 import numpy as np
 import torch
+
+from pitvis.device import device_of, seed_everything
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -35,14 +37,6 @@ from pitvis.models.arst import ARST, BAND_WIDTH, CCI_N, SpatialEmbedding, TeCNO
 from pitvis.paths import CKPT
 
 EXCLUDED = [0, 11, 13]      # encoded; scored classes are the other 12
-
-
-def device_of() -> torch.device:
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
 
 
 # --------------------------------------------------------------------------
@@ -305,8 +299,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--confusion", action="store_true")
     args = ap.parse_args(argv)
 
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    seed_everything(args.seed)
     dev = device_of()
     print(f"device: {dev}  band width W={args.width}  CCI={'on' if args.cci else 'off'}")
 

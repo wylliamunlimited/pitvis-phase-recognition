@@ -50,6 +50,8 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
+
+from pitvis.device import device_of, seed_everything
 import torch.nn as nn
 
 from pitvis.data import spaces
@@ -57,7 +59,7 @@ from pitvis.data.dataset import NUM_CLASSES, TRAIN, VAL, load_split
 from pitvis.evaluation.metric import report
 from pitvis.models.arst import ARST, BAND_WIDTH, SpatialEmbedding, TeCNO
 from pitvis.paths import CKPT
-from pitvis.training.arst import (EXCLUDED, cci_decode, device_of, embed,
+from pitvis.training.arst import (EXCLUDED, cci_decode, embed,
                                   temporal, train_arst, train_tecno)
 from pitvis.training.crossval import STEPS, cross_validate, load_entries, summarise
 
@@ -284,8 +286,7 @@ def main(argv: list[str] | None = None) -> None:
 
     variant = VARIANTS[args.variant]
     args.space = args.space or variant.space
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    seed_everything(args.seed)
     dev = device_of()
     print(f"variant: {variant.name} — {variant.summary}")
     print(f"device: {dev}  space: {args.space}  mask: {variant.mask}  "

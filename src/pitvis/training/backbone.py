@@ -63,6 +63,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
+
+from pitvis.device import device_of as _device_of
 import torch.nn as nn
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
@@ -158,13 +160,13 @@ class MultiTask(nn.Module):
 
 
 def device_of(name: str | None = None) -> torch.device:
-    if name:
-        return torch.device(name)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
+    """CUDA-first, unlike the rest of the project — this is the GPU job.
+
+    Fine-tuning runs on a rented CUDA host (see `infra/`); everything else runs
+    on a Mac. The ordering only matters on a host with both, and there this one
+    should pick CUDA.
+    """
+    return _device_of(name, prefer="cuda")
 
 
 def depth_of(name: str, n_blocks: int) -> int:

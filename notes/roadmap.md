@@ -105,7 +105,7 @@ loader.
       computed in the checkpoint's own feature space.
 
       Still challenge-keyed is the *cache* path around it —
-      `extract_features.py:377` builds `26531686/video_{n:02d}.mp4` and
+      `extract_features.py:379` builds `26531686/video_{n:02d}.mp4` and
       `extract_features.py:276` the matching `annotations_{n}.csv`, so an
       outside video still means going through `embed_video` by hand.
 
