@@ -653,6 +653,10 @@ Do not merge them. Each has a different reader in a different moment:
   away; re-date it when it goes stale rather than leaving stale numbers standing.
 - **`notes/embeddings.md`** — conceptual, assumes nothing, every number read off the
   real cache. The grounded-explanation layer; entry point for the ML side.
+- **`notes/experiment-order.md`** — why a lever gated by another defect must be
+  tested after it, worked through the backbone decision on both tasks. The
+  grounded-explanation layer for *method*, as `embeddings.md` is for the data.
+  It owns the argument and the power calculation and restates no result.
 - **`notes/walkthrough.md`** — reasoning and domain, with `file.py:NN` pointers.
   A code tour; assumes ML fluency.
 - **`notes/roadmap.md`** — what is left to build, phased.
@@ -721,6 +725,7 @@ The owners:
 | the review surface's design and its caveats | `app.md` |
 | the ONNX cut, the fidelity bar, what is unserved | `deployment.md` |
 | the cross-task "backbone last" finding | `roadmap.md` |
+| why that ordering was right, and what a null licenses | `experiment-order.md` |
 | the command surface | `README.md` §Usage |
 | rules that must not change | this file |
 | vocabulary, current status, what to run next | `where-we-are.md` |

@@ -19,6 +19,7 @@ scoreboard maintained in four files is a scoreboard that goes stale in three.
 |---|---|
 | [**walkthrough.md**](walkthrough.md) | the surgery, the data and the pipeline, with `file.py:NN` pointers. Assumes ML fluency. |
 | [**embeddings.md**](embeddings.md) | what the feature cache *is*, from the ground up, every number read off the real cache. Assumes nothing — the entry point for the ML side. |
+| [**experiment-order.md**](experiment-order.md) | why the encoder was changed last although every diagnosis pointed at it — what a null result licenses, and the sizing calculation that says the isolated experiment was never runnable. Owns the reasoning; links every number. |
 
 ## [reference/](reference/) — look things up
 
