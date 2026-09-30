@@ -1,7 +1,8 @@
 # Current state — the system as it stands
 
-*Snapshot: 2026-08-17. Written for the question "can I demo this, and what may
-I claim while doing it?"*
+*Snapshot: 2026-08-24 (written 2026-08-17, revised by the documentation audit
+of 2026-08-24 — §5 gap 8 is its output). Written for the question "can I demo
+this, and what may I claim while doing it?"*
 
 Companion to [`where-we-are.md`](where-we-are.md), which is the *research*
 orientation — vocabulary, iterations, what to run next. This one describes the
