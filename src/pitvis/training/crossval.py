@@ -46,6 +46,7 @@ import torch
 from dataclasses import dataclass
 from pathlib import Path
 
+from pitvis.data import spaces
 from pitvis.data.dataset import TRAIN, load_split, load_split_instruments
 from pitvis.data.folds import folds as fold_ids
 from pitvis.evaluation import instruments as inst_eval
@@ -99,7 +100,14 @@ def git_rev() -> str:
 
 
 def encoder_saw(space: str) -> list[int] | None:
-    """Videos the space's encoder was fine-tuned on, or None if it is frozen."""
+    """Videos the space's encoder was fine-tuned on, or None if UNRECORDED.
+
+    None used to mean "frozen", and that conflation is what let the guard below
+    pass on no evidence. It now means only "the cache cannot tell us" — the
+    manifest is absent, or it carries no `_trained_on`. Ask
+    `spaces.get(space).checkpoint` whether a space is frozen; that is declared
+    in the registry and needs no cache.
+    """
     from pitvis.paths import manifest_path
     p = manifest_path(space)
     if not p.exists():
@@ -119,10 +127,46 @@ def check_no_leak(space: str, k: int) -> None:
 
     A fine-tuned space is only valid for cross-validation if there is one
     encoder per fold, each trained with that fold's videos excluded.
+
+    THREE STATES, and the middle one used to be silently merged with the first.
+    Whether a space is fine-tuned is DECLARED in `data/spaces.py`, so that is
+    what decides; `_trained_on` only says which videos, and it lives in the
+    cache's manifest.json:
+
+        frozen (no checkpoint declared)   -> nothing to leak, return
+        fine-tuned, _trained_on present   -> check the overlap
+        fine-tuned, _trained_on absent    -> REFUSE; the leak cannot be
+                                             disproved, and absence of evidence
+                                             is not evidence of absence
+
+    The third case is reachable and not hypothetical. `dataset.load_video`
+    reads `features.npy` and `labels.npy` directly and never needs the
+    manifest, and `where-we-are.md` covers carrying a feature directory to
+    another machine — so a cache copied without its manifest would have
+    cross-validated a fine-tuned encoder and reported the leak as a +0.4 macro
+    improvement.
     """
+    if spaces.get(space).checkpoint is None:
+        return                      # frozen encoder: declared, not inferred
+
     seen = encoder_saw(space)
     if seen is None:
-        return                                   # frozen encoder: nothing to leak
+        raise SystemExit(
+            f"CANNOT VERIFY: space {space!r} is fine-tuned — "
+            f"`data/spaces.py` declares its encoder as "
+            f"{spaces.get(space).checkpoint!r} — but its cache does not record "
+            f"which videos that encoder was trained on, so this "
+            f"cross-validation cannot be shown to be leak-free.\n"
+            f"`manifest.json` is missing, or carries no `_trained_on`. A "
+            f"feature directory copied without its manifest looks exactly like "
+            f"a frozen space from here.\n"
+            f"Refusing rather than guessing: the one time this leaked it was "
+            f"worth +0.4 macro of memorisation.\n"
+            f"Fix: re-extract so the manifest records provenance —\n"
+            f"    uv run pitvis-extract --space {space}\n"
+            f"or score on VAL instead, which no TRAIN-fitted encoder has seen."
+        )
+
     overlap = sorted(set(seen) & {v for f in fold_ids(k) for v in f})
     if overlap:
         raise SystemExit(

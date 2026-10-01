@@ -239,9 +239,13 @@ See [`current-state.md`](current-state.md) §5, item 5.)*
 **Five correctness items were filed on 2026-10-01** from an audit of all 47
 modules in `src/`: roadmap 3.8, 4.5, 5.10, 5.11 and 7.7. They share one shape —
 a missing fact resolved to a default instead of refused — and `roadmap.md`'s
-cross-cutting risks section says so. **4.5 is the one to do first**: it is the
-guard protecting every cross-validated number in this repo, it currently passes
-whenever it cannot prove anything, and the fix needs no cache and no GPU.
+cross-cutting risks section says so.
+
+**4.5 is done**: the leak guard no longer passes when it cannot prove anything,
+and it now has tests, which it did not before. Of the four left, **5.11 is the
+cheapest and unblocks 5.10** — give `Checkpoint` the `space` property its own
+docstring already promises, and two duplicate helpers plus two silent
+`spaces.DEFAULT` fallbacks disappear with it.
 
 The same list against `roadmap.md`, for anyone reading it alongside:
 

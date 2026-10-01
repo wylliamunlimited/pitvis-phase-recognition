@@ -326,23 +326,28 @@ The metric itself is done and tested; what is missing is everything *around* it.
       ±0.048 fold spread, which on the five-video split could easily have read
       as a real improvement and been shipped.
 
-- [ ] **4.5 The leak guard passes when it cannot prove anything.**
-      `crossval.check_no_leak` asks the cache manifest's `_trained_on` which
-      videos the encoder saw. When the manifest is missing, or the key is null,
-      `encoder_saw` returns `None` and the guard reads that as "frozen encoder,
-      nothing to leak" and returns. So absence of evidence is treated as
-      evidence of absence, for the one check standing between us and the
-      failure it was written after: **steps macro 0.504 -> 0.917**, which was
-      the size of the leak and not an improvement
-      ([`infra/README.md`](../infra/README.md) owns that measurement).
-      It is reachable: `dataset.load_video` reads `features.npy` and
-      `labels.npy` directly and never needs the manifest, and
-      [`where-we-are.md`](where-we-are.md) explicitly covers carrying a feature
-      directory to another machine.
-      **The fix needs no cache and no GPU**: `spaces.Space.checkpoint` already
-      declares whether a space is fine-tuned, so branch on that first — frozen,
-      return; fine-tuned with `_trained_on` unavailable, refuse, because the
-      leak cannot be disproved. Same move as `feature_dim`.
+- [x] **4.5 The leak guard passed when it could not prove anything — fixed.**
+      `crossval.check_no_leak` asked the cache manifest's `_trained_on` which
+      videos the encoder saw, and `encoder_saw` returned `None` both for "this
+      space is frozen" and for "the manifest is missing". The guard read `None`
+      as the former, so absence of evidence was treated as evidence of absence —
+      for the one check standing between this project and the failure it was
+      written after: **steps macro 0.504 -> 0.917**, which was the size of the
+      leak and not an improvement ([`infra/README.md`](../infra/README.md) owns
+      that measurement). It was reachable rather than hypothetical:
+      `dataset.load_video` reads `features.npy` and `labels.npy` directly and
+      never needs the manifest, and [`where-we-are.md`](where-we-are.md) covers
+      carrying a feature directory to another machine.
+      **Now three states, and fine-tuned-ness is read from the declaration
+      rather than inferred from the cache** — `spaces.Space.checkpoint` needs no
+      manifest, no download and no GPU:
+      frozen -> return; fine-tuned with `_trained_on` present -> check the
+      overlap; fine-tuned with it absent -> **refuse**, because the leak cannot
+      be disproved. On a machine with no caches both fine-tuned spaces now
+      refuse where they previously passed silently. `tests/test_crossval.py`
+      pins all three states, the single-overlapping-video case, and that the
+      honest per-fold configuration still passes — the guard had no tests at
+      all before this.
 
 ---
 
@@ -590,12 +595,14 @@ Reasoning and the fidelity result: [`deployment.md`](surfaces/deployment.md).
   numbers are not exactly comparable on the training side even though validation
   is untouched.
 - **A silent fallback that yields a plausible wrong answer is this repo's
-  characteristic failure, and 3.8, 4.5, 5.10, 5.11 and 7.7 are all one shape.**
+  characteristic failure, and 3.8, 5.10, 5.11 and 7.7 are all one shape — 4.5
+  was the fifth and is now fixed.**
   Each resolves a missing fact to a default instead of refusing: a feature width
   to 2048, a space to `spaces.DEFAULT`, an unprovable leak to "no leak", a
   frames-source space to the video path. None raises; all produce a number that
-  looks right; and the two of this shape already fixed (`feature_dim`, and the
-  private checkpoint-tag decoder) were found by audit rather than by use.
+  looks right; and all three of this shape fixed so far (`feature_dim`, the
+  private checkpoint-tag decoder, and 4.5's leak guard) were found by audit
+  rather than by use.
   Prefer refusing to guessing wherever the fact has a declared owner.
 - **Classes 11 and 13 are essentially unlearnable** (2 videos and 1 video
   respectively) and are excluded from scoring anyway. Do not spend effort there.

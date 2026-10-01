@@ -41,6 +41,112 @@ def test_the_union_of_held_out_videos_is_every_training_video_once():
     assert len(seen) == len(set(seen)) == 19
 
 
+# -- the leak guard ----------------------------------------------------------
+#
+# `check_no_leak` is the only thing standing between this project and the
+# failure it was written after: an encoder fine-tuned on all 19 TRAIN videos,
+# then cross-validated over folds drawn from that same set, scoring 0.917 macro
+# against an honest 0.504. That gap was memorisation.
+#
+# It used to pass whenever it could not prove anything. `encoder_saw` returned
+# None both for "this space is frozen" and for "the manifest is missing", and
+# the guard read None as the former. A feature directory copied to another
+# machine without its manifest therefore looked exactly like a frozen space.
+
+
+def _manifest(tmp_path, monkeypatch, trained_on, *, exists=True):
+    """Point `manifest_path` at a manifest recording `trained_on`."""
+    import json
+
+    import pitvis.paths
+
+    target = tmp_path / "manifest.json"
+    if exists:
+        payload = {"space": {}}
+        if trained_on is not None:
+            payload["space"]["_trained_on"] = trained_on
+        target.write_text(json.dumps(payload))
+    monkeypatch.setattr(pitvis.paths, "manifest_path", lambda space: target)
+
+
+def test_a_frozen_space_passes_without_consulting_any_cache(tmp_path, monkeypatch):
+    """Frozen-ness is DECLARED in the registry, so no manifest is needed.
+
+    Pointed at a manifest that does not exist, on purpose: a frozen space must
+    not depend on the cache to be cleared.
+    """
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, None, exists=False)
+    check_no_leak("resnet50", 5)          # must not raise
+    check_no_leak("dinov2_vitb14", 5)
+
+
+def test_a_fine_tuned_space_with_no_manifest_is_REFUSED(tmp_path, monkeypatch):
+    """The bug this section exists for. Absence of evidence is not evidence."""
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, None, exists=False)
+    with pytest.raises(SystemExit, match="CANNOT VERIFY"):
+        check_no_leak("dinov2_ft", 5)
+
+
+def test_a_fine_tuned_space_whose_manifest_omits_trained_on_is_REFUSED(
+        tmp_path, monkeypatch):
+    """A manifest that exists but records no provenance is the same hole."""
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, None)
+    with pytest.raises(SystemExit, match="CANNOT VERIFY"):
+        check_no_leak("resnet50_ft", 5)
+
+
+def test_a_fine_tuned_encoder_that_saw_held_out_videos_is_refused(
+        tmp_path, monkeypatch):
+    """The original failure: trained on all of TRAIN, cross-validated on it."""
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, list(TRAIN))
+    with pytest.raises(SystemExit, match="LEAK"):
+        check_no_leak("dinov2_ft", 5)
+
+
+def test_one_overlapping_video_is_enough_to_refuse(tmp_path, monkeypatch):
+    """Not a majority rule — a single held-out video the encoder saw is a leak."""
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, [fold_ids(5)[0][0]])
+    with pytest.raises(SystemExit, match="LEAK"):
+        check_no_leak("dinov2_ft", 5)
+
+
+def test_a_fine_tuned_encoder_that_saw_nothing_held_out_passes(
+        tmp_path, monkeypatch):
+    """The honest configuration: provenance recorded, and it does not overlap.
+
+    This is what a per-fold encoder looks like from here, and it is the case
+    that must keep working — refusing every fine-tuned space would make the
+    guard useless in the other direction.
+    """
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, [])
+    check_no_leak("dinov2_ft", 5)         # must not raise
+
+
+def test_the_refusal_names_the_space_and_what_to_run(tmp_path, monkeypatch):
+    """A guard that blocks a 23-hour job has to say what to do next."""
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, None, exists=False)
+    with pytest.raises(SystemExit) as e:
+        check_no_leak("dinov2_ft", 5)
+    msg = str(e.value)
+    assert "dinov2_ft" in msg
+    assert "pitvis-extract" in msg
+    assert "VAL" in msg
+
+
 # -- aggregation -------------------------------------------------------------
 
 def test_aggregation_is_per_video_then_mean_not_pooled():

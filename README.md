@@ -30,7 +30,7 @@ The dataset, the feature cache and all model output are gitignored, so a fresh
 clone gets code and documentation only. Two things still work immediately:
 
 ```sh
-uv sync && uv run pytest        # 217 tests — metrics, Range parsing, case model, doc pointers
+uv sync && uv run pytest        # 224 tests — metrics, Range parsing, case model, doc pointers
 uv run pitvis-models            # ~1 s shape + parameter trace through the cascade
 ```
 
@@ -186,7 +186,7 @@ right?" from "is my data right?" — worth doing before committing to step 4.
 
 ```sh
 uv run pitvis-models      # ~1 s: every tensor shape and parameter count
-uv run pytest             # ~3 s: 217 tests pinning both metrics, the registry + doc pointers
+uv run pytest             # ~3 s: 224 tests pinning both metrics, the registry + doc pointers
 ```
 
 `pitvis-models` falls back to a synthetic tensor when the cache is absent, so it
