@@ -271,6 +271,33 @@ before the next one starts, so we always know what an idea actually bought.
       durotomy → excision → closure), which the frame-wise metric ignores but the
       *edit score* rewards directly.
 
+- [ ] **3.8 `pitvis-predict` embeds a frames-source space from the mp4.**
+      `extract_features.extract_video` branches on `space.source` —
+      `embed_frames` for a space whose encoder was tuned on the JPEG cache,
+      `embed_video` otherwise. `predict.embed` calls `embed_video`
+      unconditionally. `resnet50_ft` and `dinov2_ft` are both `source="frames"`,
+      and `dinov2_ft` is the space of the current best step checkpoint.
+      Nothing fails, which is the problem: the geometry coincides, so the
+      features are simply drawn from a slightly different image distribution
+      than the encoder was tuned on — 720² centre-crop to a 384 px JPEG to 224,
+      against 720p straight to 224 with no JPEG round-trip — and are then
+      labelled `dinov2_ft` in `summary.json` and on the app's model card.
+      `build_model` even sets `crop_pct = 1.0` *because* it expects a
+      pre-cropped JPEG, so the transform is configured for the path it is not
+      being given.
+      This contradicts a rule in `CLAUDE.md`: *"One path from pixels to
+      features … so a prediction is always computed in the feature space the
+      checkpoint was trained on."* For a frames-source space it is not, and it
+      bites hardest on the two things `predict.py` exists for — a brand-new mp4,
+      and `--no-cache`, whose documented purpose is verifying the pixel path end
+      to end.
+      Either declare the frame geometry on `Space` so `embed_video` can
+      reproduce it from pixels (then both paths really are one), or refuse a
+      `source != "video"` space and print the `pitvis-frames` command. The
+      refusal is the honest minimum.
+
+---
+
 ## Phase 4 — Evaluation and analysis
 
 The metric itself is done and tested; what is missing is everything *around* it.
@@ -298,6 +325,24 @@ The metric itself is done and tested; what is missing is everything *around* it.
       It earned its keep immediately: DINOv2 alone gains +0.021 macro against a
       ±0.048 fold spread, which on the five-video split could easily have read
       as a real improvement and been shipped.
+
+- [ ] **4.5 The leak guard passes when it cannot prove anything.**
+      `crossval.check_no_leak` asks the cache manifest's `_trained_on` which
+      videos the encoder saw. When the manifest is missing, or the key is null,
+      `encoder_saw` returns `None` and the guard reads that as "frozen encoder,
+      nothing to leak" and returns. So absence of evidence is treated as
+      evidence of absence, for the one check standing between us and the
+      failure it was written after: **steps macro 0.504 -> 0.917**, which was
+      the size of the leak and not an improvement
+      ([`infra/README.md`](../infra/README.md) owns that measurement).
+      It is reachable: `dataset.load_video` reads `features.npy` and
+      `labels.npy` directly and never needs the manifest, and
+      [`where-we-are.md`](where-we-are.md) explicitly covers carrying a feature
+      directory to another machine.
+      **The fix needs no cache and no GPU**: `spaces.Space.checkpoint` already
+      declares whether a space is fine-tuned, so branch on that first — frozen,
+      return; fine-tuned with `_trained_on` unavailable, refuse, because the
+      leak cannot be disproved. Same move as `feature_dim`.
 
 ---
 
@@ -384,6 +429,36 @@ the *where*.
 - [ ] **5.9 Multi-case comparison.** Seam exists: case documents are
       self-contained (comparison is N fetches) and `renderTimeline` is a pure
       function of its arguments.
+
+- [ ] **5.10 The app asks "are features cached?" in one space, and inference
+      answers in another.** `catalogue._manifest` and `cache_state` read
+      `manifest_path(spaces.DEFAULT)`, so `CaseRef.features_cached` means
+      "cached in `resnet50`". But the job it gates takes its space from the
+      *checkpoint*: `jobs.submit` passes no `--space`, so `inference/run.py`
+      resolves it from `checkpoints.default(task)` — and that default is chosen
+      by recorded score, which legitimately selects a `dinov2_ft` model.
+      Both directions are wrong. With only the `resnet50` cache on disk the
+      409 accepts the POST and the single worker then takes a cache miss: a
+      full 1 fps decode, 10-25 minutes, from one click — exactly the "hostile
+      surprise" `catalogue.py`'s own docstring says the refusal exists to
+      prevent. With only the `dinov2_ft` cache, a case that is a 45-second hit
+      is refused with the "run it yourself" hint.
+      Fix: give `Checkpoint` a `space` property (5.11) and have `catalogue` ask
+      which spaces this machine's default models need, so `features_cached`
+      means "cached in every space the defaults require" and the 409 can name
+      the space that is missing.
+- [ ] **5.11 `Checkpoint` has no `space`.** `checkpoints.py`'s own docstring
+      promises to answer "which feature space were they trained on", and the
+      dataclass carries `path` and `stats` and not that. So
+      `predict.step_space` and `predict.instrument_space` — two near-identical
+      functions differing by one constant — each `torch.load` the whole
+      checkpoint to read one string, and `inference/run.py` then loads it again
+      via `load_checkpoint`. Both return `spaces.DEFAULT` when the path does
+      not exist, which makes "no checkpoint" indistinguishable from "a
+      `resnet50` checkpoint": with `--no-steps` and a missing task-2 file, the
+      decision of *which backbone to run* — a 20-minute commitment — comes from
+      a fallback rather than from anything real. A memoised `Checkpoint.space`
+      deletes both helpers and both fallbacks, and is what 5.10 needs.
 
 ---
 
@@ -481,6 +556,21 @@ Reasoning and the fidelity result: [`deployment.md`](surfaces/deployment.md).
       blob, so the backbone is still Python. Exporting the encoder makes it
       genuinely standalone — and for DINOv2 that is the larger half of the
       compute, so it is also where the interesting engineering is.
+- [ ] **7.7 The fidelity check verifies the instrument model against the step
+      model's features.** `export.verify` loads
+      `video_dir(info["space"], vid) / "features.npy"` — where `info` is the
+      *step* bundle — and hands the same array to `_verify_instruments`. The two
+      tasks can legitimately sit in different spaces; `inference/run.py` prints
+      a note for exactly that case and memoises features per space.
+      When the widths differ the broadcast fails loudly. When they match
+      (`resnet50` against `resnet50_ft`, `dinov2_vitb14` against `dinov2_ft`)
+      the wrong features load cleanly, and because the check compares ONNX
+      against torch on the *same* wrong input, per-second agreement still reads
+      100% and the bar passes while verifying nothing about real inputs — the
+      hazard `evaluation/run.py` already warns about in prose.
+      Fix: lift `inference/run.py`'s `features_for(space)` memo into
+      `predict.py` and have `verify` use it, so each task is checked against the
+      space its own bundle records (`meta["space"]`).
 - [ ] **7.6 (D) Is this worth continuing before the model is better?** 0.561
       served at 200 Hz is still 0.561. 3.6b has now landed and raised that
       number, which makes 7.4/7.5 more attractive — and 7.5 harder, since the
@@ -499,5 +589,13 @@ Reasoning and the fidelity result: [`deployment.md`](surfaces/deployment.md).
 - **Video 19 has no labels** — we train on 19 videos, not the paper's 20, so our
   numbers are not exactly comparable on the training side even though validation
   is untouched.
+- **A silent fallback that yields a plausible wrong answer is this repo's
+  characteristic failure, and 3.8, 4.5, 5.10, 5.11 and 7.7 are all one shape.**
+  Each resolves a missing fact to a default instead of refusing: a feature width
+  to 2048, a space to `spaces.DEFAULT`, an unprovable leak to "no leak", a
+  frames-source space to the video path. None raises; all produce a number that
+  looks right; and the two of this shape already fixed (`feature_dim`, and the
+  private checkpoint-tag decoder) were found by audit rather than by use.
+  Prefer refusing to guessing wherever the fact has a declared owner.
 - **Classes 11 and 13 are essentially unlearnable** (2 videos and 1 video
   respectively) and are excluded from scoring anyway. Do not spend effort there.

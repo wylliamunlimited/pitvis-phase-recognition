@@ -1,6 +1,6 @@
 # Where we are — orientation snapshot
 
-*Snapshot: 2026-08-24. Read this first after time away, then follow the links.*
+*Snapshot: 2026-10-01. Read this first after time away, then follow the links.*
 
 **For the system as it stands** — what is trained, what is wired to what, how
 a case flows through the app, and what may be claimed in a demo — see
@@ -235,6 +235,13 @@ instrument metric.
 `resnet50` features — was fixed, and it was worse than described: it also took
 its standardisation stats from `data/arst/` regardless of the checkpoint named.
 See [`current-state.md`](current-state.md) §5, item 5.)*
+
+**Five correctness items were filed on 2026-10-01** from an audit of all 47
+modules in `src/`: roadmap 3.8, 4.5, 5.10, 5.11 and 7.7. They share one shape —
+a missing fact resolved to a default instead of refused — and `roadmap.md`'s
+cross-cutting risks section says so. **4.5 is the one to do first**: it is the
+guard protecting every cross-validated number in this repo, it currently passes
+whenever it cannot prove anything, and the fix needs no cache and no GPU.
 
 The same list against `roadmap.md`, for anyone reading it alongside:
 
