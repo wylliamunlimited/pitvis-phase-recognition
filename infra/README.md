@@ -343,7 +343,7 @@ Four things to hold on to when the numbers come back:
    around 0.05 on steps and 0.23 on the instruments headline. A gap smaller
    than that spread is not a result. This is precisely what the CV protocol
    exists to avoid, and `STAGE=full` cannot give you a CV — only the six-fold
-   run can, and only via the harness change described below.
+   run can, scored the way [After it lands](#after-it-lands) describes.
 2. **Expect the metrics to disagree, and decide in advance which one rules.**
    The fine-tuned ResNet-50 raised instrument macro by 0.099 while dropping the
    official number by 0.177: better on the rare classes macro weights equally,
