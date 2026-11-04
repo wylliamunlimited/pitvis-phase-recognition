@@ -257,10 +257,16 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--variant", default="control", choices=sorted(VARIANTS),
                     help="which variant to run (default: control)")
-    ap.add_argument("--space", default=None, choices=spaces.names(),
-                    help="override the variant's feature space")
+    ap.add_argument("--space", default=None, type=spaces.space_name,
+                    metavar="SPACE",
+                    help="override the variant's feature space; one of "
+                         + ", ".join(spaces.names()))
     ap.add_argument("--cv", action="store_true",
                     help="cross-validate over the 19 training videos")
+    ap.add_argument("--per-fold-encoders", action="store_true",
+                    help="with --cv: read fold i's features from "
+                         "<space>@fold<i>, the encoder blind to that fold. The "
+                         "only honest CV of a fine-tuned space")
     ap.add_argument("--cv-report", action="store_true",
                     help="print the leaderboard from data/instruments/cv/")
     ap.add_argument("--epochs", type=int, default=10)
@@ -305,9 +311,18 @@ def main(argv: list[str] | None = None) -> None:
     label = (variant.name if args.space == variant.space
              else f"{variant.name}@{args.space}")
 
+    if args.per_fold_encoders and not args.cv:
+        raise SystemExit(
+            "--per-fold-encoders only means anything with --cv: it chooses "
+            "which encoder each FOLD reads. The single-split run trains on all "
+            "of TRAIN and scores VAL, which no TRAIN-fitted encoder has seen, "
+            f"so it reads {args.space!r} directly."
+        )
+
     if args.cv:
         cross_validate(make_fit(variant), args, dev,
-                       variant=label, space=args.space)
+                       variant=label, space=args.space,
+                       per_fold_encoders=args.per_fold_encoders)
         return
 
     # Single split: train on all of TRAIN, score VAL once. This is the run that

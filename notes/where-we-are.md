@@ -217,10 +217,10 @@ instrument metric.
    VAL measurement, because one encoder trained on all of TRAIN leaks into every
    fold and `crossval.check_no_leak` refuses the configuration. The honest
    version is `STAGE=all`: six fine-tunes, ~23 h on an L4, ~6× the cost of the
-   run that produced the current encoder. It also needs a **harness change
-   first** — each fold must read features from *its own* encoder, which a single
-   `--space` cannot express. That change is local and free; write it before
-   renting anything. See [`infra/README.md`](../infra/README.md).
+   run that produced the current encoder. **The harness change it was blocked
+   on is done** — `--per-fold-encoders`, fold *i* reading `<space>@fold<i>` —
+   so what is left is GPU time and nothing local.
+   See [`infra/README.md`](../infra/README.md).
 2. **Ensembling** — now the cheapest untried lever, and the plan is already
    written with its falsifier fixed:
    [`ensembling-plan.md`](models/ensembling-plan.md). Note its §1 premise
@@ -257,8 +257,8 @@ The same list against `roadmap.md`, for anyone reading it alongside:
 | **7.4 / 7.5** | serve task 2; take pixels rather than a feature blob |
 | **5.4** | the agentic explanation layer — the canvas seam is in place, unused |
 
-Plus the per-fold CV harness change described at the end of `infra/README.md`,
-which item 1 depends on.
+The per-fold CV harness change that item 1 depended on is **done** — see the
+end of [`infra/README.md`](../infra/README.md) for the two commands it adds.
 
 The honest framing on 7.x: 0.561 served at 200 Hz is still 0.561. The
 deployment path was worth building because it proved the auto-regressive
@@ -343,6 +343,6 @@ uv run pitvis-predict --video 26531686/video_25.mp4 \
 
 ### 5. Then §4's list
 
-The honest CV for `dinov2_ft` (item 1 there) needs the per-fold harness change
-written first, and that change is free — it is the one thing on either list
-that costs nothing but an afternoon.
+The honest CV for `dinov2_ft` (item 1 there) needed a per-fold harness change
+written first. That is done, so item 1 is now purely a question of renting a
+GPU — nothing on either list is free any more.

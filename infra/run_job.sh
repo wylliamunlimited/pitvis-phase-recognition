@@ -95,12 +95,34 @@ if [ "$WANT" != "backbone/${FULL_TAG}/backbone.pt" ]; then
   exit 1
 fi
 
+# The same check for the PER-FOLD tags, and for the same reason: the five fold
+# encoders are only useful if `spaces.fold` can name the weights this loop
+# writes. Without this the job spends five GPU-hours producing
+# backbone/dinov2-fold0/ while the registry looks for something else, and the
+# failure surfaces as "cannot verify" at cross-validation time, on a different
+# machine, a day later.
+if [ "$STAGE" = all ]; then
+  WANT_FOLD=$(python -c "from pitvis.data import spaces; print(spaces.fold('$SPACE', 0).checkpoint)")
+  if [ "$WANT_FOLD" != "backbone/${FT_TAG}-fold0/backbone.pt" ]; then
+    echo "MISMATCH: space '$SPACE' reads fold 0 from '$WANT_FOLD', this job" \
+         "would write 'backbone/${FT_TAG}-fold0/backbone.pt'." >&2
+    echo "Fix: update fold_checkpoint for '$SPACE' in" \
+         "src/pitvis/data/spaces.py, or the tag in this script." >&2
+    exit 1
+  fi
+fi
+
 # ---- 1. one backbone per fold, each blind to that fold's held-out videos ----
 # Tags carry the backbone: two backbones' folds are different encoders and must
 # not land on the same directory. (A variant/space collision of exactly this
 # shape overwrote a winning checkpoint once already.)
 if [ "$STAGE" = all ]; then
   FOLDS=$(python -c "from pitvis.data.folds import FOLDS_5; print('|'.join(' '.join(map(str,f)) for f in FOLDS_5))")
+  # A fold cache holds TRAIN only. The fold encoder is blind to four of those
+  # videos, which is the point; VAL is scored through the full-TRAIN encoder,
+  # so extracting it five more times would buy nothing and `pitvis-verify`
+  # expects it absent.
+  TRAIN_VIDS=$(python -c "from pitvis.data.dataset import TRAIN; print(' '.join(map(str, TRAIN)))")
   i=0
   IFS='|' read -ra ARR <<< "$FOLDS"
   for fold in "${ARR[@]}"; do
@@ -114,6 +136,15 @@ if [ "$STAGE" = all ]; then
         --exclude $fold --tag "$tag"
       save_now "$tag"
     fi
+    # Extract in the same iteration as the fine-tune, not in a second pass:
+    # an encoder whose features were never extracted is an hour of GPU time
+    # that a laptop has to spend again, and this is the only machine with
+    # both the weights and a GPU. Extraction is resumable, so the repeat on a
+    # restarted instance costs a directory listing.
+    echo "--- ${SPACE}@fold${i}: extracting TRAIN features from ${tag}"
+    pitvis-extract --space "${SPACE}@fold${i}" --device cuda $TRAIN_VIDS
+    pitvis-verify  --space "${SPACE}@fold${i}"
+    save_now "features (${SPACE}@fold${i})" features
     i=$((i+1))
   done
 else

@@ -13,6 +13,8 @@ and the guard would reject 940 MB of perfectly good features, demanding a
 25-minute re-extract for nothing.
 """
 
+import re
+
 import pytest
 
 from pitvis import paths
@@ -120,6 +122,120 @@ def test_the_trace_falls_back_to_the_SPACE_width_not_a_hardcoded_one():
         if paths.manifest_path(name).exists():
             continue                     # a real cache outranks the declaration
         assert manifest_dim(name) == want
+
+
+# -- per-fold spaces ---------------------------------------------------------
+#
+# An honest cross-validation of a fine-tuned encoder needs one encoder per
+# fold, each blind to that fold's held-out videos. That is five caches of the
+# same backbone, which a single `--space` cannot express -- so `fold()` derives
+# `<base>@fold<i>` and `get()` resolves it. The registry does not list them:
+# the fold COUNT is owned by `data/folds.py`, and a hand-listed family would be
+# a second place for k to be wrong.
+
+
+def test_a_fold_space_is_derived_from_its_base_and_differs_only_in_the_encoder():
+    base = spaces.get("dinov2_ft")
+    f3 = spaces.fold("dinov2_ft", 3)
+
+    assert f3.name == "dinov2_ft@fold3"
+    assert f3.checkpoint == "backbone/dinov2-fold3/backbone.pt"
+    # Everything that defines the image->numbers function is inherited. A fold
+    # encoder differs in what it SAW, not in how it preprocesses.
+    assert (f3.backbone, f3.feature_dim, f3.target_fps, f3.model_kwargs,
+            f3.source, f3.frame_size) == (
+        base.backbone, base.feature_dim, base.target_fps, base.model_kwargs,
+        base.source, base.frame_size)
+
+
+def test_get_resolves_a_fold_name_so_every_space_reader_reaches_one():
+    """`pitvis-extract --space dinov2_ft@fold0` and everything downstream."""
+    assert spaces.get("resnet50_ft@fold0").checkpoint \
+        == "backbone/resnet50-fold0/backbone.pt"
+    assert spaces.get("dinov2_ft@fold4").name == "dinov2_ft@fold4"
+
+
+def test_the_fold_name_round_trips():
+    for base in ("dinov2_ft", "resnet50_ft"):
+        for i in range(5):
+            assert spaces.split_fold(spaces.fold_name(base, i)) == (base, i)
+
+
+def test_a_plain_name_is_not_read_as_a_fold_name():
+    for name in spaces.names():
+        assert spaces.split_fold(name) is None
+
+
+def test_a_frozen_space_has_no_fold_encoders_and_says_so():
+    """Refusing beats inventing a path.
+
+    A frozen encoder has nothing to hold out, so the same cache is honest for
+    every fold — and silently handing back five names for one cache is exactly
+    how a leaky configuration would come to look like an honest one.
+    """
+    with pytest.raises(SystemExit, match="no per-fold encoders"):
+        spaces.fold("resnet50", 0)
+    with pytest.raises(SystemExit, match="frozen"):
+        spaces.fold("dinov2_vitb14", 0)
+
+
+def test_every_fine_tuned_space_declares_its_fold_template():
+    """The property that makes an honest CV reachable at all for these two."""
+    for space in spaces.SPACES.values():
+        if space.checkpoint is not None:
+            assert space.fold_checkpoint, \
+                f"{space.name} is fine-tuned but declares no fold_checkpoint"
+            assert "{fold}" in space.fold_checkpoint
+
+
+def test_the_fold_templates_match_the_tags_the_gpu_job_writes():
+    """Pins `spaces.py` against `infra/run_job.sh`, which produces the weights.
+
+    These two files have to agree or the job spends five GPU-hours writing
+    `backbone/dinov2-fold0/` while the registry looks somewhere else — and the
+    failure surfaces a day later, on a different machine, as "cannot verify".
+    The job now checks this itself in its first second; this is the same check
+    where it costs nothing.
+    """
+    job = (paths.ROOT / "infra" / "run_job.sh").read_text()
+
+    # `tag="${FT_TAG}-fold${i}"` is the convention being pinned. If the job
+    # stops writing tags that way, this test is measuring nothing.
+    assert 'tag="${FT_TAG}-fold${i}"' in job
+    assert f'--space "${{SPACE}}{spaces.FOLD_SEP}${{i}}"' in job
+
+    mapping = re.findall(r"FT_TAG=(\S+);\s*SPACE=(\S+);", job)
+    assert mapping, "could not read the backbone -> (tag, space) map from run_job.sh"
+    for ft_tag, space in mapping:
+        for i in range(5):
+            assert spaces.fold(space, i).checkpoint \
+                == f"backbone/{ft_tag}-fold{i}/backbone.pt"
+
+
+def test_a_fold_cache_never_shares_a_directory_with_its_base_or_its_siblings():
+    dirs = [paths.features_dir("dinov2_ft")] + [
+        paths.features_dir(spaces.fold_name("dinov2_ft", i)) for i in range(5)]
+    assert len(set(dirs)) == len(dirs)
+
+
+# -- the argparse converter --------------------------------------------------
+
+def test_space_name_accepts_base_and_fold_names_and_returns_them_unchanged():
+    for name in [*spaces.names(), "dinov2_ft@fold0", "resnet50_ft@fold4"]:
+        assert spaces.space_name(name) == name
+
+
+def test_space_name_rejects_at_parse_time_and_names_the_registered_spaces():
+    """It replaced `choices=spaces.names()` at eight call sites.
+
+    `choices` could not admit a derived name without listing ten of them in
+    every `--help`; the trade is that validation has to be explicit here.
+    """
+    import argparse
+
+    for bad in ("resnet51", "dinov2_ft@fold", "resnet50@fold0"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            spaces.space_name(bad)
 
 
 # -- the path layout ---------------------------------------------------------

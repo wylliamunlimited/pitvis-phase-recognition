@@ -30,7 +30,7 @@ The dataset, the feature cache and all model output are gitignored, so a fresh
 clone gets code and documentation only. Two things still work immediately:
 
 ```sh
-uv sync && uv run pytest        # 224 tests — metrics, Range parsing, case model, doc pointers
+uv sync && uv run pytest        # 246 tests — metrics, Range parsing, case model, doc pointers
 uv run pitvis-models            # ~1 s shape + parameter trace through the cascade
 ```
 
@@ -186,7 +186,7 @@ right?" from "is my data right?" — worth doing before committing to step 4.
 
 ```sh
 uv run pitvis-models      # ~1 s: every tensor shape and parameter count
-uv run pytest             # ~3 s: 224 tests pinning both metrics, the registry + doc pointers
+uv run pytest             # ~3 s: 246 tests pinning both metrics, the registry + doc pointers
 ```
 
 `pitvis-models` falls back to a synthetic tensor when the cache is absent, so it
@@ -351,6 +351,22 @@ uv run pitvis-train arst              # just ARST
 uv run pitvis-train baseline arst     # both, in the order given
 uv run pitvis-train arst --no-cci     # unknown flags pass through to the model
 ```
+
+Variants are ranked by cross-validation inside the 19 training videos. For a
+**fine-tuned** feature space that needs one encoder per fold, each blind to the
+videos it scores, so the folds read five different caches:
+
+```sh
+uv run pitvis-train arst-v2 --cv --space dinov2_vitb14        # frozen: one cache
+uv run pitvis-train arst-v2 --cv --space dinov2_ft \
+                            --per-fold-encoders               # five: dinov2_ft@fold0..4
+uv run pitvis-extract --space dinov2_ft@fold0                 # where those come from
+```
+
+Without `--per-fold-encoders` a fine-tuned space is **refused** rather than
+scored — one encoder trained on all of TRAIN has seen every fold's held-out
+videos, which was worth +0.4 macro of memorisation the one time it happened.
+The encoders themselves need a GPU: see [`infra/README.md`](infra/README.md).
 
 The individual stages are still addressable when you want one thing:
 

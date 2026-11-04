@@ -58,7 +58,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--standardize", default=None,
                     help="train-split mean/std (default: standardize.npz beside "
                          "the checkpoint — they are never resolved separately)")
-    ap.add_argument("--space", default=None, choices=spaces.names(),
+    ap.add_argument("--space", default=None, type=spaces.space_name,
+                    metavar="SPACE",
                     help="override the feature space (default: the checkpoint's tag)")
     ap.add_argument("--split", choices=("val", "train"), default="val")
     ap.add_argument("--width", type=int,

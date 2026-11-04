@@ -461,8 +461,11 @@ def main(argv: list[str] | None = None) -> None:
                     help="video numbers to extract (default: all 25)")
     ap.add_argument("--device", choices=("mps", "cuda", "cpu"),
                     help="override device autodetection")
-    ap.add_argument("--space", default=spaces.DEFAULT, choices=spaces.names(),
-                    help=f"feature space to extract into (default: {spaces.DEFAULT})")
+    ap.add_argument("--space", default=spaces.DEFAULT, type=spaces.space_name,
+                    metavar="SPACE",
+                    help=f"feature space to extract into (default: "
+                         f"{spaces.DEFAULT}); <space>@fold<i> extracts one "
+                         f"fold's encoder for an honest cross-validation")
     ap.add_argument("--migrate", action="store_true",
                     help="move a pre-space data/features/video_NN cache into "
                          "data/features/<default>/ and exit (a rename, no decode)")

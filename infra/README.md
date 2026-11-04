@@ -365,8 +365,30 @@ Four things to hold on to when the numbers come back:
 every fold's held-out videos, and `crossval.check_no_leak` will refuse to
 pretend otherwise.
 
-The six-fold run makes that possible for the first time, but the harness is not
-there yet. Each fold's temporal model has to read features from *its own*
-encoder — the one that never saw its held-out videos — which is more than a
-single `--space` can express. That is the next piece of work, and it is a
-change to `crossval.py`, not something this job completes.
+The six-fold run is what makes one possible, and **the harness is ready for it
+now**. Each fold's temporal model reads features from *its own* encoder — the
+one that never saw its held-out videos — which is more than a single `--space`
+can express, so the folds read five caches instead:
+
+```sh
+uv run pitvis-train arst-v2        --cv --space dinov2_ft --per-fold-encoders
+uv run pitvis-train instruments-v2 --cv --space dinov2_ft --per-fold-encoders
+```
+
+Fold *i* reads `dinov2_ft@fold<i>`, extracted from `backbone/dinov2-fold<i>/` —
+the tags this job writes, which the script re-checks in its first second and
+`tests/test_spaces.py` pins against it. `STAGE=all` extracts each fold's
+features in the same iteration that fine-tunes it, so `out/features` comes back
+holding everything the cross-validation needs and a laptop runs the two
+commands above against it with no GPU.
+
+Two things to know before reading the result:
+
+- **A fold cache holds TRAIN only** — 19 videos, not 25. Its encoder is blind
+  to four of them by design and VAL is scored through the full-TRAIN encoder,
+  so `pitvis-verify --space dinov2_ft@fold0` expects the other six absent
+  rather than reporting them missing.
+- **The guard asks its question per fold.** Fold *i*'s encoder saw the other
+  folds' videos — that is its training set — so only its own four would be a
+  leak. An off-by-one in the mapping is caught by the same comparison: fold 1's
+  encoder trained on fold 0's videos, so offering it to fold 0 is refused.

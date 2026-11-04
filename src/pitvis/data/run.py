@@ -45,7 +45,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="restrict extraction to these video numbers (default: all 25)")
     ap.add_argument("--device", choices=("mps", "cuda", "cpu"),
                     help="override device autodetection for extraction")
-    ap.add_argument("--space", default=None, choices=spaces.names(),
+    ap.add_argument("--space", default=None, type=spaces.space_name,
+                    metavar="SPACE",
                     help="feature space to extract into and verify "
                          f"(default: {spaces.DEFAULT})")
     ap.add_argument("--probe", action="store_true",

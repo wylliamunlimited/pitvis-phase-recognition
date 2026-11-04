@@ -99,7 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("--video", type=int, default=1, help="video to trace (default: 1)")
-    ap.add_argument("--space", default=spaces.DEFAULT, choices=spaces.names(),
+    ap.add_argument("--space", default=spaces.DEFAULT, type=spaces.space_name,
+                    metavar="SPACE",
                     help=f"feature space to trace (default: {spaces.DEFAULT})")
     ap.add_argument("--width", type=int, default=BAND_WIDTH,
                     help=f"ARST banded-mask width (default: {BAND_WIDTH})")

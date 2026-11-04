@@ -85,6 +85,17 @@ portion, class 17's three videos land in three different rounds, and every
 round holds out a class-1 video. The number of held-out seconds varies across
 rounds by 350 s.
 
+**"Never saw it" includes the encoder, and for a fine-tuned space that costs
+five encoders.** Every variant above was ranked on *frozen* features, where one
+cache is honest for every round. A fine-tuned backbone is not: trained on all
+19 videos, its features carry the held-out videos' answers, and the harness
+refuses the configuration outright rather than scoring it. The honest form is
+one encoder per round, each fine-tuned with that round's videos excluded, so
+the rounds read five different caches — `--per-fold-encoders`, which resolves
+round *i* to `<space>@fold<i>`. The harness does this now; the encoders are a
+GPU job that has not been run — what it costs and why is
+[`infra/README.md`](../../infra/README.md).
+
 *Known bias, recorded not fixed:* `zero_division=1` scores an absent class 1.0,
 so rounds with no class-17 video are inflated — exactly as the validation
 headline already is. Freezing the groups makes it a constant offset across

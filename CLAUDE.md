@@ -332,6 +332,24 @@ not. Python is pinned to **3.13** via `.python-version`.
 - `resolve_data_config` reports the CHECKPOINT's native input size, not the
   model's. DINOv2 ships at 518, so a model built at 224 needs an explicit
   `input_size` override or the transform feeds it 518 and it raises.
+- **Per-fold spaces are DERIVED, never listed.** `<base>@fold<i>` comes from
+  `spaces.fold()` filling the fine-tuned space's declared `fold_checkpoint`
+  template, and `spaces.get` resolves the name, so every `--space` reader
+  reaches one. They are not five more registry entries because the fold *count*
+  is owned by `data/folds.py` — a hand-listed family is a second place for k to
+  be wrong. `fold_checkpoint` is not hashed; the resolved checkpoint's weight
+  digest already differs per fold, so `resnet50`'s id does not move.
+  The templates must match the tags `infra/run_job.sh` writes
+  (`dinov2-fold0`, …); the script checks it in its first second and
+  `tests/test_spaces.py` pins it.
+- **A fold cache holds TRAIN only** — 19 videos, not 25. Its encoder is blind
+  to four of them by design and VAL is scored through the full-TRAIN encoder,
+  so `verify_cache.expected_videos` expects the other six absent rather than
+  reporting them missing.
+- `--space` is validated by `spaces.space_name` as an argparse `type`, not by
+  `choices`. `choices` cannot admit a derived fold name without printing ten of
+  them in every `--help`, and eight copies of one choices list was one owner
+  too many.
 
 ## Model selection: cross-validate, score val once
 
@@ -350,6 +368,16 @@ selection set.
 - Folds are frozen so every variant sees the identical partition. `zero_division=1`
   inflates folds missing a class — a constant offset across variants, recorded
   rather than fixed.
+- **The encoder is part of "never saw that video".** A fine-tuned space is
+  refused by `crossval.check_no_leak`, not scored: one backbone trained on all
+  of TRAIN puts every held-out video's labels in the features, worth +0.4 macro
+  of memorisation when it happened. The honest form is one encoder per fold, so
+  the folds read five caches — `--per-fold-encoders`, which resolves fold `i`
+  to `<space>@fold<i>` and asks the guard its question **per fold** (fold `i`'s
+  encoder saw the other folds' videos by design; only its own four are a leak,
+  and an off-by-one in the mapping is refused by the same comparison). The
+  guard runs before any fitting, and a CV entry records `fold_spaces` so a
+  five-encoder result cannot be read as a one-cache one.
 - **`data/instruments/sano.pt` is never overwritten.** Variants write to
   `data/instruments/v2/<variant>/`, so `pitvis-predict` and the app keep
   working against the reproduction.

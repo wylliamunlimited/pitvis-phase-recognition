@@ -147,6 +147,232 @@ def test_the_refusal_names_the_space_and_what_to_run(tmp_path, monkeypatch):
     assert "VAL" in msg
 
 
+# -- the guard's SCOPE, once there is one encoder per fold -------------------
+#
+# A per-fold encoder legitimately saw the OTHER folds' videos — they are its
+# training set. So the question "did this encoder see something it is about to
+# score" has to be asked per fold, and `fold=i` is what asks it. Asking the
+# old, unscoped question of a per-fold cache would refuse every honest
+# configuration; asking the scoped question of one cache serving all five folds
+# would wave through the leak the guard exists for.
+
+
+def _saw_everything_except(fold: int) -> list[int]:
+    """What fold `fold`'s encoder was fine-tuned on: TRAIN minus its own four."""
+    held = set(fold_ids(5)[fold])
+    return [v for v in TRAIN if v not in held]
+
+
+def test_a_per_fold_encoder_passes_for_its_own_fold(tmp_path, monkeypatch):
+    """The configuration the whole exercise exists to make possible."""
+    from pitvis.training.crossval import check_no_leak
+
+    for i in range(5):
+        _manifest(tmp_path, monkeypatch, _saw_everything_except(i))
+        check_no_leak("dinov2_ft@fold%d" % i, 5, fold=i)   # must not raise
+
+
+def test_the_same_encoder_is_refused_for_every_OTHER_fold(tmp_path, monkeypatch):
+    """How an off-by-one in the fold->encoder mapping is caught.
+
+    Hand fold 0 the encoder built for fold 1 and the overlap is fold 0's own
+    held-out videos, because that encoder trained on them. No separate check is
+    needed — the same comparison catches it.
+    """
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, _saw_everything_except(1))
+    check_no_leak("dinov2_ft@fold1", 5, fold=1)
+    for i in (0, 2, 3, 4):
+        with pytest.raises(SystemExit, match="LEAK"):
+            check_no_leak("dinov2_ft@fold1", 5, fold=i)
+
+
+def test_a_per_fold_encoder_is_still_refused_unscoped(tmp_path, monkeypatch):
+    """`fold=None` asks about all 19 held-out videos, and must keep doing so.
+
+    One cache cannot serve five folds honestly if its encoder is fine-tuned,
+    whichever fold you look at — which is why the scoped question is only asked
+    when the harness is reading five caches.
+    """
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, _saw_everything_except(2))
+    with pytest.raises(SystemExit, match="LEAK"):
+        check_no_leak("dinov2_ft@fold2", 5)
+
+
+def test_the_scoped_refusal_names_the_fold(tmp_path, monkeypatch):
+    from pitvis.training.crossval import check_no_leak
+
+    _manifest(tmp_path, monkeypatch, _saw_everything_except(1))
+    with pytest.raises(SystemExit) as e:
+        check_no_leak("dinov2_ft@fold1", 5, fold=3)
+    assert "fold 3 holds out" in str(e.value)
+
+
+# -- which cache each fold reads ---------------------------------------------
+
+def test_a_frozen_space_resolves_to_one_cache_per_fold():
+    from pitvis.training.crossval import fold_spaces
+
+    assert fold_spaces("resnet50", 5, False) == ["resnet50"] * 5
+
+
+def test_per_fold_encoders_resolve_to_five_different_caches():
+    from pitvis.training.crossval import fold_spaces
+
+    assert fold_spaces("dinov2_ft", 5, True) == [
+        f"dinov2_ft@fold{i}" for i in range(5)]
+
+
+def test_per_fold_encoders_on_a_frozen_space_is_refused_not_ignored():
+    """Reading the same cache five times and calling it honest is the failure."""
+    from pitvis.training.crossval import fold_spaces
+
+    with pytest.raises(SystemExit, match="no per-fold encoders"):
+        fold_spaces("resnet50", 5, True)
+
+
+# -- the harness, end to end over a stub ------------------------------------
+#
+# `fit` is a constant predictor and the loader hands back zeros, so these are
+# about plumbing only: which space each fold reads, how many times the cache is
+# loaded, and whether the guard runs before any fitting happens.
+
+
+def _manifests(tmp_path, monkeypatch, trained_on_for):
+    """A manifest per space, so a five-cache CV can be guarded in a test."""
+    import json
+
+    import pitvis.paths
+
+    def path_for(space):
+        p = tmp_path / f"{space}.json"
+        if not p.exists():
+            seen = trained_on_for(space)
+            p.write_text(json.dumps({"space": {"_trained_on": seen}}))
+        return p
+
+    monkeypatch.setattr(pitvis.paths, "manifest_path", path_for)
+
+
+def _stub_task(tmp_path, loaded):
+    """A Task whose loader records the space it was asked for."""
+    from pitvis.training.crossval import Task
+
+    def loader(videos, space):
+        loaded.append(space)
+        return [(v, np.zeros((3, 4), np.float32), np.zeros(3, np.int64))
+                for v in videos]
+
+    def evaluate(per_video):
+        return {
+            "videos": {v: {"macro_f1": 1.0, "metric": 1.0} for v, _, _ in per_video},
+            "mean": {"macro_f1": 1.0, "metric": 1.0},
+            "std": {"macro_f1": 0.0, "metric": 0.0},
+            "pooled": {"per_class_f1": [1.0], "support": [3], "predicted": [3]},
+        }
+
+    return Task(name="stub", loader=loader, evaluate=evaluate,
+                metrics=("macro_f1", "metric"), primary="macro_f1",
+                guard="metric", cv_dir=tmp_path / "cv")
+
+
+def _run(task, *, space, per_fold, fitted=None):
+    import argparse
+
+    import torch
+
+    from pitvis.training.crossval import cross_validate
+
+    def fit(train, args, dev):
+        if fitted is not None:
+            fitted.append(sorted(v for v, _, _ in train))
+        return lambda feats: np.zeros(len(feats), np.int64)
+
+    return cross_validate(fit, argparse.Namespace(), torch.device("cpu"),
+                          variant="stub", space=space, task=task, quiet=True,
+                          per_fold_encoders=per_fold)
+
+
+def test_a_frozen_cv_still_loads_the_cache_exactly_once(tmp_path):
+    """19 videos at 2048-d is ~693 MB — reloading per fold is disk-bound.
+
+    The per-fold change had to keep this: the loop now asks per fold, and the
+    frozen answer is the same name five times, which must not become five
+    loads.
+    """
+    loaded = []
+    entry = _run(_stub_task(tmp_path, loaded), space="resnet50", per_fold=False)
+
+    assert loaded == ["resnet50"]
+    assert entry["fold_spaces"] == ["resnet50"] * 5
+
+
+def test_each_fold_reads_its_own_encoder_in_order(tmp_path, monkeypatch):
+    """The property the harness change exists for."""
+    loaded, fitted = [], []
+    _manifests(tmp_path, monkeypatch,
+               lambda sp: _saw_everything_except(int(sp[-1])))
+    entry = _run(_stub_task(tmp_path, loaded), space="dinov2_ft",
+                 per_fold=True, fitted=fitted)
+
+    assert loaded == [f"dinov2_ft@fold{i}" for i in range(5)]
+    # One load per fold, not one per video and not five caches resident.
+    assert len(loaded) == 5
+    # And the fold structure is untouched: every training video scored once,
+    # by a model that never saw it.
+    assert sorted(int(v) for v in entry["videos"]) == sorted(TRAIN)
+    for i, train in enumerate(fitted):
+        assert set(train).isdisjoint(fold_ids(5)[i])
+
+
+def test_the_per_fold_rows_record_which_encoder_produced_them(tmp_path, monkeypatch):
+    loaded = []
+    _manifests(tmp_path, monkeypatch,
+               lambda sp: _saw_everything_except(int(sp[-1])))
+    entry = _run(_stub_task(tmp_path, loaded), space="dinov2_ft", per_fold=True)
+
+    assert [row["space"] for row in entry["per_fold"]] == \
+        [f"dinov2_ft@fold{i}" for i in range(5)]
+    assert entry["space"] == "dinov2_ft", "the declared space stays the base"
+
+
+def test_the_leak_guard_runs_before_anything_is_fitted(tmp_path, monkeypatch):
+    """A guard that fires after the leak has been computed has not guarded.
+
+    Fold 3's cache is given fold 0's provenance, so the mapping is wrong and
+    the run must stop with no fit at all — not after three folds of training.
+    """
+    loaded, fitted = [], []
+    _manifests(tmp_path, monkeypatch,
+               lambda sp: _saw_everything_except(0 if sp.endswith("3")
+                                                 else int(sp[-1])))
+    with pytest.raises(SystemExit, match="LEAK"):
+        _run(_stub_task(tmp_path, loaded), space="dinov2_ft", per_fold=True,
+             fitted=fitted)
+    assert fitted == [] and loaded == []
+
+
+def test_a_per_fold_result_is_labelled_as_one_on_the_leaderboard(tmp_path):
+    """`dinov2_ft@folds` — the expensive honest version of a refused row."""
+    from pitvis.training.crossval import summarise
+
+    base = {"mean": {"macro_f1": 0.4, "metric": 0.3, "weighted": 0.6},
+            "std": {"macro_f1": 0.05, "metric": 0.04, "weighted": 0.04},
+            "dead_classes": 0, "never_predicted": 0, "seconds": 1}
+    text = summarise([
+        {"variant": "frozen", "space": "dinov2_vitb14",
+         "fold_spaces": ["dinov2_vitb14"] * 5, **base},
+        {"variant": "honest", "space": "dinov2_ft",
+         "fold_spaces": [f"dinov2_ft@fold{i}" for i in range(5)], **base},
+    ])
+    assert "dinov2_ft@folds" in text
+    assert "dinov2_ft@fold0" not in text, "the column names the family, not fold 0"
+    assert "dinov2_vitb14 " in text, "a one-cache row is unchanged"
+
+
 # -- aggregation -------------------------------------------------------------
 
 def test_aggregation_is_per_video_then_mean_not_pooled():

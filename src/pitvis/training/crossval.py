@@ -31,6 +31,15 @@ LEAKAGE. Standardisation statistics are computed inside `fit`, on the fold's
 training videos only. Computing them over all of TRAIN — which the single-split
 trainer legitimately does — would leak held-out feature statistics into every
 fold.
+
+THE ENCODER IS PART OF "NEVER SAW THAT VIDEO". A fine-tuned backbone trained on
+all of TRAIN puts every held-out video's labels inside the features themselves,
+which is worth about +0.4 macro of memorisation (measured; `check_no_leak` has
+the account). So an honest CV of a fine-tuned space needs one encoder per fold,
+each blind to that fold's videos, and the folds therefore read five different
+caches — `per_fold_encoders=True`, which resolves fold `i` to
+`<space>@fold<i>`. Frozen spaces are unaffected: one cache is honest for every
+fold, and the single load is preserved.
 """
 
 from __future__ import annotations
@@ -115,8 +124,19 @@ def encoder_saw(space: str) -> list[int] | None:
     return json.loads(p.read_text()).get("space", {}).get("_trained_on")
 
 
-def check_no_leak(space: str, k: int) -> None:
+def check_no_leak(space: str, k: int, fold: int | None = None) -> None:
     """Refuse a fold whose held-out videos the encoder has already seen.
+
+    SCOPE. `fold=None` checks `space` against *every* fold's held-out videos,
+    which is the only honest question to ask of one cache serving all k folds.
+    `fold=i` checks it against fold `i` alone, which is the per-fold
+    configuration: fold `i`'s encoder saw the other folds' videos by design —
+    they are its training set — and the leak would be its own four.
+
+    An off-by-one in that mapping is caught by the same comparison rather than
+    by a separate check: hand fold 0 the encoder built for fold 1 and the
+    overlap is fold 0's own held-out videos, because that encoder trained on
+    them.
 
     THE FAILURE THIS EXISTS FOR, because it already happened once. A backbone
     fine-tuned on all 19 TRAIN videos -- with their step and instrument labels,
@@ -167,33 +187,77 @@ def check_no_leak(space: str, k: int) -> None:
             f"or score on VAL instead, which no TRAIN-fitted encoder has seen."
         )
 
-    overlap = sorted(set(seen) & {v for f in fold_ids(k) for v in f})
+    held_out = (fold_ids(k)[fold] if fold is not None
+                else [v for f in fold_ids(k) for v in f])
+    overlap = sorted(set(seen) & set(held_out))
     if overlap:
+        scope = f"fold {fold} holds out" if fold is not None \
+            else "this cross-validation holds out"
         raise SystemExit(
             f"LEAK: the encoder behind space {space!r} was fine-tuned on "
-            f"{len(overlap)} of the videos this cross-validation holds out "
+            f"{len(overlap)} of the videos {scope} "
             f"({overlap[:6]}{'...' if len(overlap) > 6 else ''}).\n"
             f"Its features already encode their labels, so the scores would be "
             f"memorisation.\n"
             f"Fix: one encoder per fold —\n"
             f"    uv run pitvis-finetune --exclude <fold videos> --tag fold<i>\n"
-            f"or score on VAL instead, which no TRAIN-fitted encoder has seen."
+            f"then cross-validate with --per-fold-encoders, or score on VAL "
+            f"instead, which no TRAIN-fitted encoder has seen."
         )
+
+
+def fold_spaces(space: str, k: int, per_fold_encoders: bool) -> list[str]:
+    """Which feature cache each fold reads — one name per fold.
+
+    A frozen encoder is the same function for every fold, so one name k times.
+    A fine-tuned one cannot be: fold `i` must read the encoder that never saw
+    fold `i`'s videos, so the answer is k different caches. This is the whole
+    content of "a single `--space` cannot express an honest CV of a fine-tuned
+    space" — the fix is that the harness asks per fold rather than once.
+
+    Raises through `spaces.fold` if `space` declares no per-fold encoders, so
+    `--per-fold-encoders` on a frozen space fails here rather than reading the
+    same cache five times and reporting it as honest.
+    """
+    if not per_fold_encoders:
+        return [space] * k
+    return [spaces.fold(space, i).name for i in range(k)]
 
 
 def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
                    space: str, task: Task = INSTRUMENTS, k: int = 5,
-                   quiet: bool = False) -> dict:
+                   quiet: bool = False, per_fold_encoders: bool = False) -> dict:
     """Fit `k` models, score every training video out of fold, aggregate once."""
-    check_no_leak(space, k)
+    reads = fold_spaces(space, k, per_fold_encoders)
+    # Before any fitting: a guard that exists to stop a leak is worthless if it
+    # fires after the leak has been computed.
+    if per_fold_encoders:
+        for i, sp in enumerate(reads):
+            check_no_leak(sp, k, fold=i)
+    else:
+        check_no_leak(space, k)
     t0 = time.time()
-    # Loaded once and sliced. 19 videos at 2048-d is ~693 MB; reloading it per
-    # fold would turn a 5-minute sweep into a disk-bound one.
-    split = task.loader(TRAIN, space)
-    by_vid = {vid: (f, inst) for vid, f, inst in split}
+
+    # ONE SPACE RESIDENT AT A TIME, and the frozen case still loads once.
+    #
+    # 19 videos at 2048-d is ~693 MB, so reloading per fold would turn a
+    # 5-minute sweep into a disk-bound one — which is why this was a single
+    # load. With per-fold encoders a single load is no longer available: the
+    # folds read five different caches. Keeping the five resident would be
+    # ~1.4 GB at 768-d for no benefit, since a fold never revisits another
+    # fold's cache. So the cache is keyed by space and cleared when the key
+    # changes, which for one repeated name never clears and never reloads.
+    cached: dict[str, dict[int, tuple]] = {}
+
+    def features_from(sp: str) -> dict[int, tuple]:
+        if sp not in cached:
+            cached.clear()
+            cached[sp] = {vid: (f, t) for vid, f, t in task.loader(TRAIN, sp)}
+        return cached[sp]
 
     per_fold, out_of_fold = [], []
     for i, held in enumerate(fold_ids(k)):
+        by_vid = features_from(reads[i])
         train = [(v, *by_vid[v]) for v in TRAIN if v not in set(held)]
         predict = fit(train, args, dev)
 
@@ -204,9 +268,14 @@ def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
         out_of_fold.extend(fold_preds)
 
         m = task.evaluate(fold_preds)["mean"]
-        per_fold.append({"fold": i, "held_out": list(held), **m})
+        per_fold.append({"fold": i, "held_out": list(held),
+                         "space": reads[i], **m})
         if not quiet:
-            print(f"  fold {i} ({len(held)} held out): "
+            # The space is named per fold only when it varies, so the frozen
+            # output is unchanged and the per-fold output shows the one thing
+            # worth auditing in it: that fold i read fold i's encoder.
+            where = f" [{reads[i]}]" if per_fold_encoders else ""
+            print(f"  fold {i} ({len(held)} held out){where}: "
                   + "  ".join(f"{k_}={m[k_]:.4f}" for k_ in task.metrics))
 
     # The headline: one scorer call over all 19, never pooled frame-wise.
@@ -229,6 +298,11 @@ def cross_validate(fit: FitFn, args, dev: torch.device, *, variant: str,
     entry = {
         "variant": variant,
         "space": space,
+        # One name per fold, always recorded. A result that read five encoders
+        # and one that read one are not the same experiment, and the difference
+        # has to survive in the artifact or a leaderboard row cannot be told
+        # apart from the leaky configuration it replaced.
+        "fold_spaces": reads,
         "task": task.name,
         "k": k,
         "videos": {str(v): result["videos"][v] for v in result["videos"]},
@@ -279,13 +353,24 @@ def summarise(entries: list[dict], task: Task = INSTRUMENTS) -> str:
     ranked = sorted(entries, key=lambda e: -e["mean"][task.primary])
     control = next((e for e in entries if e["variant"] == "control"), None)
 
+    def where(e: dict) -> str:
+        """The space column: `dinov2_ft@folds` when the folds read five caches.
+
+        The distinction belongs in the leaderboard rather than only in the JSON.
+        A per-fold row is the expensive, honest version of a row the guard
+        refuses outright, and reading them as the same space is how a +0.4
+        memorisation artefact got believed once already.
+        """
+        reads = set(e.get("fold_spaces") or [e["space"]])
+        return f"{e['space']}{spaces.FOLD_SEP}s" if len(reads) > 1 else e["space"]
+
     cols = list(task.metrics)
     head = f"{'variant':<20}{'space':<16}" + "".join(f"{c:>18}" for c in cols)
     rows = [head + f"{'dead':>6}{'never':>7}{'sec':>7}", "-" * len(head + " " * 20)]
     for e in ranked:
         m, sd = e["mean"], e["std"]
         rows.append(
-            f"{e['variant']:<20}{e['space']:<16}"
+            f"{e['variant']:<20}{where(e):<16}"
             + "".join(f"{m[c]:>11.4f}\u00b1{sd[c]:.4f}" for c in cols)
             + f"{e['dead_classes']:>6}{e.get('never_predicted', -1):>7}"
               f"{e['seconds']:>7.0f}"

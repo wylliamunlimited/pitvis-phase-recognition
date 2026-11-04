@@ -5,7 +5,9 @@ afterwards, so a truncated npy, a stale labels file, or a manifest that
 drifted from what is on disk would surface only as silent training
 misbehaviour. This script re-establishes "the cache is good" as a fact.
 
-Per video 01..25:
+Per video 01..25 — or per TRAIN video for a `<space>@fold<i>` cache, which is
+extracted over TRAIN only and whose missing VAL directories are therefore
+correct (see `expected_videos`):
 - features.npy exists, float32, shape (T, feature_dim), every value finite
 - instruments.npy (24 labeled videos): int64, shape (T, 2), raw sentinels,
   byte-identical to re-deriving from the CSV; slot ranges and pair ordering
@@ -49,6 +51,20 @@ from pitvis.paths import RAW, manifest_path, video_dir
 
 ALL_VIDEOS = list(range(1, 26))
 LABELED = set(TRAIN) | set(VAL)  # 24 videos; 19 has no annotations
+
+
+def expected_videos(space: str) -> list[int]:
+    """Which videos this cache is supposed to hold — 25, or TRAIN for a fold.
+
+    A per-fold space (`<base>@fold<i>`) exists to serve one cross-validation
+    fold, and `crossval` only ever reads TRAIN through it. VAL is deliberately
+    never extracted into one: a fold encoder is blind to four TRAIN videos, so
+    scoring VAL through it would be a sixth experiment nobody asked for, and
+    the full-TRAIN encoder is what VAL is for. So the six absent directories
+    are the design rather than a truncated cache, and verifying against 25
+    would report five failures per fold for files that must not exist.
+    """
+    return sorted(TRAIN) if spaces.split_fold(space) else ALL_VIDEOS
 FINITE_CHUNK = 50_000  # rows per np.isfinite pass over the memmap
 
 
@@ -215,7 +231,8 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--probe", action="store_true",
                         help="also re-probe every video with ffprobe (slow)")
-    parser.add_argument("--space", default=spaces.DEFAULT, choices=spaces.names(),
+    parser.add_argument("--space", default=spaces.DEFAULT,
+                        type=spaces.space_name, metavar="SPACE",
                         help=f"feature space to verify (default: {spaces.DEFAULT})")
     args = parser.parse_args(argv)
 
@@ -230,12 +247,16 @@ def main(argv: list[str] | None = None) -> None:
             f"manifest space id {manifest['space']['id']} != recomputed "
             f"{space_id(manifest['space'])}"
         )
-    orphans = set(manifest["videos"]) - {f"video_{v:02d}" for v in ALL_VIDEOS}
+    videos = expected_videos(args.space)
+    if videos != ALL_VIDEOS:
+        print(f"{args.space}: a per-fold cache — verifying the {len(videos)} "
+              f"TRAIN videos it is meant to hold, not all 25")
+    orphans = set(manifest["videos"]) - {f"video_{v:02d}" for v in videos}
     if orphans:
         errors.append(f"manifest entries for unknown videos: {sorted(orphans)}")
 
     total_frames = 0
-    for vid in ALL_VIDEOS:
+    for vid in videos:
         errs = check_video(vid, manifest, args.probe, args.space)
         errors.extend(errs)
         key = f"video_{vid:02d}"
@@ -258,7 +279,7 @@ def main(argv: list[str] | None = None) -> None:
             print(f"FAIL — {e}", file=sys.stderr)
         print(f"\nFAILED: {len(errors)} problem(s)", file=sys.stderr)
         sys.exit(1)
-    print(f"\nOK: 25 videos, {total_frames} frames, "
+    print(f"\nOK: {len(videos)} videos, {total_frames} frames, "
           f"space {manifest['space']['id']}"
           f"{', probed' if args.probe else ''}")
 

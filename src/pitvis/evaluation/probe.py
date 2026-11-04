@@ -89,7 +89,7 @@ def probe_space(space: str, classes: list[int], seed: int = 0,
 def main(argv: list[str] | None = None) -> None:
     ap_ = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap_.add_argument("--space", action="append", default=None,
-                     choices=spaces.names(),
+                     type=spaces.space_name, metavar="SPACE",
                      help="feature space to probe; repeat to compare")
     ap_.add_argument("--classes", type=int, nargs="*", default=None,
                      help="instrument ids (default: all 19)")

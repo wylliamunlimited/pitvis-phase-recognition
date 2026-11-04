@@ -256,8 +256,13 @@ def make_fit(variant: Variant):
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--variant", default="control", choices=sorted(VARIANTS))
-    ap.add_argument("--space", default=None, choices=spaces.names())
+    ap.add_argument("--space", default=None, type=spaces.space_name,
+                    metavar="SPACE", help=f"one of {', '.join(spaces.names())}")
     ap.add_argument("--cv", action="store_true")
+    ap.add_argument("--per-fold-encoders", action="store_true",
+                    help="with --cv: read fold i's features from "
+                         "<space>@fold<i>, the encoder blind to that fold. The "
+                         "only honest CV of a fine-tuned space")
     ap.add_argument("--cv-report", action="store_true")
     ap.add_argument("--epochs-spatial", type=int, default=20)
     ap.add_argument("--epochs-tecno", type=int, default=30)
@@ -300,9 +305,18 @@ def main(argv: list[str] | None = None) -> None:
     label = (variant.name if args.space == variant.space
              else f"{variant.name}@{args.space}")
 
+    if args.per_fold_encoders and not args.cv:
+        raise SystemExit(
+            "--per-fold-encoders only means anything with --cv: it chooses "
+            "which encoder each FOLD reads. The single-split run trains on all "
+            "of TRAIN and scores VAL, which no TRAIN-fitted encoder has seen, "
+            f"so it reads {args.space!r} directly."
+        )
+
     if args.cv:
         cross_validate(make_fit(variant), args, dev, variant=label,
-                       space=args.space, task=STEPS)
+                       space=args.space, task=STEPS,
+                       per_fold_encoders=args.per_fold_encoders)
         return
 
     t0 = time.time()

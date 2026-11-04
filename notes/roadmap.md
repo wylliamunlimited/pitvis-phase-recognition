@@ -260,9 +260,16 @@ before the next one starts, so we always know what an idea actually bought.
       single VAL measurement. A ranking needs one encoder per fold — six
       fine-tunes, `STAGE=all`, ~23 h on an L4 — because a single encoder
       trained on all of TRAIN leaks into every fold (measured: steps macro read
-      0.917). It also needs a harness change first: each fold must read
-      features from its own encoder, which one `--space` cannot express. See
-      [`infra/`](../infra/README.md).
+      0.917). See [`infra/`](../infra/README.md).
+
+      **The harness change this was blocked on is done** (`--per-fold-encoders`;
+      fold *i* reads `<space>@fold<i>`, derived from the fine-tuned space's
+      declared template, and `check_no_leak` asks its question per fold so an
+      off-by-one in the mapping is refused). What is left is GPU time: the five
+      fold encoders do not exist. `run_job.sh` STAGE=all now extracts each
+      fold's TRAIN features in the same iteration that fine-tunes it, which it
+      did not before — the encoders alone would have left the features to a
+      machine with no GPU.
 
 ---
 
