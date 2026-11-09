@@ -139,10 +139,10 @@ class MultiTask(nn.Module):
     `model_kwargs` reaches `timm.create_model` untouched, and for a ViT it is
     not optional. DINOv2's weights ship at 518x518, so without `img_size=224`
     the model is built for a 37x37 patch grid and rejects the 224 tensor this
-    dataset produces — "Input height (518) doesn't match model (224)", the same
-    trap extraction hit. It must also match the `img_size` of the space that
-    will later read this checkpoint, or the encoder is fine-tuned at one
-    resolution and inferred at another.
+    dataset produces — "Input height (224) doesn't match model (518)", which is
+    extraction's trap from the other side. It must also match the `img_size` of
+    the space that will later read this checkpoint, or the encoder is
+    fine-tuned at one resolution and inferred at another.
     """
 
     def __init__(self, name: str, pretrained: bool = True, **model_kwargs):
@@ -202,8 +202,10 @@ def layer_decay_groups(model: nn.Module, backbone_lr: float, head_lr: float,
     decay makes early layers move `decay^k` times as fast as late ones, which is
     the standard prescription for adapting a strong self-supervised encoder.
 
-    With decay=1.0 this degenerates to a single group at `backbone_lr`, so the
-    old behaviour is still reachable and reproducible.
+    With decay=1.0 every backbone group lands on `backbone_lr`, so the old
+    behaviour is still reachable and reproducible. Note the grouping does not
+    collapse: there is still one group per depth, they just share a rate, which
+    AdamW treats identically but a `len(groups)` assertion does not.
     """
     depths = {n: depth_of(n, 0) for n, _ in model.backbone.named_parameters()}
     n_blocks = max(depths.values(), default=0)
